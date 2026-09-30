@@ -14,6 +14,9 @@ import { startSplitScheduler } from "./services/splitScheduler.js";
 import { startFinanceHandoverWorker } from "./services/financeHandoverWorker.js";
 import { startFollowupWarningScheduler } from "./services/followupWarningScheduler.js";
 import { startBackupScheduler } from "./services/backupService.js";
+import { startInactiveLeadScheduler } from "./services/inactiveLeadScheduler.js";
+import { startIdleAlertScheduler } from "./services/idleAlertScheduler.js";
+import { startMeetingReminderScheduler } from "./services/meetingReminderScheduler.js";
 
 const app = express();
 
@@ -57,6 +60,9 @@ const start = async () => {
       startSplitScheduler();
       startFollowupWarningScheduler();
       startBackupScheduler();
+      startInactiveLeadScheduler();
+      startIdleAlertScheduler();
+      startMeetingReminderScheduler();
     } else {
       console.log("⏸️  RUN_SCHEDULERS=false — the timed jobs are not running in this process");
     }

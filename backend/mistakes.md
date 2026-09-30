@@ -244,3 +244,46 @@ router.patch("/:teamId/leads/:leadId/assign", authenticate, checkPermission("tea
 **Bug:** When adding `getTeamReminders` aggregation pipeline, typed as `object[]` instead of `PipelineStage[]`. Mongoose aggregation requires the stricter `PipelineStage[]` type from mongoose.
 **Fix:** `import { type PipelineStage } from "mongoose"` and typed pipeline as `PipelineStage[]`.
 **Also:** `preserveNullAndEmpty` is not valid — correct key is `preserveNullAndEmptyArrays` in `$unwind` stage.
+
+---
+
+## Settings are cached per process for 30 s (2026-09-30)
+
+**What happened:** a Phase 1 test switched an email type off through the API, then called `notify()` from the test's own
+process — and the email still went. `settingsService` caches the settings for 30 seconds in each process; `PUT /settings/app`
+clears only the cache of the process that served it.
+
+**Not a bug in the product:** `notify()` runs inside the backend, whose cache the PUT clears. A separate process (a second
+API instance, or a scheduler-only process) sees a change within 30 seconds, by design.
+
+**Rule:** a test (or script) that changes settings over HTTP and then calls a service in its own process must wait out the
+30 s cache, or run the check through the API.
+
+**Seen again (2026-10-01):** the cache also outlives a *database reset* in a running backend — a Phase 3 re-run straight after
+a Phase 2 run counted active minutes on the UTC date (the old setting) while the test used Dubai, just after Dubai midnight.
+After wiping a test database, wait 31 s (or restart the backend) before the next suite.
+
+---
+
+## A system action's `performedBy` — leave it out, never null (2026-09-30)
+
+**What we found:** the team Logs tab renders `typeof log.performedBy === "object" ? log.performedBy.name : …`. `typeof null` is
+`"object"`, so one activity entry stored with `performedBy: null` would crash the whole tab.
+
+**Rule:** for something the CRM did on its own (an automatic inactive-lead move), omit `performedBy` from the activity entry.
+The field is optional since 2026-09-30; a missing performer already shows as "System" on the lead page, team logs, the team feed
+and reports.
+
+**Related, not fixed yet:** `splitScheduler` passes the string `"system"` as the performer. It cannot be cast to an ObjectId, so
+the timed daily split assigns the lead but its `lead_assigned` entry — and the new owner's notification after it — fail
+(`CastError`, logged as `[autoSplitLead] error`).
+
+---
+
+## Presence timestamps only move forward — `$max`, not `$set` (2026-09-30)
+
+**What happened:** in the Phase 3 test, a heartbeat recorded "a minute from now" was followed by a real one, and `$set` moved
+`lastSeenAt` backwards. With one server that cannot happen; with two whose clocks differ by a second, a late heartbeat could.
+
+**Fix:** `recordHeartbeat` writes `lastSeenAt` / `lastActiveAt` with `$max`. The idle sweep's conditional update on
+`lastActiveAt` is unaffected.

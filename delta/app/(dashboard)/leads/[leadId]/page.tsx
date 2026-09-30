@@ -78,6 +78,7 @@ const ACTION_CONFIG: Record<ActivityAction, { icon: React.ElementType; color: st
   note_deleted: { icon: Minus, color: "text-red-400", bg: "bg-red-500/15" },
   whatsapp_welcome: { icon: MessageCircle, color: "text-green-400", bg: "bg-green-500/15" },
   followup_missed: { icon: AlertTriangle, color: "text-red-400", bg: "bg-red-500/15" },
+  inactive_reassigned: { icon: ArrowRightLeft, color: "text-amber-400", bg: "bg-amber-500/15" },
 };
 
 const noteSchema = z.object({ content: z.string().min(1, "Note cannot be empty").max(2000) });
@@ -406,7 +407,8 @@ function ActivityTimeline({ logs }: { logs: ActivityLog[] }) {
                 icon: Activity, color: "text-muted-foreground", bg: "bg-muted",
               };
               const Icon = cfg.icon;
-              const by = getUserName(log.performedBy as User | string);
+              // No performer: the CRM did it on its own (a lead moved on for inactivity).
+              const by = log.performedBy ? getUserName(log.performedBy as User | string) : "System";
 
               return (
                 <motion.div

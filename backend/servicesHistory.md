@@ -591,3 +591,101 @@ This file documents every service in `backend/src/services/`. Read this before w
 **No-op** when finance is not configured. The 60-second timer stays as the retry net.
 **Backoff after a failure:** attempts² minutes, capped at 15 minutes (was 1 hour).
 **Test:** `tests/finance/handoverKick.test.ts` (`bun --no-env-file test tests/finance/handoverKick.test.ts`) — in-process, throwaway DB, stand-in finance.
+
+---
+
+## mailService (added 2026-09-30)
+
+**Methods:** `isMailConfigured()`, `sendMail({ to, subject, html, text?, attachments? })`, `renderEmail({ heading, paragraphs, action? })`
+**Config:** `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_SECURE` ("true" for 465), `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`. `SMTP_HOST` empty = mail off: each email is logged (`✉️  [mail dry-run] …`) and `{ sent: false, reason: "not configured" }` is returned.
+**Never throws** — returns `{ sent, reason? }`. `renderEmail` is the one branded template (purple header, one button; paths resolved against `CLIENT_URL`; all text escaped).
+
+---
+
+## notificationService — notify (added 2026-09-30)
+
+**Method:** `notify({ userIds, type, title, body, url?, tag?, email? })` — never throws.
+**Does, in order:** stores one `Notification` per person → emits the socket `"notification"` event with the stored DTO (now carries `id`) → web push via `sendPushToUsers` → email, only when `email` is given AND `settings.email[email.setting]` is on (per person, "Hi <name>,", skips inactive users and users without email).
+**Also:** `toNotificationDTO(doc)` → `{ id, type, title, body, url, read, createdAt }`.
+**Used by:** Phase 2+ (inactive leads, idle alerts, meetings).
+
+---
+
+## settingsService (added 2026-09-30)
+
+**Methods:** `getAppSettings()` (30 s cache; creates the `key: "app"` document with defaults on first read), `updateAppSettings(input, userId)` (partial `$set`, clears the cache; 400 if working hours end ≤ start), `isWithinWorkingHours(settings, at?)` (evaluated in the settings' own time zone).
+**Defaults:** inactive leads — auto-reassign **off**, 45 min · idle alerts **off**, 30 min, team leaders not alerted · working hours Mon–Sat 09:00–18:00 Asia/Dubai · email on for inactive leads, idle alerts and meetings.
+
+---
+
+## inactiveLeadService (added 2026-09-30)
+
+**Methods:**
+- `listInactiveLeads({ page, limit, teamId?, ownerId?, search? }, now?)` → `{ items, summary: { total, stuck, movedToday, capped }, rule, pagination }` — longest-waiting first; each item says what the automatic mover will do (`due | off | before_switch | stuck | no_team`).
+- `listLeadMoves({ page, limit, kind?, teamId? })` → the `LeadMove` log, newest first, names filled in.
+- `reassignInactiveLeads({ leadIds, to? }, byUserId, now?)` → `{ moved, skipped }` — `to` = one person; without it each lead goes to the next in its team. Re-checks every lead first.
+- `sweepInactiveLeads(now?)` → `{ moved, stuck, idle? }` — one automatic pass (the scheduler calls it every minute).
+- `formatMinutes(n)` — "45 min", "2 h 30 min".
+**Never** moves a lead back to anyone in `inactivity.lostBy`; every move is a conditional update on `{ assignedTo, assignedAt }`.
+
+---
+
+## leadService — split rule shared (changed 2026-09-30)
+
+- `pickSplitAssignee(team, leadId, { overrideMemberIds?, exclude? })` → member id or `null` — the member-picking half of `autoSplitLeadInner`, pulled out unchanged so moved leads follow the same split rule as new ones. `exclude` takes people out without changing whose turn it is.
+- `runInTeamQueue(teamId, task)` — the per-team split queue, now usable by callers other than `autoSplitLead`.
+- New-lead behaviour is unchanged (regression-tested: round robin, source-wise round robin).
+
+---
+
+## settingsService — enabledAt (changed 2026-09-30)
+
+`updateAppSettings` stamps `inactiveLeads.enabledAt` when `autoReassign` goes from off to on and clears it when it goes off; it now reads the stored settings past the cache before deciding. Clients cannot set `enabledAt` (the schema is strict).
+
+---
+
+## utils/workingHours (added 2026-09-30)
+
+`workingMinutesBetween(wh, from, to)`, `workingCutoff(wh, now, minutes)`, `startOfLocalDay(tz, at)` — pure, evaluated in the working hours' own time zone (DST-safe), windows `[start, end)`.
+
+---
+
+## activityService (added 2026-09-30)
+
+**Recording:** `recordLogin(req, user, method)`, `recordLoginFailure(req, email, error, method)` (401/403 only; reason `wrong_password | unknown_email | deactivated | no_account`), `recordLogout(req, userId)`, `recordHeartbeat(userId, active, now?)`. The first two never throw.
+**Reading:** `listPeople({ search?, teamId? }, now?)` → everyone with status (`active | idle | away | signed_out | offline`), quiet minutes, alerted, active minutes today, last sign-in; `listLoginEvents({ page, limit, userId?, kind?, from?, to? })`; `listIdleStretches({ page, limit, userId? }, now?)`.
+**Sweep:** `sweepIdleUsers(now?)` → `{ alerted, idle? }` — the scheduler calls it every minute.
+
+---
+
+## notificationService — superAdminIds (moved 2026-09-30)
+
+`superAdminIds()` — every active Super Admin; moved here from inactiveLeadService so idle alerts share it.
+
+---
+
+## utils/requestMeta (added 2026-09-30)
+
+`clientIp(req)` — first X-Forwarded-For hop, else the socket address (display only, not a security check); `describeDevice(userAgent)` → `{ label: "Chrome on Windows", type: desktop | mobile | tablet | app | unknown }`.
+
+`utils/workingHours` also gained `localDayKey(tz, at)` and `formatMinutes(n)` (moved from inactiveLeadService).
+
+---
+
+## meetingService (added 2026-10-01)
+
+**Methods:** `createMeeting(input, actor)`, `updateMeeting(id, input, actor)`, `cancelMeeting(id, reason, actor)`, `getMeeting(id, actor)`, `calendarFor({ from, to, userId? }, actor)` → `{ timezone, workingHours, person, meetings, followUps, reminders }`, `findConflicts({ startAt, endAt, userIds, mentorIds, excludeId? })` → `{ people, mentors, mentorsUnavailable }`, `listColleagues(search?)`, `sweepMeetingReminders(now?)`.
+**Rules:** organizer or Super Admin changes/cancels; attendees see; others get 404. A client only if the organizer can see the lead (same rule as the leads list). Mentors are looked up in the LMS by id — names and emails never come from the form. Notes never leave the team. Every change bumps `sequence` (the invite's SEQUENCE); moving it re-arms the reminder.
+
+---
+
+## utils/ics (added 2026-10-01)
+
+`buildIcs({ uid, sequence, method: REQUEST | CANCEL, start, end, title, description?, location?, url?, organizer, attendee?, alarmMinutes? })` — RFC 5545, CRLF, lines folded at 75 octets (UTF-8 safe), TEXT escaped, one attendee per file (the recipient).
+
+## mailService / notificationService — calendar invites (changed 2026-10-01)
+
+`sendMail({ …, icalEvent: { method, content, filename? } })` → nodemailer's `icalEvent` (mail clients show an "add to calendar" card). `notify({ email: { invite: (person) => icalEvent } })` builds one per recipient.
+
+`utils/workingHours.localClock(tz, at)` → `{ weekday, minutes, dayKey }` (mentor slot checks).
+

@@ -193,7 +193,8 @@ export type ActivityAction =
   | "note_updated"
   | "note_deleted"
   | "whatsapp_welcome"
-  | "followup_missed";
+  | "followup_missed"
+  | "inactive_reassigned";
 
 export interface ILeadNote {
   _id: Types.ObjectId;
@@ -242,7 +243,8 @@ export interface IActivityLog {
   _id: Types.ObjectId;
   action: ActivityAction;
   description: string;
-  performedBy: Types.ObjectId | IUser;
+  /** Absent when the CRM did it on its own. */
+  performedBy?: Types.ObjectId | IUser;
   changes?: Record<string, { from: unknown; to: unknown }>;
   createdAt: Date;
 }
@@ -294,8 +296,19 @@ export interface ILead extends Document {
     sentAt?: Date | null;
   } | null;
   comments?: string | null;
+  /** Moves for inactivity — absent until the first one. */
+  inactivity?: ILeadInactivity;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ILeadInactivity {
+  /** Everyone who lost this lead for not acting on it. */
+  lostBy: Types.ObjectId[];
+  moves: number;
+  lastMovedAt: Date | null;
+  /** Nobody left in the team to move it to, for the current assignment. */
+  stuckAt: Date | null;
 }
 
 export interface LeadFilters {
@@ -453,4 +466,185 @@ export interface ExcelParseResult {
 export interface AutoAssignResult {
   assigned: number;
   results: { leadId: string; assignedTo: string }[];
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+/**
+ * A notice kept for one person, so the bell still has it after a reload.
+ * The live copy goes out on the socket as before; this is the record.
+ */
+export interface INotification {
+  _id: Types.ObjectId;
+  user: Types.ObjectId;
+  type: string;
+  title: string;
+  body: string;
+  url: string;
+  readAt: Date | null;
+  createdAt: Date;
+}
+
+export interface NotificationDTO {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  url: string;
+  read: boolean;
+  createdAt: string;
+}
+
+// ─── App settings ─────────────────────────────────────────────────────────────
+/** Which events also go by email. The in-app notice and the push always go. */
+export type EmailEventKey = "inactiveLeads" | "idleAlerts" | "meetings";
+
+/**
+ * The one settings document for the whole CRM (key "app").
+ *
+ * Limits are stored in minutes; the Settings page shows hours and minutes.
+ * The automatic behaviours ship switched off — they act on real leads and
+ * real people, so turning them on is a decision, not a default.
+ */
+export interface IAppSettings {
+  key: "app";
+  inactiveLeads: {
+    /** Move a lead nobody acted on to the next team member. */
+    autoReassign: boolean;
+    /** How long after assignment, in minutes, a lead with no action counts as inactive. */
+    limitMinutes: number;
+    /**
+     * When automatic moves were last switched on. Only leads assigned since then
+     * move on their own — switching it on never sweeps up the whole backlog.
+     */
+    enabledAt: Date | null;
+  };
+  idleAlerts: {
+    enabled: boolean;
+    /** Minutes without activity in the app, while logged in during working hours. */
+    limitMinutes: number;
+    notifyTeamLeaders: boolean;
+  };
+  workingHours: {
+    /** IANA zone the times below are in, e.g. "Asia/Dubai". */
+    timezone: string;
+    /** 0 = Sunday … 6 = Saturday. */
+    days: number[];
+    /** "HH:MM", 24-hour. */
+    start: string;
+    end: string;
+  };
+  email: Record<EmailEventKey, boolean>;
+  updatedBy: Types.ObjectId | null;
+  updatedAt?: Date;
+}
+
+// ─── Inactive leads ───────────────────────────────────────────────────────────
+/** One lead moved on because its owner did not act on it — automatically, or by hand from the Inactive leads page. */
+export interface ILeadMove {
+  _id: Types.ObjectId;
+  lead: Types.ObjectId;
+  leadName: string;
+  team: Types.ObjectId | null;
+  from: Types.ObjectId;
+  to: Types.ObjectId;
+  kind: "automatic" | "manual";
+  /** Who moved it by hand; null when the CRM did. */
+  by: Types.ObjectId | null;
+  /** Working minutes the lead had waited without action when it moved. */
+  inactiveMinutes: number;
+  createdAt: Date;
+}
+
+// ─── Activity (sign-ins, presence, idle) ──────────────────────────────────────
+export type LoginEventKind = "login" | "login_failed" | "logout";
+export type LoginFailReason = "wrong_password" | "unknown_email" | "deactivated" | "no_account";
+
+/** One sign-in, failed sign-in or sign-out — the Activity page's sign-in history. */
+export interface ILoginEvent {
+  _id: Types.ObjectId;
+  user: Types.ObjectId | null;
+  email: string;
+  kind: LoginEventKind;
+  method: "password" | "sso" | null;
+  reason: LoginFailReason | null;
+  ip: string;
+  userAgent: string;
+  device: string;
+  deviceType: "desktop" | "mobile" | "tablet" | "app" | "unknown";
+  createdAt: Date;
+}
+
+/** Where each person is, one document per user — refreshed by the web app's heartbeat. */
+export interface IUserPresence {
+  _id: Types.ObjectId;
+  user: Types.ObjectId;
+  /** Any heartbeat: the app was open. */
+  lastSeenAt: Date | null;
+  /** A heartbeat after someone used the app. */
+  lastActiveAt: Date | null;
+  lastLoginAt: Date | null;
+  lastLogoutAt: Date | null;
+  lastIp: string;
+  lastDevice: string;
+  /** An idle alert was sent for the quiet stretch that began at lastActiveAt. */
+  idleAlertedAt: Date | null;
+}
+
+/** Active minutes per person per day (in the working hours' time zone). */
+export interface IActivityDay {
+  _id: Types.ObjectId;
+  user: Types.ObjectId;
+  day: string;
+  activeMinutes: number;
+  firstActiveAt: Date | null;
+  lastActiveAt: Date | null;
+  /** Epoch minute last counted: one active minute per minute, however many tabs are open. */
+  lastMinute: number;
+  createdAt: Date;
+}
+
+/** A stretch of no activity that raised an idle alert; ends when the person is back. */
+export interface IIdleStretch {
+  _id: Types.ObjectId;
+  user: Types.ObjectId;
+  since: Date;
+  alertedAt: Date;
+  endedAt: Date | null;
+  createdAt: Date;
+}
+
+// ─── Meetings ─────────────────────────────────────────────────────────────────
+/** A mentor invited by email — looked up in the LMS by id when the meeting is saved. */
+export interface IMeetingMentor {
+  lmsId: string;
+  name: string;
+  email: string;
+}
+
+export interface IMeeting {
+  _id: Types.ObjectId;
+  title: string;
+  /** For the team only — never sent to the client or mentors. */
+  notes: string;
+  /** A joining link or a place. */
+  link: string;
+  startAt: Date;
+  endAt: Date;
+  organizer: Types.ObjectId;
+  /** Employees invited, not counting the organizer. */
+  attendees: Types.ObjectId[];
+  /** The client — a lead, invited by email when it has one. */
+  lead: Types.ObjectId | null;
+  mentors: IMeetingMentor[];
+  status: "scheduled" | "cancelled";
+  cancelledAt: Date | null;
+  cancelledBy: Types.ObjectId | null;
+  cancelReason: string;
+  /** Minutes before the start to remind everyone; 0 = no reminder. */
+  reminderMinutes: number;
+  reminderSentAt: Date | null;
+  /** iCalendar SEQUENCE — one up on every change, so calendars replace the invite they have. */
+  sequence: number;
+  createdAt: Date;
+  updatedAt: Date;
 }

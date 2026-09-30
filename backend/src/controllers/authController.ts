@@ -3,6 +3,7 @@ import type { AuthenticatedRequest } from "../types/index.js";
 import { AuthService } from "../services/authService.js";
 import { loginSchema, refreshTokenSchema, changePasswordSchema } from "../validations/authValidation.js";
 import { sendSuccess, sendError } from "../utils/response.js";
+import { recordLogin, recordLoginFailure, recordLogout } from "../services/activityService.js";
 import axios from "axios";
 
 const authService = new AuthService();
@@ -15,7 +16,15 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
       return;
     }
 
-    const result = await authService.login(parsed.data);
+    // Every sign-in, and every refused one, goes in the Activity page's history.
+    let result: Awaited<ReturnType<typeof authService.login>>;
+    try {
+      result = await authService.login(parsed.data);
+    } catch (err) {
+      await recordLoginFailure(req, parsed.data.email, err, "password");
+      throw err;
+    }
+    await recordLogin(req, result.user, "password");
     sendSuccess(res, "Login successful", result, 200);
   } catch (error) {
     next(error);
@@ -61,6 +70,17 @@ export const changePassword = async (req: AuthenticatedRequest, res: Response, n
   }
 };
 
+// POST /api/v1/auth/logout — the app calls it on "Logout", so the sign-out is on record.
+// Tokens are not revoked (they are stateless); the app drops its own copy.
+export const logout = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    await recordLogout(req, req.user!.userId);
+    sendSuccess(res, "Signed out");
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ── Root ERP SSO Login ─────────────────────────────────────────────────────
 /**
  * POST /api/v1/auth/sso-login
@@ -98,7 +118,14 @@ export const ssoLogin = async (req: Request, res: Response, next: NextFunction):
       return;
     }
 
-    const result = await authService.ssoLogin(admin);
+    let result: Awaited<ReturnType<typeof authService.ssoLogin>>;
+    try {
+      result = await authService.ssoLogin(admin);
+    } catch (err) {
+      await recordLoginFailure(req, admin.email, err, "sso");
+      throw err;
+    }
+    await recordLogin(req, result.user, "sso");
     sendSuccess(res, "SSO login successful", result, 200);
   } catch (error) {
     // The portal rejects a spent or expired token with a 401. Surface that as

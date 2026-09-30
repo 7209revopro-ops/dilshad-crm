@@ -1027,3 +1027,102 @@
 **Props:** `teams: Team[]`, `selectedTeamIds: Set<string>`, `selectedMemberIds: Record<string, Set<string>>`, `lockedTeamId?: string | null`, `lockedMemberId?: string | null`, `onToggleTeam: (id: string) => void`, `onToggleMember: (teamId: string, memberId: string) => void`, `onSetAllMembers: (teamId: string, all: boolean) => void`
 **Used in:** upload page
 **Purpose:** Vertical list of team rows, each expands to show `MemberSelector`. BDE sees only their team (locked, non-removable). Admins can toggle any team + any member. Framer Motion AnimatePresence for expand/collapse.
+
+
+---
+
+### AutomationSettingsCard
+- **File**: `components/settings/AutomationSettingsCard.tsx`
+- **Version**: 1.0.0
+- **Created**: 2026-09-30
+- **Last Updated**: 2026-09-30
+- **Status**: active
+
+**Purpose**: Settings → "Automation & alerts": inactive-lead limit (hours + minutes) and auto-reassign switch, idle alerts, working hours, per-event email switches, mailbox status and test email. Read-only for anyone without `settings.edit`.
+
+**API Routes Used**:
+| Method | Endpoint | Hook | Purpose |
+|--------|----------|------|---------|
+| GET | `/settings/app` | `useAppSettings()` | Load |
+| PUT | `/settings/app` | `useUpdateAppSettings()` | Save |
+| POST | `/settings/app/test-email` | `useSendTestEmail()` | Test the mailbox |
+
+**Used In (Pages)**:
+| Route | Why |
+|-------|-----|
+| `app/(dashboard)/settings/page.tsx` | Last card on the Settings page |
+
+**Dependencies**:
+- 1.0.0 — Initial creation
+
+### NotificationBell — change log
+- 2026-09-30 — Loads kept notifications from `GET /notifications` and merges live socket ones (stored ones arrive with an `id`); mark-all-read, dismiss and clear-all now persist through `hooks/useNotifications.ts`.
+
+---
+
+### MoveLeadsDialog
+- **File**: `components/inactive-leads/MoveLeadsDialog.tsx`
+- **Version**: 1.0.0
+- **Created**: 2026-09-30
+- **Last Updated**: 2026-09-30
+- **Status**: active
+
+**Purpose**: Move one or more inactive leads — "Next in their team" (the team's split rule) or "A person I choose" (searchable list of active users; the current owner is disabled). Stays open when nothing moved, so another choice can be made.
+
+**API Routes Used**:
+| Method | Endpoint | Hook | Purpose |
+|--------|----------|------|---------|
+| POST | `/inactive-leads/reassign` | `useReassignInactiveLeads()` | Move |
+| GET | `/users?status=active` | `useUsers()` | People to pick from |
+
+**Used In (Pages)**:
+| Route | Why |
+|-------|-----|
+| `app/(dashboard)/inactive-leads/page.tsx` | Row "Move" and the bulk "Move N" bar |
+
+**Dependencies**: `ResponsiveDialog` (Drawer on mobile)
+- 1.0.0 — Initial creation
+
+### Inactive Leads page
+- **File**: `app/(dashboard)/inactive-leads/page.tsx` — route `/inactive-leads`, super admin only (renders nothing else for anyone else; the layout also redirects them)
+- **Parts**: header with the rule and automatic-moves badge, 3 stat cards, tabs "Inactive now" / "Moves log", table with select-all, bulk bar, pager; local `StatCard`, `Pager`, `EmptyState`, `ErrorState`, `TableSkeleton`
+- **Created**: 2026-09-30
+
+### Change log — 2026-09-30 (Phase 2)
+- `Sidebar` — "Inactive Leads" nav item (`permModule: "inactive-leads"`, which only the Super Admin passes); the notification handler also reads `type` from stored notices, so the lead count refreshes for moved leads.
+- Lead detail page — `inactive_reassigned` in the activity log (amber, `ArrowRightLeft`); entries with no performer show "by System".
+- `AutomationSettingsCard` 1.1.0 — Inactive leads section live (no "Coming next"), shows since when automatic moves apply and links to the page; never sends `enabledAt` back.
+
+---
+
+### Shared list parts (added 2026-09-30)
+- **Files**: `components/shared/StatCard.tsx` (`StatCard`), `components/shared/Pager.tsx` (`Pager`), `components/shared/ListStates.tsx` (`EmptyState`, `ErrorState`, `TableSkeleton`); variants in `lib/animations.ts` (`pageVariants`, `listContainerVariants`, `listItemVariants`)
+- **Why**: pulled out of the Inactive Leads page when the Activity page needed the same parts. Reuse them for new list pages.
+- **Used In**: `app/(dashboard)/inactive-leads/page.tsx`, `app/(dashboard)/activity/page.tsx`
+
+### Activity page
+- **File**: `app/(dashboard)/activity/page.tsx` — route `/activity`, super admin only (renders nothing else for anyone else; the layout also redirects them)
+- **Parts**: header with the idle-alert rule badge, 4 stat cards, tabs People / Sign-ins / Idle alerts, person chip filter, pagers; local `EventBadge`, `DeviceIcon`
+- **Created**: 2026-09-30
+
+### Change log — 2026-09-30 (Phase 3)
+- `Sidebar` — "Activity" nav item (`permModule: "activity"`, which only the Super Admin passes).
+- `app/(dashboard)/layout.tsx` — mounts `useActivityHeartbeat()`.
+- `NotificationBell` — icons for `inactive_lead_moved`, `inactive_leads_moved`, `inactive_leads_stuck`, `idle_self`, `idle_alert`.
+- `AutomationSettingsCard` 1.2.0 — Idle alerts live (no "Coming next"), clearer description, link to `/activity`.
+- Inactive Leads page — uses the shared list parts; tabs no longer shrink.
+
+---
+
+### Calendar components (added 2026-10-01)
+- `components/calendar/TimeGrid.tsx` — day/week hours grid: side-by-side overlaps, mentors' strip (free/busy), now line, click-to-book
+- `components/calendar/MonthGrid.tsx` — six weeks, three items a day + "+N more"
+- `components/calendar/MeetingDialog.tsx` — book/change: colleagues, client, mentors, link, notes, reminder, live busy warning (ResponsiveDialog)
+- `components/calendar/MeetingDetails.tsx` — one meeting; change / cancel with a reason
+- `components/calendar/mentorColors.ts` — mentor colours as full class names (Tailwind can't build them from pieces)
+- **Used In**: `app/(dashboard)/calendar/page.tsx`
+
+### Change log — 2026-10-01 (Phase 4)
+- `Sidebar` — "Calendar" nav item (`permModule: null`).
+- `app/(dashboard)/layout.tsx` — `/calendar` passes the permission redirect for every role (like `/profile`).
+- `NotificationBell` — icons for `meeting_scheduled`, `meeting_updated`, `meeting_reminder`, `meeting_cancelled`.

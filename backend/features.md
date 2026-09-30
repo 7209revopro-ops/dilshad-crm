@@ -500,3 +500,76 @@ Each feature documents:
 **Change Log**:
 - Initial PDF export for teams
 - Added user-scoped PDF export
+
+
+---
+
+## 18. Notifications, email & app settings (Phase 1 foundations, 2026-09-30)
+
+**Description**: The groundwork for inactive leads, idle alerts and meetings — a kept notification per person, one `notify()` that sends in-app + push + email, an SMTP mailer that logs instead of sending until configured, and one app-wide settings document.
+
+**Routes**: see middlewareHistory.md → "Routes added 2026-09-30".
+
+**Service Methods**: `mailService.sendMail/renderEmail/isMailConfigured`, `notificationService.notify/toNotificationDTO`, `settingsService.getAppSettings/updateAppSettings/isWithinWorkingHours`
+
+**Models Used**: `Notification` (60-day TTL), `AppSetting` (single document, `key: "app"`), `User`
+
+**Socket Events**: `notification` — unchanged name; stored notices now include `id`.
+
+**Change Log**:
+- 1.0.0 — Initial build (dependency: `nodemailer`)
+
+---
+
+## 19. Inactive leads (Phase 2, 2026-09-30)
+
+**Description**: A lead is *inactive* when its status is still new/assigned and its owner has not changed the status, added a note, logged a follow-up or a call, or set a reminder within the limit set in Settings (default 45 min), counting working time only. The super admin sees them on the **Inactive leads** page and moves them on by hand; with Settings → Automation & alerts → "Move leads nobody acted on" switched on, a scheduler moves them every minute in working hours — to the next person by the team's split rule, never back to anyone who lost that lead before.
+
+**Routes**: see middlewareHistory.md → "Routes added 2026-09-30 — inactive leads".
+
+**Service Methods**: `inactiveLeadService.listInactiveLeads / listLeadMoves / reassignInactiveLeads / sweepInactiveLeads`; `leadService.pickSplitAssignee / runInTeamQueue` (split rule shared with new leads); `utils/workingHours.workingMinutesBetween / workingCutoff / startOfLocalDay`
+
+**Models Used**: `Lead` (new `inactivity` sub-document, `inactive_reassigned` activity), `LeadMove` (the move log), `AppSetting` (`inactiveLeads.enabledAt`), `Team`, `User`, `Role`, `CallLog`, `Notification`
+
+**Scheduler**: `inactiveLeadScheduler` — every 60 s, only when `RUN_SCHEDULERS` is on and the switch is on.
+
+**Socket Events**: `notification` (types `inactive_lead_moved`, `lead_assigned`, `inactive_leads_moved`, `inactive_leads_stuck`); `team:update` activity item `inactive_reassigned`.
+
+**Change Log**:
+- 1.0.0 — Initial build. Automatic moves only for leads assigned after the switch went on (`enabledAt`).
+
+---
+
+## 20. Sign-ins, activity & idle alerts (Phase 3, 2026-09-30)
+
+**Description**: Every sign-in, refused sign-in (with the reason) and sign-out is recorded with IP and device. The web app sends a heartbeat every minute it is open, saying whether anyone used it — which gives last seen, last active and active minutes per day. With Settings → Automation & alerts → "Send idle alerts" on, anyone who used the app today, hasn't signed out and has done nothing in it for the limit (working time) gets one alert per quiet stretch, as do the super admins (and their team leaders, if switched on). Super admins are not tracked. The super admin's **Activity** page shows it all.
+
+**Routes**: see middlewareHistory.md → "Routes added 2026-09-30 — activity".
+
+**Service Methods**: `activityService.recordLogin / recordLoginFailure / recordLogout / recordHeartbeat / listPeople / listLoginEvents / listIdleStretches / sweepIdleUsers`; `notificationService.superAdminIds`; `utils/requestMeta.clientIp / describeDevice`; `utils/workingHours.localDayKey / formatMinutes`
+
+**Models Used**: `LoginEvent`, `UserPresence` (one per user), `ActivityDay` (per user per day), `IdleStretch` — the last three kept a year (TTL); plus `User`, `Team`, `AppSetting`, `Notification`
+
+**Scheduler**: `idleAlertScheduler` — every 60 s, only when `RUN_SCHEDULERS` is on and idle alerts are switched on.
+
+**Socket Events**: `notification` types `idle_self`, `idle_alert` (see socketHistory.md).
+
+**Change Log**:
+- 1.0.0 — Initial build. Tokens are still not revoked on sign-out (stateless JWT); the sign-out is recorded and the app drops its copy.
+
+---
+
+## 21. Meetings & calendars (Phase 4, 2026-10-01)
+
+**Description**: Anyone signed in books meetings with colleagues (and the super admin), optionally a client — a lead they can see — and mentors from the LMS. The organizer (or a super admin) changes or cancels them; a busy check warns (never blocks) when a colleague has another meeting then, or a mentor has an LMS class/meeting or no free slot. Everyone involved is told: employees in the app, by push and by email; the client and mentors by email — all with a calendar invite (.ics), updated or cancelled as the meeting changes. A reminder goes out before the start. Each person's calendar shows their meetings, follow-ups and reminders; the super admin can open anyone's.
+
+**Routes**: see middlewareHistory.md → "Routes added 2026-10-01 — meetings".
+
+**Service Methods**: `meetingService.createMeeting / updateMeeting / cancelMeeting / getMeeting / calendarFor / findConflicts / listColleagues / sweepMeetingReminders`; `utils/ics.buildIcs`; `mailService.sendMail({ icalEvent })`; `notify({ email: { invite } })`
+
+**Models Used**: `Meeting`; `User`, `Lead`, `Team`, `Notification`; the LMS via `mentorService.schedule`
+
+**Scheduler**: `meetingReminderScheduler` — every 60 s (`RUN_SCHEDULERS`).
+
+**Change Log**:
+- 1.0.0 — Initial build. Mentors are invited by email; their LMS diary is not booked (that stays on the Mentors page).

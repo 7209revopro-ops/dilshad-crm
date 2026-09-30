@@ -367,3 +367,55 @@ reminderScheduler.tick()
 - **Web Push** — delivers via the browser's push infrastructure even when the app is closed. Slightly delayed. Requires user to grant notification permission.
 
 Both fire for the same reminder — the frontend is expected to deduplicate by `reminderId` (e.g., if the socket reminder arrives first, the push notification that arrives shortly after should not cause a double-toast).
+
+
+---
+
+### `notification` payload — stored notices (2026-09-30)
+
+Notices sent through `notificationService.notify()` are also kept in the `notifications` collection, and their socket payload carries the stored `id`:
+`{ id, type, title, body, url, read: false, createdAt }`. Older emitters still send `{ title, body, url, … }` without an id; the bell treats those as live-only.
+
+---
+
+### Inactive leads (2026-09-30)
+
+All through `notify()` (stored, socket `notification`, push, email when Settings → Email → Inactive leads is on). One notice per person per pass, however many leads it covers.
+
+| `type` | To | When |
+|--------|----|------|
+| `inactive_lead_moved` | the person who lost the lead(s) | moved automatically or by hand |
+| `lead_assigned` | the person who got them | same — the sidebar's lead count refreshes on it, as for any assignment |
+| `inactive_leads_moved` | every active Super Admin | automatic moves only (a manual move was made by one of them) |
+| `inactive_leads_stuck` | every active Super Admin | nobody left in the team to take a lead — once per lead and assignment |
+
+Team room: `team:update` with an `activity` item, `action: "inactive_reassigned"`, `performedBy: null` for automatic moves.
+
+---
+
+### Idle alerts (2026-09-30)
+
+Through `notify()`; email when Settings → Email → Idle alerts is on.
+
+| `type` | To | When |
+|--------|----|------|
+| `idle_self` | the person who went quiet | once per quiet stretch |
+| `idle_alert` | every active Super Admin — one notice per pass, listing everyone | same |
+| `idle_alert` | each team leader, about their own team members only | only with "Also alert the person's team leaders" on |
+
+Presence is **not** on the socket: the web app's heartbeat is an HTTP call (`POST /activity/heartbeat`, every 60 s), so it rides the same token refresh as every other request.
+
+---
+
+### Meetings (2026-10-01)
+
+Through `notify()`; email (with the .ics invite) when Settings → Email → Meetings is on. The client and mentors get email only — always, since the organizer invited them.
+
+| `type` | To | When |
+|--------|----|------|
+| `meeting_scheduled` | employees invited (not the organizer) | booked, or added later |
+| `meeting_updated` | employees still on it (+ the organizer when a Super Admin changed it) | time, title, link, notes, client or mentors changed |
+| `meeting_cancelled` | employees on it (+ the organizer when a Super Admin cancelled); anyone taken off it | cancelled / removed |
+| `meeting_reminder` | organizer + employees | `reminderMinutes` before the start, once |
+
+All open `/calendar?meeting=<id>`.

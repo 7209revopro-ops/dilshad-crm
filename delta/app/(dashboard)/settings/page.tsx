@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useCurrencyStore, CURRENCIES } from "@/lib/store/currencyStore";
 import { fmtCompact, fmtFull } from "@/lib/currency";
 import { toast } from "sonner";
+import { AutomationSettingsCard } from "@/components/settings/AutomationSettingsCard";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -281,6 +282,11 @@ export default function SettingsPage() {
 
           </CardContent>
         </Card>
+      </motion.div>
+
+      {/* Automation & alerts — inactive leads, idle alerts, working hours, email */}
+      <motion.div variants={itemVariants}>
+        <AutomationSettingsCard />
       </motion.div>
     </motion.div>
   );

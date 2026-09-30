@@ -16,6 +16,11 @@ import callRoutes from "./callRoutes.js";
 import sheetSourceRoutes from "./sheetSourceRoutes.js";
 import portalRoutes from "./portalRoutes.js";
 import mentorRoutes from "./mentorRoutes.js";
+import notificationRoutes from "./notificationRoutes.js";
+import settingsRoutes from "./settingsRoutes.js";
+import inactiveLeadRoutes from "./inactiveLeadRoutes.js";
+import activityRoutes from "./activityRoutes.js";
+import meetingRoutes from "./meetingRoutes.js";
 
 const router = Router();
 
@@ -39,6 +44,14 @@ router.use("/calls",         callRoutes);
 router.use("/sheet-sources", sheetSourceRoutes);
 // The mentor calendar this CRM reads from the Delta LMS — see mentorRoutes.
 router.use("/mentors", mentorRoutes);
+router.use("/notifications", notificationRoutes);
+router.use("/settings", settingsRoutes);
+// The super admin's Inactive leads page — see inactiveLeadRoutes.
+router.use("/inactive-leads", inactiveLeadRoutes);
+// Heartbeats from everyone; the Activity page for the super admin — see activityRoutes.
+router.use("/activity", activityRoutes);
+// Meetings between colleagues, clients and mentors, and each person's calendar — see meetingRoutes.
+router.use("/meetings", meetingRoutes);
 
 // Health check
 router.get("/health", (_req, res) => {

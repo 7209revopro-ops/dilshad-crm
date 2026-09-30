@@ -525,3 +525,62 @@ view | create | edit | delete | approve | export
 #### `settings`
 - `view` — access settings page
 - `edit` — modify system settings (VAPID keys, Sheets API key, etc.)
+
+
+---
+
+### Routes added 2026-09-30 — notifications & app settings
+
+| Method | Path | Middleware chain |
+|--------|------|-----------------|
+| GET | `/api/v1/notifications` | `authenticate` (own notifications only) |
+| POST | `/api/v1/notifications/read-all` | `authenticate` |
+| DELETE | `/api/v1/notifications` | `authenticate` |
+| DELETE | `/api/v1/notifications/:id` | `authenticate` — another user's id answers 404 |
+| GET | `/api/v1/settings/app` | `authenticate` → `checkPermission("settings","view")` |
+| PUT | `/api/v1/settings/app` | `authenticate` → `checkPermission("settings","edit")` |
+| POST | `/api/v1/settings/app/test-email` | `authenticate` → `checkPermission("settings","edit")` |
+
+`settings.edit` now also covers the Settings page's **Automation & alerts** section.
+
+---
+
+### Routes added 2026-09-30 — inactive leads
+
+| Method | Path | Middleware chain |
+|--------|------|-----------------|
+| GET | `/api/v1/inactive-leads` | `authenticate` → `requireSuperAdmin` |
+| GET | `/api/v1/inactive-leads/moves` | `authenticate` → `requireSuperAdmin` |
+| POST | `/api/v1/inactive-leads/reassign` | `authenticate` → `requireSuperAdmin` |
+
+**`requireSuperAdmin`** (new, `middleware/permissions.ts`) — passes only `role.isSystemRole && role.roleName === "Super Admin"`; everyone else gets 403, including a custom role with every permission ticked. It is deliberately not a module a role can be granted.
+
+---
+
+### Routes added 2026-09-30 — activity
+
+| Method | Path | Middleware chain |
+|--------|------|-----------------|
+| POST | `/api/v1/auth/logout` | `authenticate` — records the sign-out |
+| POST | `/api/v1/activity/heartbeat` | `authenticate` (everyone reports their own) |
+| GET | `/api/v1/activity/people` | `authenticate` → `requireSuperAdmin` |
+| GET | `/api/v1/activity/logins` | `authenticate` → `requireSuperAdmin` |
+| GET | `/api/v1/activity/idle` | `authenticate` → `requireSuperAdmin` |
+
+`POST /auth/login` and `POST /auth/sso-login` now also record the sign-in, or the refusal (401/403 only — not validation errors or server errors).
+
+---
+
+### Routes added 2026-10-01 — meetings
+
+| Method | Path | Middleware chain |
+|--------|------|-----------------|
+| GET | `/api/v1/meetings/calendar` | `authenticate` — own calendar; `userId` of someone else only for the Super Admin (403 otherwise) |
+| GET | `/api/v1/meetings/people` | `authenticate` — active colleagues to invite |
+| POST | `/api/v1/meetings/conflicts` | `authenticate` |
+| POST | `/api/v1/meetings` | `authenticate` — a client (`leadId`) only if the leads rule lets the organizer see it (403) |
+| GET | `/api/v1/meetings/:id` | `authenticate` — organizer, attendees or Super Admin; anyone else 404 |
+| PUT | `/api/v1/meetings/:id` | `authenticate` — organizer or Super Admin (attendees 403, others 404) |
+| POST | `/api/v1/meetings/:id/cancel` | same as PUT |
+
+No module permission: booking time with colleagues is everyday work, like the mentor calendar. The frontend's dashboard layout lets `/calendar` through for every role.

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Bell, BellOff, X, CheckCircle2, UserCheck,
   MessageCircle, StickyNote, ExternalLink, Loader2,
+  ArrowRightLeft, AlertTriangle, Coffee, CalendarClock, CalendarX2,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,10 @@ import { useAuthStore } from "@/lib/store/authStore";
 import { usePushNotification } from "@/hooks/usePushNotification";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { toast } from "@/lib/toast";
+import {
+  useNotifications, useMarkAllNotificationsRead, useDeleteNotification, useClearNotifications,
+} from "@/hooks/useNotifications";
+import type { AppNotificationDTO } from "@/types/notification";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,13 +34,35 @@ interface AppNotification {
   url?: string;
   createdAt: string;
   read: boolean;
+  /** Kept on the server (it has a stored id): reading, dismissing and clearing it stick. */
+  stored?: boolean;
 }
+
+/** Newest first, one of each id, at most 50. */
+function mergeNotifications(a: AppNotification[], b: AppNotification[]): AppNotification[] {
+  const byId = new Map<string, AppNotification>();
+  for (const n of [...a, ...b]) if (!byId.has(n.id)) byId.set(n.id, n);
+  return Array.from(byId.values())
+    .sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime())
+    .slice(0, 50);
+}
+
+const fromStored = (n: AppNotificationDTO): AppNotification => ({ ...n, url: n.url || undefined, stored: true });
 
 const TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
   lead_assigned:  { icon: UserCheck,     color: "text-teal-400",   bg: "bg-teal-500/15"   },
   team_message:   { icon: MessageCircle, color: "text-blue-400",   bg: "bg-blue-500/15"   },
   status_changed: { icon: CheckCircle2,  color: "text-violet-400", bg: "bg-violet-500/15" },
   note_added:     { icon: StickyNote,    color: "text-green-400",  bg: "bg-green-500/15"  },
+  inactive_lead_moved:  { icon: ArrowRightLeft, color: "text-amber-400", bg: "bg-amber-500/15" },
+  inactive_leads_moved: { icon: ArrowRightLeft, color: "text-amber-400", bg: "bg-amber-500/15" },
+  inactive_leads_stuck: { icon: AlertTriangle,  color: "text-red-400",   bg: "bg-red-500/15"   },
+  idle_self:            { icon: Coffee,         color: "text-amber-400", bg: "bg-amber-500/15" },
+  idle_alert:           { icon: Coffee,         color: "text-amber-400", bg: "bg-amber-500/15" },
+  meeting_scheduled:    { icon: CalendarClock,  color: "text-primary",   bg: "bg-primary/15"   },
+  meeting_updated:      { icon: CalendarClock,  color: "text-primary",   bg: "bg-primary/15"   },
+  meeting_reminder:     { icon: CalendarClock,  color: "text-primary",   bg: "bg-primary/15"   },
+  meeting_cancelled:    { icon: CalendarX2,     color: "text-red-400",   bg: "bg-red-500/15"   },
 };
 const DEFAULT_TYPE = { icon: Bell, color: "text-primary", bg: "bg-primary/15" };
 
@@ -228,8 +255,20 @@ export function NotificationBell() {
   const { accessToken } = useAuthStore();
   const { permission, isSubscribed, isLoading: pushLoading, requestPermission } = usePushNotification();
   const isMobile = useIsMobile();
+  const { data: storedList } = useNotifications(Boolean(accessToken));
+  const markAllStoredRead = useMarkAllNotificationsRead();
+  const deleteStored = useDeleteNotification();
+  const clearStored = useClearNotifications();
 
   const unread = notifications.filter((n) => !n.read).length;
+
+  // ── What the server kept: loaded on sign-in and after every change ─────────
+  useEffect(() => {
+    if (!storedList) return;
+    const stored = storedList.items.map(fromStored);
+    // Live-only notices (older events that are not stored) stay; stored ones are replaced by the server's copy.
+    setNotifications((prev) => mergeNotifications(stored, prev.filter((n) => !n.stored)));
+  }, [storedList]);
 
   // ── Show push permission banner if not yet granted ────────────────────────
   useEffect(() => {
@@ -246,13 +285,15 @@ export function NotificationBell() {
     if (!accessToken || typeof window === "undefined") return;
     const socket = getSocket(accessToken);
 
-    const handler = (payload: Omit<AppNotification, "id" | "read">) => {
+    const handler = (payload: Omit<AppNotification, "id" | "read"> & { id?: string }) => {
+      // Stored notices arrive with their id; older live-only events get one made up here.
       const notif: AppNotification = {
         ...payload,
-        id: `${Date.now()}-${Math.random()}`,
+        id: payload.id ?? `${Date.now()}-${Math.random()}`,
         read: false,
+        stored: Boolean(payload.id),
       };
-      setNotifications((prev) => [notif, ...prev].slice(0, 50));
+      setNotifications((prev) => mergeNotifications([notif], prev));
       toast(notif.title, {
         description: notif.body,
         duration: 5000,
@@ -284,14 +325,20 @@ export function NotificationBell() {
   }, [open, isMobile]);
 
   const markAllRead = useCallback(() => {
+    if (notifications.some((n) => n.stored && !n.read)) markAllStoredRead.mutate();
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
+  }, [notifications, markAllStoredRead]);
 
   const dismiss = useCallback((id: string) => {
+    const target = notifications.find((n) => n.id === id);
+    if (target?.stored) deleteStored.mutate(id);
     setNotifications((prev) => prev.filter((n) => n.id !== id));
-  }, []);
+  }, [notifications, deleteStored]);
 
-  const clearAll = useCallback(() => setNotifications([]), []);
+  const clearAll = useCallback(() => {
+    if (notifications.some((n) => n.stored)) clearStored.mutate();
+    setNotifications([]);
+  }, [notifications, clearStored]);
 
   const handleOpen = useCallback(() => {
     setOpen((v) => !v);

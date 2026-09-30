@@ -72,3 +72,17 @@ export const requireModule = (module: CrmModule) => {
     next();
   };
 };
+
+/**
+ * Only the Super Admin — for screens that are theirs alone, like Inactive
+ * leads. Not a module a role can be granted: the whole point is that nobody
+ * else decides whose leads move.
+ */
+export const requireSuperAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  const role = req.user?.role;
+  if (role?.isSystemRole && role.roleName === "Super Admin") {
+    next();
+    return;
+  }
+  sendError(res, "Access denied: only a super admin can do this", 403);
+};

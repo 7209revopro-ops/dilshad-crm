@@ -622,3 +622,67 @@ Google Sheets columns map to Lead fields:
 - It is then sent immediately in the background (`kickFinanceHandover`), not on the next 60-second tick. The timer only retries what could not be sent.
 - Retry wait after a failure: 1, 4, 9 … minutes, now capped at **15 minutes** (was 60), so an enrolment goes out soon after finance comes back.
 - 4xx other than 401 still stops (`failed`); 401 and 5xx keep retrying.
+
+---
+
+## Inactive leads — the rule, the clock and the moves (2026-09-30)
+
+**File**: `src/services/inactiveLeadService.ts` (+ `src/utils/workingHours.ts`, `leadService.pickSplitAssignee`)
+
+1. **Candidates** — status `new`/`assigned`, has an owner, `assignedAt ≤ cutoff`. The cutoff is the latest moment that is at
+   least the limit of working time before now (`workingCutoff`): working time only grows the earlier something started, so
+   "assigned at or before the cutoff" is exactly "past the limit" — a plain date the database filters on.
+2. **Acted on** (any one, by the owner, at or after `assignedAt`) — an activity entry `status_changed` / `note_added` /
+   `note_updated`, or `lead_updated` that changed `status`; a note; a follow-up; a reminder; `firstContactTime`
+   (stamped by the owner's first call, note or status change); `lastContactedAt` (a counted call); a `CallLog` for the lead
+   `initiatedBy` the owner or on the owner's 3CX `extension`; or the owner created the lead and took it on the spot.
+   Opening the lead does not count. A note or call from before the lead became theirs does not count.
+3. **Where it goes** — `pickSplitAssignee` with `exclude = [current owner, everyone in inactivity.lostBy, deactivated users]`,
+   inside the team's split queue. Round-robin: an excluded member's turn passes to the next one. Nobody left, or no team →
+   `inactivity.stuckAt` is stamped (super admins told once), and it waits for a person to be picked by hand.
+4. **The move** — one conditional update on `{ _id, assignedTo, assignedAt }` (a lead reassigned or moved meanwhile is left
+   alone): new owner, `assignedAt = now`, `status = "assigned"`, `firstContactTime = null`, loser added to
+   `inactivity.lostBy`, `inactivity.moves + 1`, activity `inactive_reassigned`; then a `LeadMove` record.
+5. **Automatic** — every 60 s, in working hours only, with the switch on, and only for leads assigned since
+   `inactiveLeads.enabledAt` (stamped when the switch goes on, cleared when off). At most 200 leads a pass.
+6. **By hand** — the page's leads are checked again before moving; one worked or moved since the page loaded is skipped
+   with the reason.
+
+---
+
+## Presence, active time and idle alerts (2026-09-30)
+
+**File**: `src/services/activityService.ts` (+ `hooks/useActivityHeartbeat.ts` in the web app)
+
+1. **Heartbeat** — every 60 s while the app is open; `active` = a pointer, key, wheel, touch, scroll or focus event in the last
+   60 s (the app also sends one straight away when someone comes back after a quiet minute). Server: `lastSeenAt` always,
+   `lastActiveAt` when active (both `$max`).
+2. **Active minutes** — one per clock minute with an active heartbeat, however many tabs: a conditional `$inc` on
+   `{ user, day, lastMinute < thisMinute }`; the day's first minute creates the record (a duplicate-key race means another tab
+   already counted it). `day` is the date in the working hours' time zone.
+3. **Status** (Activity page) — `signed_out`: signed out after the last sign-in and last heartbeat (90 s slack for one in
+   flight), today; `active`: used in the last 2 min; `idle`: heartbeat in the last 2½ min but not used; `away`: seen today, app
+   closed; `offline`: not seen today.
+4. **Idle alert** — in working hours, with the switch on: `lastActiveAt` today and at or before `workingCutoff(now, limit)`,
+   not already alerted for that `lastActiveAt`, not signed out since, not a super admin, not deactivated. Stamp
+   `idleAlertedAt` (conditional on `lastActiveAt` unchanged), record an `IdleStretch`, notify. The next active heartbeat ends
+   every open stretch; a new quiet stretch can then be alerted again.
+
+---
+
+## Meetings, invites and the busy check (2026-10-01)
+
+**File**: `src/services/meetingService.ts`
+
+1. **Booking** — start not more than 5 min in the past; end after start; at most 12 h; attendees active (organizer and duplicates
+   dropped); client visible to the organizer; mentors resolved from the LMS.
+2. **Who hears what** — employees: in-app + push + email (switch: Settings → Email → Meetings) with notes; client and mentors:
+   email only, never notes, always sent. Each email carries its own .ics (the recipient as the only ATTENDEE).
+3. **Changes** — people added: invite; taken off: cancellation; staying: "changed" when time, title, link, notes, client or
+   mentors changed. Client and mentors only hear about time, title or link. SEQUENCE + 1 every save; a time change clears
+   `reminderSentAt`.
+4. **Busy check** — other scheduled meetings of the chosen people overlapping [start, end) (the meeting being edited excluded);
+   for mentors, LMS classes and meetings overlapping it, and whether it sits inside one of their weekly slots in the LMS's
+   zone. A warning in the form, never a refusal. LMS unreachable → `mentorsUnavailable`, the rest still answered.
+5. **Reminder** — every minute: scheduled, not yet reminded, `startAt − reminderMinutes ≤ now < startAt` → stamp (conditional),
+   notify organizer + attendees.

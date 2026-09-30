@@ -137,8 +137,25 @@ function istMidnightUTC(): Date {
 // Batch callers (sheet sync, bulk upload) fire autoSplitLead for many leads in
 // parallel. Round-robin cursors and count-based selection must each see the
 // previous assignment's write, so splits for the SAME team are serialized
-// through a promise chain. Different teams still split in parallel.
+// through a promise chain. Different teams still split in parallel. Moving an
+// inactive lead on picks its next owner through the same chain.
 const teamSplitQueues = new Map<string, Promise<void>>();
+
+/** Runs `task` after every split already queued for this team. */
+export function runInTeamQueue<T>(teamId: string, task: () => Promise<T>): Promise<T> {
+  const prev = teamSplitQueues.get(teamId) ?? Promise.resolve();
+  const run = prev.then(task);
+  // Guard the chain so one failure can never wedge the queue.
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  teamSplitQueues.set(teamId, tail);
+  void tail.finally(() => {
+    if (teamSplitQueues.get(teamId) === tail) teamSplitQueues.delete(teamId);
+  });
+  return run;
+}
 
 function autoSplitLead(
   teamId: string,
@@ -147,18 +164,10 @@ function autoSplitLead(
   overrideMemberIds?: string[],
   bypassSplitTime = false,
 ): Promise<void> {
-  const prev = teamSplitQueues.get(teamId) ?? Promise.resolve();
-  const run = prev.then(() =>
+  // Inner catches its own errors.
+  return runInTeamQueue(teamId, () =>
     autoSplitLeadInner(teamId, leadId, performedById, overrideMemberIds, bypassSplitTime),
   );
-  // Inner catches its own errors, but guard the chain anyway so one failure
-  // can never wedge the queue.
-  const tail = run.catch(() => undefined);
-  teamSplitQueues.set(teamId, tail);
-  void tail.finally(() => {
-    if (teamSplitQueues.get(teamId) === tail) teamSplitQueues.delete(teamId);
-  });
-  return run;
 }
 
 // ── Auto-split a lead to a team member based on team settings ────────────────
@@ -187,147 +196,8 @@ async function autoSplitLeadInner(
       if (splitTime) return; // always hold — scheduler handles assignment at splitTime
     }
 
-    const allMemberIds = [
-      ...team.leaders.map((u: { _id: { toString(): string } }) =>
-        u._id.toString(),
-      ),
-      ...team.members.map((u: { _id: { toString(): string } }) =>
-        u._id.toString(),
-      ),
-    ].filter((id, i, arr) => arr.indexOf(id) === i);
-
-    const inactiveSet = new Set(
-      (team.inactiveMembers as unknown as { toString(): string }[]).map((id) =>
-        id.toString(),
-      ),
-    );
-
-    // Build absent-today set — entries matching today's AED date
-    const todayMidnight = istMidnightUTC();
-    const tomorrowMidnight = new Date(todayMidnight.getTime() + 86400000);
-    const absentSet = new Set(
-      (team.absentToday as unknown as { userId: { toString(): string }; date: Date }[])
-        .filter((a) => a.date >= todayMidnight && a.date < tomorrowMidnight)
-        .map((a) => a.userId.toString()),
-    );
-
-    // Lead source — needed for per-member source exclusions and source-wise RR
-    const leadDoc = await Lead.findById(leadId).select("source").lean();
-    const source = (leadDoc?.source as string | undefined)?.trim() || "";
-    const srcNorm = source.toLowerCase();
-
-    // Per-member source exclusions — these members never receive this source
-    const exclusions = (team.settings as any)?.sourceExclusions as
-      | Record<string, string[]>
-      | undefined;
-    const isExcludedForSource = (id: string): boolean => {
-      if (!srcNorm) return false;
-      const list = exclusions?.[id];
-      return !!list?.some((s) => s.trim().toLowerCase() === srcNorm);
-    };
-
-    // Priority: per-call override → team.settings.includedMembers → all members
-    let includedSet: string[];
-    if (overrideMemberIds && overrideMemberIds.length > 0) {
-      includedSet = overrideMemberIds.filter((id) => allMemberIds.includes(id));
-    } else {
-      includedSet = (
-        team.settings.includedMembers as unknown as { toString(): string }[]
-      )
-        .map((id) => id.toString())
-        .filter((id) => allMemberIds.includes(id));
-    }
-    const pool = (includedSet.length > 0 ? includedSet : allMemberIds).filter(
-      (id) => !inactiveSet.has(id) && !absentSet.has(id) && !isExcludedForSource(id),
-    );
-
-    if (pool.length === 0) return;
-
-    let assigneeId: string;
-
-    if (splitStrategy === "live") {
-      // Live mode — SOURCE + TOTAL fair, per GST day: the lead goes to the
-      // pool member with the fewest leads of THIS source today, tie-broken by
-      // fewest total leads today, then stable pool order. Sources stay evenly
-      // spread AND daily totals never drift more than 1 apart (a small
-      // source's single lead flows to whoever is lowest overall, instead of
-      // whoever a blind rotation points at). Runs inside the per-team queue,
-      // so each pick sees the previous assignment.
-      const liveDayStart = istMidnightUTC();
-      const stats = await Promise.all(
-        pool.map(async (id) => ({
-          id,
-          srcCount: source
-            ? await Lead.countDocuments({ assignedTo: id, assignedAt: { $gte: liveDayStart }, source })
-            : 0,
-          totalCount: await Lead.countDocuments({ assignedTo: id, assignedAt: { $gte: liveDayStart } }),
-        })),
-      );
-      let best = stats[0];
-      for (const st of stats) {
-        if (st.srcCount < best.srcCount || (st.srcCount === best.srcCount && st.totalCount < best.totalCount)) {
-          best = st;
-        }
-      }
-      assigneeId = best.id;
-    } else if (team.settings.splitMode === "equal_load") {
-      const counts = await Promise.all(
-        pool.map((id) =>
-          Lead.countDocuments({
-            team: teamId,   // scope to THIS team so cross-team load doesn't skew the count
-            assignedTo: id,
-            status: {
-              $in: ["new", "assigned", "followup", "interested", "cnc", "callback", "rnr", "whatsapp"],
-            },
-          }),
-        ),
-      );
-      const minIndex = counts.indexOf(Math.min(...counts));
-      assigneeId = pool[minIndex];
-    } else {
-      // round_robin — if roundRobinStartDate is set, pick the member with fewest
-      // leads assigned since that date (fair start-date-bounded distribution).
-      // Otherwise fall back to stored index.
-      const startDate = team.settings.roundRobinStartDate
-        ? new Date(team.settings.roundRobinStartDate)
-        : null;
-
-      if (startDate) {
-        const counts = await Promise.all(
-          pool.map((id) =>
-            Lead.countDocuments({
-              assignedTo: id,
-              assignedAt: { $gte: startDate },
-            }),
-          ),
-        );
-        const minCount = Math.min(...counts);
-        // Among tied members, prefer the one earliest in pool order (deterministic)
-        const minIndex = counts.indexOf(minCount);
-        assigneeId = pool[minIndex];
-      } else {
-        // Source-wise round robin: each unique lead source has its own cursor so
-        // sources don't steal turns from each other when volumes differ.
-        let idx: number;
-        if (source) {
-          const srcMap = (team.settings as any).sourceRoundRobinIndices as Record<string, number> | undefined;
-          const srcIdx = srcMap?.[source] ?? 0;
-          idx = srcIdx % pool.length;
-          assigneeId = pool[idx];
-          await Team.updateOne(
-            { _id: teamId },
-            { $set: { [`settings.sourceRoundRobinIndices.${source}`]: (idx + 1) % pool.length } },
-          );
-        } else {
-          idx = (team.settings.roundRobinIndex ?? 0) % pool.length;
-          assigneeId = pool[idx];
-          await Team.updateOne(
-            { _id: teamId },
-            { $set: { "settings.roundRobinIndex": (idx + 1) % pool.length } },
-          );
-        }
-      }
-    }
+    const assigneeId = await pickSplitAssignee(team as unknown as SplitTeam, leadId, { overrideMemberIds });
+    if (!assigneeId) return;
 
     const user = await User.findById(assigneeId).select("_id name").lean();
     if (!user) return;
@@ -367,6 +237,183 @@ async function autoSplitLeadInner(
   } catch (err) {
     console.error("[autoSplitLead] error:", err);
   }
+}
+
+// ── Pick the member the team's split rule gives a lead to ────────────────────
+/** A team as the split reads it: leaders and members populated with at least `_id`. */
+export interface SplitTeam {
+  _id: { toString(): string };
+  leaders: Array<{ _id: { toString(): string } }>;
+  members: Array<{ _id: { toString(): string } }>;
+  inactiveMembers?: Array<{ toString(): string }>;
+  absentToday?: Array<{ userId: { toString(): string }; date: Date }>;
+  settings?: {
+    splitMode?: "round_robin" | "equal_load";
+    splitStrategy?: string;
+    roundRobinIndex?: number;
+    includedMembers?: Array<{ toString(): string }>;
+    roundRobinStartDate?: Date | string | null;
+    sourceRoundRobinIndices?: Record<string, number>;
+    sourceExclusions?: Record<string, string[]>;
+  };
+}
+
+/** The next member in a rotation from `cursor` who is not excluded, and where the cursor goes after them. */
+function nextInRotation(pool: string[], cursor: number, excluded: Set<string>): { pick: string; next: number } | null {
+  for (let k = 0; k < pool.length; k++) {
+    const i = (cursor + k) % pool.length;
+    if (!excluded.has(pool[i])) return { pick: pool[i], next: (i + 1) % pool.length };
+  }
+  return null;
+}
+
+/**
+ * The member the team's split rule gives this lead to, or null when nobody in
+ * the pool can take it. Round-robin advances the team's cursor, so call it
+ * inside runInTeamQueue.
+ *
+ * `exclude` takes people out of the running without changing whose turn it
+ * is: moving an inactive lead on never picks its current owner, nor anyone
+ * who lost it before — their turn passes to the next person in line.
+ */
+export async function pickSplitAssignee(
+  team: SplitTeam,
+  leadId: string,
+  opts: { overrideMemberIds?: string[]; exclude?: string[] } = {},
+): Promise<string | null> {
+  const teamId = team._id.toString();
+  const settings = team.settings ?? {};
+  const splitStrategy: string = settings.splitStrategy ?? "scheduled";
+  const excluded = new Set(opts.exclude ?? []);
+
+  const allMemberIds = [
+    ...team.leaders.map((u) => u._id.toString()),
+    ...team.members.map((u) => u._id.toString()),
+  ].filter((id, i, arr) => arr.indexOf(id) === i);
+
+  const inactiveSet = new Set((team.inactiveMembers ?? []).map((id) => id.toString()));
+
+  // Build absent-today set — entries matching today's AED date
+  const todayMidnight = istMidnightUTC();
+  const tomorrowMidnight = new Date(todayMidnight.getTime() + 86400000);
+  const absentSet = new Set(
+    (team.absentToday ?? [])
+      .filter((a) => a.date >= todayMidnight && a.date < tomorrowMidnight)
+      .map((a) => a.userId.toString()),
+  );
+
+  // Lead source — needed for per-member source exclusions and source-wise RR
+  const leadDoc = await Lead.findById(leadId).select("source").lean();
+  const source = (leadDoc?.source as string | undefined)?.trim() || "";
+  const srcNorm = source.toLowerCase();
+
+  // Per-member source exclusions — these members never receive this source
+  const exclusions = settings.sourceExclusions;
+  const isExcludedForSource = (id: string): boolean => {
+    if (!srcNorm) return false;
+    const list = exclusions?.[id];
+    return !!list?.some((s) => s.trim().toLowerCase() === srcNorm);
+  };
+
+  // Priority: per-call override → team.settings.includedMembers → all members
+  let includedSet: string[];
+  if (opts.overrideMemberIds && opts.overrideMemberIds.length > 0) {
+    includedSet = opts.overrideMemberIds.filter((id) => allMemberIds.includes(id));
+  } else {
+    includedSet = (settings.includedMembers ?? [])
+      .map((id) => id.toString())
+      .filter((id) => allMemberIds.includes(id));
+  }
+  const pool = (includedSet.length > 0 ? includedSet : allMemberIds).filter(
+    (id) => !inactiveSet.has(id) && !absentSet.has(id) && !isExcludedForSource(id),
+  );
+  const candidates = pool.filter((id) => !excluded.has(id));
+
+  if (candidates.length === 0) return null;
+
+  if (splitStrategy === "live") {
+    // Live mode — SOURCE + TOTAL fair, per GST day: the lead goes to the
+    // pool member with the fewest leads of THIS source today, tie-broken by
+    // fewest total leads today, then stable pool order. Sources stay evenly
+    // spread AND daily totals never drift more than 1 apart (a small
+    // source's single lead flows to whoever is lowest overall, instead of
+    // whoever a blind rotation points at). Runs inside the per-team queue,
+    // so each pick sees the previous assignment.
+    const liveDayStart = istMidnightUTC();
+    const stats = await Promise.all(
+      candidates.map(async (id) => ({
+        id,
+        srcCount: source
+          ? await Lead.countDocuments({ assignedTo: id, assignedAt: { $gte: liveDayStart }, source })
+          : 0,
+        totalCount: await Lead.countDocuments({ assignedTo: id, assignedAt: { $gte: liveDayStart } }),
+      })),
+    );
+    let best = stats[0];
+    for (const st of stats) {
+      if (st.srcCount < best.srcCount || (st.srcCount === best.srcCount && st.totalCount < best.totalCount)) {
+        best = st;
+      }
+    }
+    return best.id;
+  }
+
+  if (settings.splitMode === "equal_load") {
+    const counts = await Promise.all(
+      candidates.map((id) =>
+        Lead.countDocuments({
+          team: teamId,   // scope to THIS team so cross-team load doesn't skew the count
+          assignedTo: id,
+          status: {
+            $in: ["new", "assigned", "followup", "interested", "cnc", "callback", "rnr", "whatsapp"],
+          },
+        }),
+      ),
+    );
+    const minIndex = counts.indexOf(Math.min(...counts));
+    return candidates[minIndex];
+  }
+
+  // round_robin — if roundRobinStartDate is set, pick the member with fewest
+  // leads assigned since that date (fair start-date-bounded distribution).
+  // Otherwise fall back to stored index.
+  const startDate = settings.roundRobinStartDate ? new Date(settings.roundRobinStartDate) : null;
+
+  if (startDate) {
+    const counts = await Promise.all(
+      candidates.map((id) =>
+        Lead.countDocuments({
+          assignedTo: id,
+          assignedAt: { $gte: startDate },
+        }),
+      ),
+    );
+    const minCount = Math.min(...counts);
+    // Among tied members, prefer the one earliest in pool order (deterministic)
+    const minIndex = counts.indexOf(minCount);
+    return candidates[minIndex];
+  }
+
+  // Source-wise round robin: each unique lead source has its own cursor so
+  // sources don't steal turns from each other when volumes differ.
+  if (source) {
+    const srcIdx = settings.sourceRoundRobinIndices?.[source] ?? 0;
+    const turn = nextInRotation(pool, srcIdx, excluded);
+    if (!turn) return null;
+    await Team.updateOne(
+      { _id: teamId },
+      { $set: { [`settings.sourceRoundRobinIndices.${source}`]: turn.next } },
+    );
+    return turn.pick;
+  }
+
+  const turn = nextInRotation(pool, settings.roundRobinIndex ?? 0, excluded);
+  if (!turn) return null;
+  await Team.updateOne(
+    { _id: teamId },
+    { $set: { "settings.roundRobinIndex": turn.next } },
+  );
+  return turn.pick;
 }
 
 // Public wrapper so teamController can call autoSplitLead without coupling to LeadService class

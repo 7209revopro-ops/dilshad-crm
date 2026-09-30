@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/Header";
 import { useAuthStore } from "@/lib/store/authStore";
 import { navItems } from "@/components/layout/Sidebar";
 import { useReminderNotifications } from "@/hooks/useReminderNotifications";
+import { useActivityHeartbeat } from "@/hooks/useActivityHeartbeat";
 import { RecentPageTracker } from "@/components/shared/CommandPalette";
 import { RootPortalHistoryBridge } from "@/components/shared/RootPortalHistoryBridge";
 
@@ -13,6 +14,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { isAuthenticated, hasPermission } = useAuthStore();
   const router = useRouter();
   useReminderNotifications();
+  useActivityHeartbeat();
 
   useEffect(() => {
     if (typeof window !== "undefined" && !isAuthenticated) {
@@ -39,7 +41,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [hasPermission]);
   useEffect(() => {
-    if (pathname == "/login" || pathname == "/profile") return;
+    // Pages everyone signed in may open, whatever their role: their profile and their own calendar.
+    if (pathname == "/login" || pathname == "/profile" || pathname == "/calendar") return;
     if (!hasPermission(pathname.split("/")[1], "view")) {
       redirectPermisionPage();
     }

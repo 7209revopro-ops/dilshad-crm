@@ -25,6 +25,9 @@ import {
   Receipt,
   CalendarCheck,
   CalendarDays,
+  TimerOff,
+  Activity,
+  CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/lib/store/uiStore";
@@ -51,6 +54,9 @@ export const navItems: { href: string; label: string; icon: React.ElementType; p
   { href: "/leads",     label: "Leads",              icon: FileText,        permModule: "leads"     },
   { href: "/calls",     label: "Calls",              icon: PhoneCall,       permModule: "leads"     },
   { href: "/reminders", label: "Reminders",          icon: Bell,            permModule: "reminders" },
+  /* Not a module any role is granted — only the Super Admin passes this check. */
+  { href: "/inactive-leads", label: "Inactive Leads", icon: TimerOff,       permModule: "inactive-leads" },
+  { href: "/activity",  label: "Activity",           icon: Activity,        permModule: "activity"  },
   { href: "/teams",     label: "Teams",              icon: UsersRound,      permModule: "teams"     },
   { href: "/courses",   label: "Courses",            icon: BookOpen,        permModule: "courses"   },
   { href: "/reports",   label: "Reports",            icon: BarChart2,       permModule: "reports"   },
@@ -61,6 +67,8 @@ export const navItems: { href: string; label: string; icon: React.ElementType; p
      the work do, not something to gate behind a module first. Same rule the
      Root portal already holds for this same screen. */
   { href: "/mentors",   label: "Mentors",            icon: CalendarDays,    permModule: null        },
+  /* Everyone's own calendar — open to all, like Mentors (the dashboard layout lets /calendar through). */
+  { href: "/calendar",  label: "Calendar",           icon: CalendarClock,   permModule: null        },
   { href: "/students",  label: "Students",           icon: GraduationCap,   permModule: "students"  },
   { href: "/roles",     label: "Roles & Permissions",icon: Shield,          permModule: "roles"     },
   { href: "/settings",  label: "Settings",           icon: Settings,        permModule: null        },
@@ -86,8 +94,10 @@ function NavLinks({ collapsed = false, onNavigate }: NavLinksProps) {
     if (!accessToken) return;
     const socket = getSocket(accessToken);
 
-    function handleNotification(payload: { data?: { type?: string } }) {
-      if (payload?.data?.type === "lead_assigned") {
+    function handleNotification(payload: { type?: string; data?: { type?: string } }) {
+      // Old-style notices carry data.type; stored ones (notify()) carry type.
+      const type = payload?.data?.type ?? payload?.type;
+      if (type === "lead_assigned" || type === "inactive_lead_moved") {
         queryClient.invalidateQueries({ queryKey: ["leads", "stats", userId] });
       }
     }

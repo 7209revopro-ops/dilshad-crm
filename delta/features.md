@@ -612,5 +612,110 @@ Per-lead AI chat assistant powered by Anthropic Claude. Stores conversation memo
 
 Copy the template at the top and place it in the correct module section.
 
-**Feature count**: 12
+**Feature count**: 16
 *(Increment every time you add a feature)*
+
+
+---
+
+## Notifications that survive a reload & Automation settings (2026-09-30)
+
+**Pages / components**: `NotificationBell` (header), Settings → `AutomationSettingsCard`
+
+**What it does**:
+- The bell loads the signed-in user's kept notifications (`GET /notifications`), merges live socket ones, and "Mark all read", dismiss and "Clear all" now persist.
+- Settings → **Automation & alerts** (edit needs `settings.edit`, i.e. the super admin): inactive-lead limit in hours + minutes and the auto-reassign switch, idle-alert limit and switch, team-leader alerts, working days/hours/time zone, which events also email, mailbox status and "Send me a test email". Inactive leads and idle alerts show "Coming next" until their phases ship.
+
+**API**:
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/v1/notifications` | Kept notifications + unread count |
+| POST | `/api/v1/notifications/read-all` | Mark all read |
+| DELETE | `/api/v1/notifications/:id` · `/api/v1/notifications` | Dismiss one · clear all |
+| GET / PUT | `/api/v1/settings/app` | Read / save automation settings |
+| POST | `/api/v1/settings/app/test-email` | Test the mailbox |
+
+**State**: React Query keys `["notifications"]`, `["settings", "app"]`
+
+**Change Log**:
+- 1.0.0 — Initial build
+
+---
+
+## Inactive leads page (2026-09-30)
+
+**Pages / components**: `app/(dashboard)/inactive-leads/page.tsx` (sidebar "Inactive Leads", super admin only), `components/inactive-leads/MoveLeadsDialog.tsx`; also Settings → `AutomationSettingsCard`, lead page activity log, `Sidebar`
+
+**What it does**:
+- Lists leads whose owner hasn't acted within the Settings limit (working time): owner (click to filter), team, working time waited, what the automatic mover will do, who lost it before. Search, team filter, paging, refreshes every minute and on inactive-lead notifications.
+- Move one or many: "Next in their team" (the team's split rule, never back to someone who lost it) or "A person I choose". Skips say why.
+- **Moves log** tab: every lead moved for inactivity — when, from → to, team, time waited, automatic or by whom.
+- Settings: the Inactive leads section is live (no longer "Coming next"), says since when automatic moves apply, links to the page.
+- Lead page: automatic moves show in the activity log "by System".
+
+**API**:
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/v1/inactive-leads` | Inactive leads + summary + the rule |
+| GET | `/api/v1/inactive-leads/moves` | The move log |
+| POST | `/api/v1/inactive-leads/reassign` | Move leads (`{ leadIds, to? }`) |
+
+**State**: React Query key `["inactive-leads", …]`
+
+**Change Log**:
+- 1.0.0 — Initial build
+
+---
+
+## Activity page, heartbeat & idle alerts (2026-09-30)
+
+**Pages / components**: `app/(dashboard)/activity/page.tsx` (sidebar "Activity", super admin only); `hooks/useActivityHeartbeat.ts` (mounted in the dashboard layout); also `useLogout`, Settings → `AutomationSettingsCard`, `NotificationBell`, `Sidebar`
+
+**What it does**:
+- **People**: everyone's status right now (Active / No activity · N min / App closed · N min / Signed out HH:MM / Not seen today), an "Alerted" flag for the current quiet stretch, active time today and since when, last seen, last sign-in (time, device, IP). Search and team filter; refreshes every 30 s. Click a name for their sign-ins.
+- **Sign-ins**: every sign-in (password or Root portal), refused sign-in with the reason, and sign-out — device and IP. Filter by kind or person; paged.
+- **Idle alerts**: every alert that went out — quiet since, alerted at, back at (or "Not back yet"), working time. Paged.
+- The web app sends a heartbeat every minute it is open (used or not); "Logout" now records the sign-out.
+- Settings: Idle alerts are live (no "Coming next"), with a link to the page. The bell has icons for inactive-lead and idle notices.
+
+**API**:
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/v1/activity/heartbeat` | `{ active }` every minute — everyone |
+| GET | `/api/v1/activity/people` | Everyone's status + today |
+| GET | `/api/v1/activity/logins` | Sign-in history |
+| GET | `/api/v1/activity/idle` | Idle alerts |
+| POST | `/api/v1/auth/logout` | Record the sign-out |
+
+**State**: React Query key `["activity", …]`
+
+**Change Log**:
+- 1.0.0 — Initial build
+
+---
+
+## Calendar & meetings (2026-10-01)
+
+**Pages / components**: `app/(dashboard)/calendar/page.tsx` (sidebar "Calendar", everyone); `components/calendar/` — `TimeGrid` (day/week), `MonthGrid`, `MeetingDialog` (book/change), `MeetingDetails` (view/cancel), `mentorColors`
+
+**What it does**:
+- Day / week / month calendar of the signed-in person's meetings, follow-ups and reminders (toggle), in the CRM's working-hours zone (labelled). The super admin picks anyone's calendar. A phone opens on the day view.
+- **Mentors** layer (day/week): up to five LMS mentors beside your own time — green where their LMS slots say they're free, red where they have a class or meeting.
+- Click an empty time (or "+" in month view) to book there; "New meeting" for the next half hour. Title, date and times, colleagues, a client (your leads only), mentors, link or place, team notes (never sent outside), reminder. A busy warning lists clashes — you can still book.
+- Click a meeting: details; organizer or super admin can change or cancel it (with a reason). `/calendar?meeting=<id>` opens one (from notifications).
+
+**API**:
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/v1/meetings/calendar` | One person's meetings, follow-ups, reminders |
+| GET | `/api/v1/meetings/people` | Colleagues to invite |
+| POST | `/api/v1/meetings/conflicts` | Busy check |
+| POST | `/api/v1/meetings` | Book |
+| GET / PUT | `/api/v1/meetings/:id` | Read / change |
+| POST | `/api/v1/meetings/:id/cancel` | Cancel |
+| GET | `/api/v1/mentors/schedule` | (existing) the mentors' LMS diary |
+
+**State**: React Query key `["meetings", …]`; mentors `["mentors","schedule",from,to]`
+
+**Change Log**:
+- 1.0.0 — Initial build

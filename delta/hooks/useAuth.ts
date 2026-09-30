@@ -41,6 +41,16 @@ export const useLogout = () => {
   const queryClient = useQueryClient();
 
   return () => {
+    // Put the sign-out on record while the token is still here. keepalive lets it
+    // finish even as the page moves on; if it fails, signing out still happens.
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (token) {
+      void fetch("/api/v1/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        keepalive: true,
+      }).catch(() => undefined);
+    }
     // clearAuth();
     toast.success("Logged out successfully");
     if (typeof window !== "undefined") {

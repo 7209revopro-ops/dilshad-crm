@@ -320,6 +320,36 @@ Replace all `style={{ ... }}` with equivalent Tailwind utility classes.
 
 ## 🌐 General / Other
 
+### Tailwind classes built from pieces never exist
+- **Date**: 2026-10-01
+- **Category**: tailwind
+
+**What happened**:
+The calendar's first draft coloured each mentor with `` `bg-${color}-500/15` ``. Tailwind only generates classes it finds written out in the source, so those would have rendered with no colour at all.
+
+**Fix**:
+A lookup of full class names (`components/calendar/mentorColors.ts`).
+
+**Rule — Never do this again**:
+> Never assemble a Tailwind class from variables — map each value to the full class name.
+
+---
+
+### Spreading a Set or Map fails the typecheck (TS2802)
+- **Date**: 2026-09-30
+- **Category**: typescript
+
+**What happened**:
+`[...new Set(days)]` and `[...map.values()]` failed `tsc` with TS2802 — this project compiles to a target below ES2015 without `downlevelIteration`. Hit twice (NotificationBell, Inactive Leads page).
+
+**Fix**:
+`Array.from(new Set(days))`, `Array.from(map.values())`.
+
+**Rule — Never do this again**:
+> Never spread a Set, Map or iterator here — use `Array.from(...)`.
+
+---
+
 ### No Input Validation for Future Time on Reminder Form
 - **Date**: 2026-04-01
 - **Category**: forms
@@ -344,5 +374,5 @@ No `min` attribute on `datetime-local` input, and no frontend validation.
 
 Copy the template at the top and place it at the **top** of the correct category section.
 
-**Entry count**: 9
+**Entry count**: 11
 *(Increment every time you add a mistake)*

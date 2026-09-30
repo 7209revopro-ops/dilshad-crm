@@ -46,6 +46,22 @@ const envSchema = z.object({
   TELEGRAM_CHAT_ID:    z.string().default(""),
 
   /*
+   * The mailbox Remote CRM sends from — lead, idle and meeting emails.
+   *
+   * SMTP_HOST empty means mail is off: every email is written to the log
+   * instead of sent, and nothing else changes. It is the same "unset is off"
+   * rule as the integrations above, so a copy of the app never mails real
+   * people from a mailbox nobody told it to use.
+   */
+  SMTP_HOST:   z.string().default(""),
+  SMTP_PORT:   z.string().default("587"),
+  /** "true" for port 465 (TLS from the start); anything else uses STARTTLS. */
+  SMTP_SECURE: z.string().default("false"),
+  SMTP_USER:   z.string().default(""),
+  SMTP_PASS:   z.string().default(""),
+  MAIL_FROM:   z.string().default("Remote CRM <no-reply@localhost>"),
+
+  /*
    * Delta Finance, where a closed lead becomes an invoice.
    *
    * All four empty means the handover is off: the CRM works exactly as it did,

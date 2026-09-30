@@ -1304,7 +1304,13 @@ Axios instance: `frontend/lib/axios.ts` — auto-attaches `Authorization: Bearer
 | Reports | 7 |
 | AI Chat | 3 |
 | Push Notifications | 3 |
-| **Total** | **71** |
+| Notifications | 4 |
+| App settings | 3 |
+| Inactive leads | 3 |
+| Activity | 4 |
+| Auth — logout | 1 |
+| Meetings & calendar | 7 |
+| **Total** | **93** |
 
 ---
 
@@ -1312,7 +1318,7 @@ Axios instance: `frontend/lib/axios.ts` — auto-attaches `Authorization: Bearer
 
 Copy the template at the top of this file and add under the correct module section.
 
-**Endpoint count**: 71
+**Endpoint count**: 93
 *(Increment every time you add an endpoint)*
 
 ---
@@ -1325,3 +1331,66 @@ Copy the template at the top of this file and add under the correct module secti
 **Params:** `memberId`, `isDone`, `search`, `page`, `limit`
 **Response:** `{ data: TeamReminderItem[], pagination }`
 **Used by:** `TeamRemindersTab`
+
+
+---
+
+## Notifications hooks (added 2026-09-30)
+
+**File:** `hooks/useNotifications.ts`
+| Hook | Key / endpoint | Notes |
+|------|----------------|-------|
+| `useNotifications(enabled)` | `["notifications"]` · `GET /notifications?limit=50` | `{ items: AppNotificationDTO[], unread }` |
+| `useMarkAllNotificationsRead()` | `POST /notifications/read-all` | invalidates `["notifications"]` |
+| `useDeleteNotification()` | `DELETE /notifications/:id` | invalidates `["notifications"]` |
+| `useClearNotifications()` | `DELETE /notifications` | invalidates `["notifications"]` |
+**Used by:** `NotificationBell`
+
+## App settings hooks (added 2026-09-30)
+
+**File:** `hooks/useAppSettings.ts`
+| Hook | Key / endpoint | Notes |
+|------|----------------|-------|
+| `useAppSettings(enabled)` | `["settings","app"]` · `GET /settings/app` | `{ settings: AppSettings, mail: { configured, from } }` |
+| `useUpdateAppSettings()` | `PUT /settings/app` | partial update; writes the response into the cache; toasts |
+| `useSendTestEmail()` | `POST /settings/app/test-email` | toasts whether it was sent, or why not |
+**Used by:** `AutomationSettingsCard`
+
+## Inactive leads hooks (added 2026-09-30)
+
+**File:** `hooks/useInactiveLeads.ts` — super admin only (the API answers 403 to everyone else)
+| Hook | Key / endpoint | Notes |
+|------|----------------|-------|
+| `useInactiveLeads(filters, enabled)` | `["inactive-leads","list",filters]` · `GET /inactive-leads` | `{ items, summary, rule, pagination }`; keeps the previous page while loading; refetches every 60 s |
+| `useLeadMoves(filters, enabled)` | `["inactive-leads","moves",filters]` · `GET /inactive-leads/moves` | `{ items: LeadMoveEntry[], pagination }` |
+| `useReassignInactiveLeads()` | `POST /inactive-leads/reassign` | `{ leadIds, to? }` → `{ moved, skipped }`; invalidates `["inactive-leads"]` and `["leads"]`; toasts moved / skipped with the reason |
+**Types:** `types/inactiveLeads.ts`
+**Used by:** `app/(dashboard)/inactive-leads/page.tsx`, `MoveLeadsDialog`
+
+## Activity hooks (added 2026-09-30)
+
+**File:** `hooks/useActivity.ts` — super admin only (the API answers 403 to everyone else)
+| Hook | Key / endpoint | Notes |
+|------|----------------|-------|
+| `useActivityPeople(filters, enabled)` | `["activity","people",filters]` · `GET /activity/people` | `{ items, summary, idleRule }`; refetches every 30 s |
+| `useLoginEvents(filters, enabled)` | `["activity","logins",filters]` · `GET /activity/logins` | `{ items, pagination }` |
+| `useIdleStretches(filters, enabled)` | `["activity","idle",filters]` · `GET /activity/idle` | `{ items, pagination }` |
+**Types:** `types/activity.ts` · **Used by:** `app/(dashboard)/activity/page.tsx`
+
+**File:** `hooks/useActivityHeartbeat.ts` — `POST /activity/heartbeat { active }` every 60 s while signed in (plus one when someone comes back after a quiet minute); errors are ignored. Mounted once in `app/(dashboard)/layout.tsx`.
+
+**Changed:** `useLogout` (`hooks/useAuth.ts`) — `POST /auth/logout` with `fetch(…, { keepalive: true })` and the stored token, before the tokens are removed.
+
+## Meetings hooks (added 2026-10-01)
+
+**File:** `hooks/useMeetings.ts` — open to everyone signed in (per-meeting rules on the server)
+| Hook | Key / endpoint | Notes |
+|------|----------------|-------|
+| `useCalendar({ from, to, userId? })` | `["meetings","calendar",q]` · `GET /meetings/calendar` | refetches every 60 s |
+| `useMeeting(id)` | `["meetings","one",id]` · `GET /meetings/:id` | |
+| `useColleagues(enabled)` | `["meetings","people"]` · `GET /meetings/people` | 5 min stale |
+| `useLeadSearch(search, enabled)` | `["leads","meeting-search",search]` · `GET /leads?search=&limit=8` | from 2 characters; the leads rule applies |
+| `useMentorSchedule(from, to, enabled)` | `["mentors","schedule",from,to]` · `GET /mentors/schedule` | no retry |
+| `useMeetingConflicts(input)` | `["meetings","conflicts",input]` · `POST /meetings/conflicts` | debounced by the form |
+| `useCreateMeeting()` / `useUpdateMeeting()` / `useCancelMeeting()` | `POST /meetings` · `PUT /meetings/:id` · `POST /meetings/:id/cancel` | invalidate `["meetings"]`; toasts |
+**Types:** `types/meeting.ts` · **Time zone maths:** `lib/zonedTime.ts`

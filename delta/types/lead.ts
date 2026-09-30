@@ -18,7 +18,8 @@ export type ActivityAction =
   | "note_updated"
   | "note_deleted"
   | "whatsapp_welcome"
-  | "followup_missed";
+  | "followup_missed"
+  | "inactive_reassigned";
 
 export interface LeadNote {
   _id: string;
@@ -65,7 +66,8 @@ export interface ActivityLog {
   _id: string;
   action: ActivityAction;
   description: string;
-  performedBy: User | string;
+  /** Absent when the CRM did it on its own (a lead moved on for inactivity). */
+  performedBy?: User | string;
   changes?: Record<string, { from: unknown; to: unknown }>;
   createdAt: string;
 }
