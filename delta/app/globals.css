@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── PWA / iOS safe-area insets ── */
+    --safe-area-top:    env(safe-area-inset-top,    0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-left:   env(safe-area-inset-left,   0px);
+    --safe-area-right:  env(safe-area-inset-right,  0px);
+
+    /* ── Light mode — purple on neutral ──
+       Remote CRM's brand colour is purple (violet-600 #7c3aed); every surface is
+       a true grey rather than a tinted one, so the purple is the only colour
+       that means "Remote CRM". Red stays red — it is a warning, not a scheme. */
+    --background:             0 0% 98%;
+    --foreground:             0 0% 4%;
+    --card:                   0 0% 100%;
+    --card-foreground:        0 0% 4%;
+    --popover:                0 0% 100%;
+    --popover-foreground:     0 0% 4%;
+
+    /* Purple primary (violet-600 #7c3aed), white on it */
+    --primary:                262.1 83.3% 57.8%;
+    --primary-foreground:     0 0% 100%;
+
+    /* Neutral grey secondary / muted / accent */
+    --secondary:              0 0% 94%;
+    --secondary-foreground:   0 0% 9%;
+    --muted:                  0 0% 94%;
+    --muted-foreground:       0 0% 42%;
+    --accent:                 0 0% 94%;
+    --accent-foreground:      0 0% 9%;
+
+    --destructive:            0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* Neutral borders / inputs; a purple focus ring */
+    --border:                 0 0% 90%;
+    --input:                  0 0% 90%;
+    --ring:                   262.1 83.3% 57.8%;
+    --radius:                 0.875rem;
+
+    /* Sidebar — light grey, purple highlight */
+    --sidebar-background:          0 0% 96%;
+    --sidebar-foreground:          0 0% 4%;
+    --sidebar-primary:             262.1 83.3% 57.8%;
+    --sidebar-primary-foreground:  0 0% 100%;
+    --sidebar-accent:              0 0% 90%;
+    --sidebar-accent-foreground:   0 0% 9%;
+    --sidebar-border:              0 0% 90%;
+    --sidebar-ring:                262.1 83.3% 57.8%;
+  }
+
+  .dark {
+    /* ── Dark mode — near-black surfaces, a brighter purple (violet-500 #8b5cf6)
+       so it still reads as text on them ── */
+    --background:             0 0% 4%;
+    --foreground:             0 0% 98%;
+
+    /* Slightly lifted card */
+    --card:                   0 0% 7%;
+    --card-foreground:        0 0% 98%;
+    --popover:                0 0% 7%;
+    --popover-foreground:     0 0% 98%;
+
+    /* Purple primary (violet-500 #8b5cf6), white on it */
+    --primary:                258.3 89.5% 66.3%;
+    --primary-foreground:     0 0% 100%;
+
+    /* Neutral grey muted surfaces */
+    --secondary:              0 0% 15%;
+    --secondary-foreground:   0 0% 98%;
+    --muted:                  0 0% 15%;
+    --muted-foreground:       0 0% 64%;
+    --accent:                 0 0% 15%;
+    --accent-foreground:      0 0% 98%;
+
+    --destructive:            0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* Neutral borders / inputs; a purple focus ring */
+    --border:                 0 0% 15%;
+    --input:                  0 0% 15%;
+    --ring:                   258.3 89.5% 66.3%;
+
+    /* Sidebar — near-black, purple highlight */
+    --sidebar-background:          0 0% 6%;
+    --sidebar-foreground:          0 0% 98%;
+    --sidebar-primary:             258.3 89.5% 66.3%;
+    --sidebar-primary-foreground:  0 0% 100%;
+    --sidebar-accent:              0 0% 15%;
+    --sidebar-accent-foreground:   0 0% 98%;
+    --sidebar-border:              0 0% 15%;
+    --sidebar-ring:                258.3 89.5% 66.3%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* ── Login page ─────────────────────────────────────────────────────────────── */
+/* The ticker: two identical copies side by side, moved left by one copy's width. */
+@keyframes login-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.login-marquee { animation: login-marquee 40s linear infinite; }
+.login-marquee:hover { animation-play-state: paused; }
+
+/* Film grain over the purple panel — an SVG noise tile, no image request. */
+.login-grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-marquee { animation: none; }
+}
+
+/* ── PWA safe-area utility classes ──────────────────────────────────────────── */
+.pwa-safe-top    { padding-top:    var(--safe-area-top);    }
+.pwa-safe-bottom { padding-bottom: var(--safe-area-bottom); }
+
+/* ── Prevent iOS Safari auto-zoom on input focus (font-size must be ≥ 16px) ── */
+@media screen and (max-width: 639px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: transparent;
+}

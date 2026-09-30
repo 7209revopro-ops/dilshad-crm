@@ -1,0 +1,406 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.callrecorder"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <!-- ── Core permissions ──────────────────────────────────────────────── -->
+12    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+12-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:5:5-71
+12-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:5:22-68
+13    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+13-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:6:5-75
+13-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:6:22-72
+14    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+14-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:7:5-72
+14-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:7:22-69
+15    <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" />
+15-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:8:5-81
+15-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:8:22-78
+16    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+16-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:9:5-77
+16-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:9:22-74
+17    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+17-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:10:5-88
+17-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:10:22-85
+18    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+18-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:11:5-81
+18-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:11:22-78
+19    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+19-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:12:5-77
+19-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:12:22-74
+20    <uses-permission android:name="android.permission.VIBRATE" />
+20-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:13:5-66
+20-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:13:22-63
+21    <uses-permission android:name="android.permission.CALL_PHONE" />
+21-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:14:5-69
+21-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:14:22-66
+22
+23    <!-- ── InCallService / Companion permissions ──────────────────────────── -->
+24    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+24-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:17:5-75
+24-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:17:22-72
+25
+26    <!--
+27        CALL_COMPANION_APP (API 29+): Lets the app act as a Call Companion —
+28        receives InCallService events WITHOUT being the default dialer.
+29        This is the recommended mode: the phone app handles call UI normally,
+30        and our InCallService quietly records.
+31    -->
+32    <uses-permission android:name="android.permission.CALL_COMPANION_APP" />
+32-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:25:5-77
+32-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:25:22-74
+33
+34    <!-- ── Contacts ──────────────────────────────────────────────────────────── -->
+35    <uses-permission android:name="android.permission.READ_CONTACTS" />
+35-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:28:5-72
+35-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:28:22-69
+36
+37    <!-- ── Storage (Android ≤ 9 only) ────────────────────────────────────── -->
+38    <uses-permission
+38-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:31:5-33:38
+39        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+39-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:32:9-65
+40        android:maxSdkVersion="28" />
+40-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:33:9-35
+41    <uses-permission
+41-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:34:5-36:38
+42        android:name="android.permission.READ_EXTERNAL_STORAGE"
+42-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:35:9-64
+43        android:maxSdkVersion="32" />
+43-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:36:9-35
+44
+45    <permission
+45-->[androidx.core:core:1.13.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/cb1f257bfea8efdbce81fccf8d074e0e/transformed/core-1.13.1/AndroidManifest.xml:22:5-24:47
+46        android:name="com.callrecorder.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+46-->[androidx.core:core:1.13.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/cb1f257bfea8efdbce81fccf8d074e0e/transformed/core-1.13.1/AndroidManifest.xml:23:9-81
+47        android:protectionLevel="signature" />
+47-->[androidx.core:core:1.13.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/cb1f257bfea8efdbce81fccf8d074e0e/transformed/core-1.13.1/AndroidManifest.xml:24:9-44
+48
+49    <uses-permission android:name="com.callrecorder.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+49-->[androidx.core:core:1.13.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/cb1f257bfea8efdbce81fccf8d074e0e/transformed/core-1.13.1/AndroidManifest.xml:26:5-97
+49-->[androidx.core:core:1.13.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/cb1f257bfea8efdbce81fccf8d074e0e/transformed/core-1.13.1/AndroidManifest.xml:26:22-94
+50
+51    <application
+51-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:38:5-160:19
+52        android:name="com.callrecorder.App"
+52-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:39:9-28
+53        android:allowBackup="true"
+53-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:40:9-35
+54        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+54-->[androidx.core:core:1.13.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/cb1f257bfea8efdbce81fccf8d074e0e/transformed/core-1.13.1/AndroidManifest.xml:28:18-86
+55        android:debuggable="true"
+56        android:extractNativeLibs="false"
+57        android:icon="@mipmap/ic_launcher"
+57-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:41:9-43
+58        android:label="@string/app_name"
+58-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:42:9-41
+59        android:roundIcon="@mipmap/ic_launcher_round"
+59-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:43:9-54
+60        android:supportsRtl="true"
+60-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:44:9-35
+61        android:theme="@style/Theme.CallRecorder" >
+61-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:45:9-50
+62
+63        <!-- ── Main Activity ──────────────────────────────────────────────── -->
+64        <activity
+64-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:48:9-56:20
+65            android:name="com.callrecorder.ui.MainActivity"
+65-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:49:13-44
+66            android:exported="true"
+66-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:50:13-36
+67            android:windowSoftInputMode="adjustResize" >
+67-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:51:13-55
+68            <intent-filter>
+68-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:52:13-55:29
+69                <action android:name="android.intent.action.MAIN" />
+69-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:53:17-69
+69-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:53:25-66
+70
+71                <category android:name="android.intent.category.LAUNCHER" />
+71-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:54:17-77
+71-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:54:27-74
+72            </intent-filter>
+73        </activity>
+74
+75        <!--
+76        ── Incoming Call Activity ─────────────────────────────────────────
+77             Shown when this app is the default dialer and a call is ringing.
+78             Displayed over the lock screen so the user can answer immediately.
+79        ────────────────────────────────────────────────────────────────────
+80        -->
+81        <activity
+81-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:62:9-68:51
+82            android:name="com.callrecorder.ui.IncomingCallActivity"
+82-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:63:13-52
+83            android:excludeFromRecents="true"
+83-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:65:13-46
+84            android:exported="false"
+84-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:64:13-37
+85            android:launchMode="singleInstance"
+85-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:68:13-48
+86            android:showOnLockScreen="true"
+86-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:66:13-44
+87            android:turnScreenOn="true" />
+87-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:67:13-40
+88
+89        <!--
+90        ── Dialer Activity ─────────────────────────────────────────────
+91             Required for default dialer eligibility.
+92             Handles outgoing call intents (DIAL/CALL) when we are default dialer.
+93        ────────────────────────────────────────────────────────────────────
+94        -->
+95        <activity
+95-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:74:9-105:20
+96            android:name="com.callrecorder.ui.DialerActivity"
+96-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:75:13-46
+97            android:excludeFromRecents="true"
+97-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:78:13-46
+98            android:exported="true"
+98-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:76:13-36
+99            android:label="@string/app_name" >
+99-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:77:13-45
+100            <intent-filter>
+100-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:80:13-85:29
+101                <action android:name="android.intent.action.DIAL" />
+101-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:81:17-69
+101-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:81:25-66
+102
+103                <category android:name="android.intent.category.DEFAULT" />
+103-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:82:17-76
+103-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:82:27-73
+104                <category android:name="android.intent.category.BROWSABLE" />
+104-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:83:17-78
+104-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:83:27-75
+105
+106                <data android:scheme="tel" />
+106-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:84:17-46
+106-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:84:23-43
+107            </intent-filter>
+108            <intent-filter>
+108-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:87:13-90:29
+109                <action android:name="android.intent.action.DIAL" />
+109-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:81:17-69
+109-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:81:25-66
+110
+111                <category android:name="android.intent.category.DEFAULT" />
+111-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:82:17-76
+111-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:82:27-73
+112            </intent-filter>
+113            <intent-filter>
+113-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:92:13-97:29
+114                <action android:name="android.intent.action.VIEW" />
+114-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:93:17-69
+114-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:93:25-66
+115
+116                <category android:name="android.intent.category.DEFAULT" />
+116-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:82:17-76
+116-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:82:27-73
+117                <category android:name="android.intent.category.BROWSABLE" />
+117-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:83:17-78
+117-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:83:27-75
+118
+119                <data android:scheme="tel" />
+119-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:84:17-46
+119-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:84:23-43
+120            </intent-filter>
+121            <intent-filter>
+121-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:99:13-103:29
+122                <action android:name="android.intent.action.CALL_PRIVILEGED" />
+122-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:100:17-80
+122-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:100:25-77
+123
+124                <category android:name="android.intent.category.DEFAULT" />
+124-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:82:17-76
+124-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:82:27-73
+125
+126                <data android:scheme="tel" />
+126-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:84:17-46
+126-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:84:23-43
+127            </intent-filter>
+128        </activity>
+129
+130        <!-- ── Foreground Recording Service ──────────────────────────────── -->
+131        <service
+131-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:108:9-112:58
+132            android:name="com.callrecorder.service.CallRecordingService"
+132-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:109:13-57
+133            android:enabled="true"
+133-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:110:13-35
+134            android:exported="false"
+134-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:111:13-37
+135            android:foregroundServiceType="microphone" />
+135-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:112:13-55
+136
+137        <!--
+138        ── InCallService ───────────────────────────────────────────────
+139             IN_CALL_SERVICE_UI = false → we are a recording companion, NOT a
+140             full phone app. The regular phone app handles all call UI.
+141             The system binds to us for call events so we can record.
+142
+143             Works in two modes:
+144             • Companion App (recommended): user grants CALL_COMPANION_APP
+145               permission in Settings → no need to be default dialer.
+146             • Default Dialer: user explicitly set this app as default dialer.
+147               IncomingCallActivity handles the answer/decline screen.
+148        ────────────────────────────────────────────────────────────────────
+149        -->
+150        <service
+150-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:125:9-136:19
+151            android:name="com.callrecorder.service.CallRecorderInCallService"
+151-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:126:13-62
+152            android:enabled="true"
+152-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:127:13-35
+153            android:exported="true"
+153-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:128:13-36
+154            android:permission="android.permission.BIND_INCALL_SERVICE" >
+154-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:129:13-72
+155            <meta-data
+155-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:130:13-132:41
+156                android:name="android.telecom.IN_CALL_SERVICE_UI"
+156-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:131:17-66
+157                android:value="false" />
+157-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:132:17-38
+158
+159            <intent-filter>
+159-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:133:13-135:29
+160                <action android:name="android.telecom.InCallService" />
+160-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:134:17-72
+160-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:134:25-69
+161            </intent-filter>
+162        </service>
+163
+164        <!-- ── Phone State Receiver (Layer 1 + 2) ────────────────────────── -->
+165        <receiver
+165-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:139:9-147:20
+166            android:name="com.callrecorder.service.CallStateReceiver"
+166-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:140:13-54
+167            android:enabled="true"
+167-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:141:13-35
+168            android:exported="true" >
+168-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:142:13-36
+169            <intent-filter>
+169-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:143:13-146:29
+170                <action android:name="android.intent.action.PHONE_STATE" />
+170-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:144:17-76
+170-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:144:25-73
+171                <action android:name="android.intent.action.NEW_OUTGOING_CALL" />
+171-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:145:17-82
+171-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:145:25-79
+172            </intent-filter>
+173        </receiver>
+174
+175        <!-- ── Boot Receiver ─────────────────────────────────────────────── -->
+176        <receiver
+176-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:150:9-158:20
+177            android:name="com.callrecorder.service.BootReceiver"
+177-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:151:13-49
+178            android:enabled="true"
+178-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:152:13-35
+179            android:exported="true" >
+179-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:153:13-36
+180            <intent-filter>
+180-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:154:13-157:29
+181                <action android:name="android.intent.action.BOOT_COMPLETED" />
+181-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:155:17-79
+181-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:155:25-76
+182                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+182-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:156:17-82
+182-->/Users/mhdabshar/delta/CallRecorder/app/src/main/AndroidManifest.xml:156:25-79
+183            </intent-filter>
+184        </receiver>
+185
+186        <provider
+186-->[androidx.emoji2:emoji2:1.3.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/39d6c7e06be00e4005d39051ea528e4c/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+187            android:name="androidx.startup.InitializationProvider"
+187-->[androidx.emoji2:emoji2:1.3.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/39d6c7e06be00e4005d39051ea528e4c/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+188            android:authorities="com.callrecorder.androidx-startup"
+188-->[androidx.emoji2:emoji2:1.3.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/39d6c7e06be00e4005d39051ea528e4c/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+189            android:exported="false" >
+189-->[androidx.emoji2:emoji2:1.3.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/39d6c7e06be00e4005d39051ea528e4c/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+190            <meta-data
+190-->[androidx.emoji2:emoji2:1.3.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/39d6c7e06be00e4005d39051ea528e4c/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+191                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+191-->[androidx.emoji2:emoji2:1.3.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/39d6c7e06be00e4005d39051ea528e4c/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+192                android:value="androidx.startup" />
+192-->[androidx.emoji2:emoji2:1.3.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/39d6c7e06be00e4005d39051ea528e4c/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+193            <meta-data
+193-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/mhdabshar/.gradle/caches/8.9/transforms/2f12101d7b2c011361b0cff3436a2453/transformed/lifecycle-process-2.8.7/AndroidManifest.xml:29:13-31:52
+194                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+194-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/mhdabshar/.gradle/caches/8.9/transforms/2f12101d7b2c011361b0cff3436a2453/transformed/lifecycle-process-2.8.7/AndroidManifest.xml:30:17-78
+195                android:value="androidx.startup" />
+195-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/mhdabshar/.gradle/caches/8.9/transforms/2f12101d7b2c011361b0cff3436a2453/transformed/lifecycle-process-2.8.7/AndroidManifest.xml:31:17-49
+196            <meta-data
+196-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+197                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+197-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+198                android:value="androidx.startup" />
+198-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+199        </provider>
+200
+201        <uses-library
+201-->[androidx.window:window:1.0.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/7685d82bb9c8a5b1484a0640c46b4f16/transformed/window-1.0.0/AndroidManifest.xml:25:9-27:40
+202            android:name="androidx.window.extensions"
+202-->[androidx.window:window:1.0.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/7685d82bb9c8a5b1484a0640c46b4f16/transformed/window-1.0.0/AndroidManifest.xml:26:13-54
+203            android:required="false" />
+203-->[androidx.window:window:1.0.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/7685d82bb9c8a5b1484a0640c46b4f16/transformed/window-1.0.0/AndroidManifest.xml:27:13-37
+204        <uses-library
+204-->[androidx.window:window:1.0.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/7685d82bb9c8a5b1484a0640c46b4f16/transformed/window-1.0.0/AndroidManifest.xml:28:9-30:40
+205            android:name="androidx.window.sidecar"
+205-->[androidx.window:window:1.0.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/7685d82bb9c8a5b1484a0640c46b4f16/transformed/window-1.0.0/AndroidManifest.xml:29:13-51
+206            android:required="false" />
+206-->[androidx.window:window:1.0.0] /Users/mhdabshar/.gradle/caches/8.9/transforms/7685d82bb9c8a5b1484a0640c46b4f16/transformed/window-1.0.0/AndroidManifest.xml:30:13-37
+207
+208        <service
+208-->[androidx.room:room-runtime:2.6.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/86075fc5fa7cf253d84f6d4138875e29/transformed/room-runtime-2.6.1/AndroidManifest.xml:24:9-28:63
+209            android:name="androidx.room.MultiInstanceInvalidationService"
+209-->[androidx.room:room-runtime:2.6.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/86075fc5fa7cf253d84f6d4138875e29/transformed/room-runtime-2.6.1/AndroidManifest.xml:25:13-74
+210            android:directBootAware="true"
+210-->[androidx.room:room-runtime:2.6.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/86075fc5fa7cf253d84f6d4138875e29/transformed/room-runtime-2.6.1/AndroidManifest.xml:26:13-43
+211            android:exported="false" />
+211-->[androidx.room:room-runtime:2.6.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/86075fc5fa7cf253d84f6d4138875e29/transformed/room-runtime-2.6.1/AndroidManifest.xml:27:13-37
+212
+213        <receiver
+213-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+214            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+214-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+215            android:directBootAware="false"
+215-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+216            android:enabled="true"
+216-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+217            android:exported="true"
+217-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+218            android:permission="android.permission.DUMP" >
+218-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+219            <intent-filter>
+219-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+220                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+220-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+220-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+221            </intent-filter>
+222            <intent-filter>
+222-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+223                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+223-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+223-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+224            </intent-filter>
+225            <intent-filter>
+225-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+226                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+226-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+226-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+227            </intent-filter>
+228            <intent-filter>
+228-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+229                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+229-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+229-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/mhdabshar/.gradle/caches/8.9/transforms/3c3db0216650d96509ffd00738fe28d3/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+230            </intent-filter>
+231        </receiver>
+232    </application>
+233
+234</manifest>

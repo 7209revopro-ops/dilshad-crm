@@ -1,0 +1,48 @@
+import { Router } from "express";
+import authRoutes from "./authRoutes.js";
+import myTrackerRoutes from "./myTrackerRoutes.js";
+import userRoutes from "./userRoutes.js";
+import roleRoutes from "./roleRoutes.js";
+import leadRoutes from "./leadRoutes.js";
+import userLeadRoutes from "./userLeadRoutes.js";
+import teamRoutes from "./teamRoutes.js";
+import courseRoutes from "./courseRoutes.js";
+import sheetsRoutes from "./sheetsRoutes.js";
+import reportRoutes from "./reportRoutes.js";
+import pushRoutes from "./pushRoutes.js";
+import aiRoutes from "./aiRoutes.js";
+import studentRoutes from "./studentRoutes.js";
+import callRoutes from "./callRoutes.js";
+import sheetSourceRoutes from "./sheetSourceRoutes.js";
+import portalRoutes from "./portalRoutes.js";
+import mentorRoutes from "./mentorRoutes.js";
+
+const router = Router();
+
+router.use("/auth", authRoutes);
+// Server-to-server, from the Root portal. Guarded by a shared secret, not a
+// session — see portalRoutes.
+router.use("/service", portalRoutes);
+router.use("/my-tracker", myTrackerRoutes);
+router.use("/users", userRoutes);
+router.use("/users", userLeadRoutes);
+router.use("/roles", roleRoutes);
+router.use("/leads", leadRoutes);
+router.use("/teams", teamRoutes);
+router.use("/courses", courseRoutes);
+router.use("/sheets",  sheetsRoutes);
+router.use("/reports", reportRoutes);
+router.use("/push",    pushRoutes);
+router.use("/ai",       aiRoutes);
+router.use("/students", studentRoutes);
+router.use("/calls",         callRoutes);
+router.use("/sheet-sources", sheetSourceRoutes);
+// The mentor calendar this CRM reads from the Delta LMS — see mentorRoutes.
+router.use("/mentors", mentorRoutes);
+
+// Health check
+router.get("/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+export default router;
