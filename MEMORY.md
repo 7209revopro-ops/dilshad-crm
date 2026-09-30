@@ -193,7 +193,7 @@ crm/
 
 ### Backend (`backend/.env`)
 ```env
-PORT=5001
+PORT=7868
 NODE_ENV=development
 MONGODB_URI=mongodb://localhost:27017/crm_db
 JWT_SECRET=...
@@ -213,8 +213,8 @@ ANTHROPIC_API_KEY=sk-ant-...   ← Required for AI Memory feature
 
 ### Frontend (`frontend/.env.local`)
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:5001/api/v1
-NEXT_PUBLIC_SOCKET_URL=http://localhost:5001
+NEXT_PUBLIC_API_URL=http://localhost:7868/api/v1
+NEXT_PUBLIC_SOCKET_URL=http://localhost:7868
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=...
 ```
 

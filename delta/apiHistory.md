@@ -16,7 +16,7 @@
 
 ## Base URL
 
-All endpoints are prefixed: `http://localhost:5001/api/v1/`
+All endpoints are prefixed: `http://localhost:7868/api/v1/`
 Axios instance: `frontend/lib/axios.ts` — auto-attaches `Authorization: Bearer <token>`
 
 ---

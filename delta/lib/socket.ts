@@ -2,7 +2,7 @@ import { io, type Socket } from "socket.io-client";
 
 // Derive the socket server URL from the API URL (strip /api/v1)
 const SOCKET_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5001/api/v1"
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:7868/api/v1"
 ).replace(/\/api\/v1\/?$/, "");
 
 let socket: Socket | null = null;

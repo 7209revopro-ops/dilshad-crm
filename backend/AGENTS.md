@@ -9,7 +9,7 @@
 - **Auth**: JWT (access + refresh tokens via `jsonwebtoken`)
 - **Push Notifications**: web-push (VAPID)
 - **File Parsing**: exceljs / xlsx
-- **Port**: 5001
+- **Port**: 7868
 - **DB URI**: mongodb://localhost:27017/crm_db
 
 ## Collections

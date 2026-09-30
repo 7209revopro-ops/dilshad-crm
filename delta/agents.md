@@ -702,7 +702,7 @@ export function MyComponent({ prop }: MyComponentProps) {
 ## 🌐 API Integration
 
 - All calls through `lib/axios.ts` — auto-attaches `Authorization: Bearer <token>`
-- Base URL: `/api/v1/` (backend on port `5001`)
+- Base URL: `/api/v1/` (backend on port `7868`)
 - Never hardcode full URLs in components — relative paths in hook files only
 - Error message extraction: `err.response?.data?.message ?? err.message`
 

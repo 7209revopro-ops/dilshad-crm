@@ -156,7 +156,7 @@ Next: Phase [N+1] — [name]
 
 Every session start → automatically:
 1. Detect start command from `package.json`
-2. Start backend: `cd backend && bun run dev &` → port **5001**
+2. Start backend: `cd backend && bun run dev &` → port **7868**
 3. Start frontend: `cd frontend && bun run dev &` → port **3000**
 4. Wait up to 10s for ports to be live
 5. Call `preview_start` → `preview_screenshot` → show to user
@@ -236,7 +236,7 @@ describe("[Feature]", () => {
 | Icons | Lucide React |
 
 ### Ports & URIs
-- **Backend**: `http://localhost:5001`
+- **Backend**: `http://localhost:7868`
 - **Frontend**: `http://localhost:3000`
 - **MongoDB**: `mongodb://localhost:27017/crm_db`
 - **All API routes**: `/api/v1/`
@@ -590,7 +590,7 @@ See `backend/socketHistory.md` for full event list, rooms, and payload shapes.
 On first session, create `.vscode/` with:
 
 **`launch.json`** — 4 configs:
-- `Bun — Dev Server` (backend on port 5001)
+- `Bun — Dev Server` (backend on port 7868)
 - `Bun — Run Tests` (`bun test tests/ --timeout 15000`)
 - `Next.js — Dev Server` (frontend on port 3000, `serverReadyAction` → opens browser)
 - `🚀 Full Stack — Backend + Frontend` (compound, starts both)

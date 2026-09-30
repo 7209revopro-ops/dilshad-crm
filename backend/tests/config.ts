@@ -10,7 +10,7 @@
  * this file hardcoded `localhost:5001`, which on a developer machine is
  * ordinarily the dev server, configured against the production database.
  *
- *   CRM_TEST_BASE_URL   default http://localhost:5001/api/v1
+ *   CRM_TEST_BASE_URL   default http://localhost:7868/api/v1
  *   CRM_TEST_EMAIL      required — an account that can manage users and teams
  *   CRM_TEST_PASSWORD   required
  *   CRM_TEST_ALLOW_REMOTE=1   to aim at something that is not localhost
@@ -18,7 +18,7 @@
  * Everything the suite creates is prefixed [TEST] and removed afterwards.
  */
 
-export const BASE_URL = process.env.CRM_TEST_BASE_URL ?? "http://localhost:5001/api/v1";
+export const BASE_URL = process.env.CRM_TEST_BASE_URL ?? "http://localhost:7868/api/v1";
 
 export const TIMEOUT_MS = 10_000;
 

@@ -4,8 +4,8 @@
   "module": "src/index.ts",
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "start": "bun src/index.ts",
+    "dev": "PORT=7868 bun --watch src/index.ts",
+    "start": "PORT=7868 bun src/index.ts",
     "seed": "bun src/seeds/superAdmin.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "test": "bun test tests/ --timeout 15000",
