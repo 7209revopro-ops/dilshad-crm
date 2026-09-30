@@ -23,6 +23,23 @@ api.interceptors.request.use(
 );
 
 // ─── Response Interceptor: handle 401 and token refresh ───────────────────────
+/**
+ * Calls where a 401 is the answer rather than an expired session: a wrong
+ * email or password, or a refresh token that has run out. Treating the login's
+ * 401 as "session expired" sent the browser to /login — reloading the very page
+ * the error was about to be shown on, so a wrong password looked like nothing.
+ */
+const AUTH_ANSWER_PATHS = ["/auth/login", "/auth/refresh-token"];
+const isAuthAnswer = (url?: string) => !!url && AUTH_ANSWER_PATHS.some((p) => url.endsWith(p));
+
+/** Clear the session and go to the login page — unless already there, where a reload only wipes what is on screen. */
+function sendToLogin() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
+  if (window.location.pathname !== "/login") window.location.href = "/login";
+}
+
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (value: unknown) => void; reject: (reason?: unknown) => void }> = [];
 
@@ -42,7 +59,7 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthAnswer(originalRequest?.url)) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -62,12 +79,7 @@ api.interceptors.response.use(
       if (!refreshToken) {
         isRefreshing = false;
         processQueue(error, null);
-        // Clear auth and redirect to login
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("refreshToken");
-          window.location.href = "/login";
-        }
+        sendToLogin();
         return Promise.reject(error);
       }
 
@@ -85,11 +97,7 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("refreshToken");
-          window.location.href = "/login";
-        }
+        sendToLogin();
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
