@@ -287,3 +287,15 @@ the timed daily split assigns the lead but its `lead_assigned` entry — and the
 
 **Fix:** `recordHeartbeat` writes `lastSeenAt` / `lastActiveAt` with `$max`. The idle sweep's conditional update on
 `lastActiveAt` is unaffected.
+
+---
+
+## A filter narrows a role's view — it never replaces it (2026-10-01)
+
+**Rule:** when a list is limited by role (a BDE to their own leads, a team leader to their team), a query filter on the same
+field must be combined with that limit, not assigned over it; a filter pointing outside the limit returns nothing. Endpoints
+that serve one person's data (`/users/:userId/leads`, `lead-stats`, `revenue`) go through `selfOrOverseer()`.
+
+**Where:** `leadService.getLeads` (`narrow()`), `middleware/permissions.selfOrOverseer`. Tested 28/28 — every role's own view
+unchanged.
+

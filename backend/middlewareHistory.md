@@ -584,3 +584,17 @@ view | create | edit | delete | approve | export
 | POST | `/api/v1/meetings/:id/cancel` | same as PUT |
 
 No module permission: booking time with colleagues is everyday work, like the mentor calendar. The frontend's dashboard layout lets `/calendar` through for every role.
+
+---
+
+### Changed 2026-10-01 — per-user lead routes
+
+| Method | Path | Middleware chain |
+|--------|------|-----------------|
+| GET | `/api/v1/users/:userId/leads` | `authenticate` → `selfOrOverseer()` |
+| GET | `/api/v1/users/:userId/lead-stats` | `authenticate` → `selfOrOverseer()` |
+| GET | `/api/v1/users/:userId/revenue` | `authenticate` → `selfOrOverseer()` |
+
+**`selfOrOverseer(param = "userId")`** (new, `middleware/permissions.ts`) — passes for the person themselves, a Super Admin or
+Reporter, a role with `users.view`, or a leader of a team that person is in; everyone else 403.
+

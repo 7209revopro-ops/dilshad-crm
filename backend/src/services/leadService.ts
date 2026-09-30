@@ -503,8 +503,17 @@ export class LeadService {
     }
 
     if (filters.status) query.status = filters.status;
-    if (filters.assignedTo) query.assignedTo = filters.assignedTo;
-    if (filters.team) query.team = filters.team;
+    // A filter narrows what the caller may see — it never replaces the limit on
+    // their role. One that points outside it matches nothing.
+    let outsideView = false;
+    const narrow = (key: "assignedTo" | "team", value: string) => {
+      const scoped = query[key];
+      if (scoped !== undefined && String(scoped) !== value) outsideView = true;
+      else query[key] = value;
+    };
+    if (filters.assignedTo) narrow("assignedTo", filters.assignedTo);
+    if (filters.team) narrow("team", filters.team);
+    if (outsideView) return { leads: [], pagination: buildPagination(0, page, limit) };
     if (filters.reporter) query.reporter = filters.reporter;
     if (filters.course) query.course = filters.course;
     if (filters.source) query.source = new RegExp(filters.source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");

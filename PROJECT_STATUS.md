@@ -16,7 +16,10 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
 - **P0 — Security fixes pending.** The details are kept off this public repo — ask the owner. In short: make the repo private,
   rotate the credentials the owner knows about, and give Remote CRM its own database user and its own `SHEETS_API_KEY`
   (`openssl rand -hex 32`).
-- **P1 — No public address yet.** Every Remote CRM setting points at localhost; the sheet script needs the backend's internet address.
+- **P0 — Deploy the backend.** Besides the four phases, it now carries an access fix (2026-10-01) that only takes effect once the
+  API server runs it.
+- **P1 — Backend not deployed with the four phases.** The web app (Vercel, auto-deploys from `main`) has the new pages; the API
+  server still runs the older code, so they can't load until it is updated (pull, `bun install`, restart).
 - **P1 — Timed split loses its log and notice (pre-existing).** `splitScheduler` passes `"system"` as the performer; the daily split
   assigns the lead, then the `lead_assigned` entry and the new owner's notification fail (`CastError`). Not fixed — owner's call.
 - **P1 — Meeting invites need the mailbox.** Until `SMTP_*` is set, clients and mentors get nothing (employees still get the
@@ -53,3 +56,5 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   (off by default), Activity page (super admin); shared list components and `lib/animations.ts`.
 - 2026-10-01 — Phase 4: meetings (colleagues, client, LMS mentors), calendar invites (.ics) by email, busy check, reminders,
   Calendar page (day / week / month, mentors' LMS time alongside); the Delta Trading Hub sheet script shows sync status per row.
+- 2026-10-01 — Leads page "My leads" toggle for super admins and team leaders; lead lists and per-user lead endpoints keep to
+  each role's view.

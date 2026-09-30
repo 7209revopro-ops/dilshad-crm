@@ -1,5 +1,7 @@
 import type { Response, NextFunction } from "express";
+import { Types } from "mongoose";
 import type { AuthenticatedRequest, CrmModule, PermissionAction } from "../types/index.js";
+import { Team } from "../models/Team.js";
 import { sendError } from "../utils/response.js";
 
 /**
@@ -86,3 +88,36 @@ export const requireSuperAdmin = (req: AuthenticatedRequest, res: Response, next
   }
   sendError(res, "Access denied: only a super admin can do this", 403);
 };
+
+/**
+ * One person's own data — their leads, lead stats, revenue — for them, or for
+ * someone who may see them: a super admin or reporter, a role allowed to view
+ * users (the Users page), or their team leader. Anyone else is refused.
+ */
+export const selfOrOverseer = (param = "userId") => {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const target = req.params[param];
+      const me = req.user?.userId;
+      const role = req.user?.role;
+      if (!me || !role) {
+        sendError(res, "Role information missing", 403);
+        return;
+      }
+      if (target === me) return next();
+      if ((role.isSystemRole && role.roleName === "Super Admin") || role.roleName === "Reporter" || role.permissions?.users?.view) {
+        return next();
+      }
+      if (
+        Types.ObjectId.isValid(target) &&
+        (await Team.exists({ leaders: new Types.ObjectId(me), $or: [{ members: new Types.ObjectId(target) }, { leaders: new Types.ObjectId(target) }] }))
+      ) {
+        return next();
+      }
+      sendError(res, "Access denied: you can only see your own leads", 403);
+    } catch (err) {
+      next(err);
+    }
+  };
+};
+

@@ -689,3 +689,10 @@ This file documents every service in `backend/src/services/`. Read this before w
 
 `utils/workingHours.localClock(tz, at)` → `{ weekday, minutes, dayKey }` (mentor slot checks).
 
+---
+
+## leadService.getLeads — filters within the role (changed 2026-10-01)
+
+`assignedTo` and `team` filters are combined with the caller's role limit (BDE: own leads; team leader: own team) instead of
+replacing it; one outside the limit returns an empty page. Super admins and reporters are unaffected.
+
