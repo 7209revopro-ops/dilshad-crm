@@ -36,9 +36,9 @@ import { KanbanBoard } from "@/components/leads/KanbanBoard";
 import { useLeads, useLeadSources, useUpdateLeadStatus, useBulkUpdateLeadStatus, useBulkDeleteLeads, useBulkAssignLeadsToTeam, useUpdateLead } from "@/hooks/useLeads";
 import { useAllCourses } from "@/hooks/useCourses";
 import { useUsers } from "@/hooks/useUsers";
-import { useTeams } from "@/hooks/useTeams";
+import { useMyTeam, useTeams } from "@/hooks/useTeams";
 import { useAuthStore } from "@/lib/store/authStore";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Lead } from "@/types/lead";
 import type { LeadStatus } from "@/lib/statusConfig";
@@ -98,6 +98,8 @@ const ALL_COLUMNS: ColumnDef[] = [
 ];
 
 const DEFAULT_VISIBLE = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id));
+/** Remembers "All leads" / "My leads" for super admins and team leaders, per browser. */
+const LEADS_SCOPE_KEY = "crm_leads_scope";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -639,6 +641,8 @@ function LeadsPageContent() {
   const { data, isLoading, isFetching } = useLeads(filters);
   const { data: usersData } = useUsers({ status: "active", limit: "200" });
   const { data: teamsData } = useTeams({ status: "active", limit: 100 });
+  // The team this person is on — readable by any role that sees leads, unlike the teams list.
+  const { data: myTeam } = useMyTeam();
   const { data: allCourses = [] } = useAllCourses();
   const { data: allSources = [] } = useLeadSources();
 
@@ -653,21 +657,47 @@ function LeadsPageContent() {
   const isSuperAdmin =
     user?.role?.isSystemRole === true && user?.role?.roleName === "Super Admin";
 
-  // Detect if current user is a leader of any team (by checking team data)
-  const myLeaderTeam = teamsData?.data?.find((t) =>
-    t.leaders?.some((l) => (typeof l === "object" ? l._id : l) === user?._id),
-  ) ?? null;
+  // Detect if current user is a leader of any team — from the teams list when the role may read it,
+  // otherwise from their own team (most leaders' roles can't list teams).
+  const isLeaderOf = (t: { leaders?: Array<User | string> } | null | undefined) =>
+    Boolean(t?.leaders?.some((l) => (typeof l === "object" ? l._id : l) === user?._id));
+  const myLeaderTeam = teamsData?.data?.find((t) => isLeaderOf(t)) ?? (isLeaderOf(myTeam) ? myTeam ?? null : null);
 
   const isTeamLeader = !!myLeaderTeam;
   // "Admin-level" = can see people-based filters
   const isAdmin = isSuperAdmin || isTeamLeader;
+  const myId = user?._id ?? "";
 
-  // For Assigned To filter: super admin sees all users; team leader sees their team members; else empty
-  const filterableUsers = isSuperAdmin
+  // For Assigned To filter: super admin sees all users; team leader sees their team members (and themselves); else empty
+  const leaderMembers = (myLeaderTeam?.members ?? []).filter((m): m is typeof allUsers[0] => typeof m === "object");
+  const filterableUsers: Array<{ _id: string; name: string }> = isSuperAdmin
     ? allUsers
     : isTeamLeader && myLeaderTeam
-      ? (myLeaderTeam.members ?? []).filter((m): m is typeof allUsers[0] => typeof m === "object")
+      ? [...(myId && !leaderMembers.some((m) => m._id === myId) ? [{ _id: myId, name: "You" }] : []), ...leaderMembers]
       : [];
+
+  // ── "My leads" — super admins and team leaders see more than their own; this shows just theirs ──
+  // A shortcut for Assigned To = you, so the list, the board, paging and the URL all follow it.
+  const mineOnly = Boolean(myId) && assignedTo === myId;
+  const scopeRestored = useRef(false);
+  // The last choice comes back once we know who is looking — unless the address sets Assigned To itself.
+  useEffect(() => {
+    if (scopeRestored.current || !isAdmin || !myId) return;
+    scopeRestored.current = true;
+    if (searchParams.get("assignedTo")) return;
+    try {
+      if (localStorage.getItem(LEADS_SCOPE_KEY) === "mine") setAssignedTo(myId);
+    } catch { /* storage unavailable — start on all leads */ }
+  }, [isAdmin, myId, searchParams]);
+  // …and is remembered: "mine" whenever Assigned To is you, "all" when it is cleared. Filtering to
+  // someone else (a link, the dropdown) leaves the remembered choice alone.
+  useEffect(() => {
+    if (!scopeRestored.current || !isAdmin) return;
+    if (!mineOnly && assignedTo !== "all") return;
+    try {
+      localStorage.setItem(LEADS_SCOPE_KEY, mineOnly ? "mine" : "all");
+    } catch { /* storage unavailable */ }
+  }, [mineOnly, assignedTo, isAdmin]);
 
   // Reporter filter only makes sense for super admin
   const showReporterFilter = isSuperAdmin;
@@ -740,6 +770,7 @@ function LeadsPageContent() {
 
   // ── Active filter label helpers ───────────────────────────────────────────────
   function userName(id: string) {
+    if (id === myId) return "You";
     return allUsers.find((u) => u._id === id)?.name ?? id;
   }
 
@@ -814,8 +845,37 @@ function LeadsPageContent() {
                 )}
               </div>
 
-              {/* Right side — Today + filter toggle + view toggle + clear */}
+              {/* Right side — whose leads + Today + filter toggle + view toggle + clear */}
               <div className="flex items-center gap-2 flex-wrap">
+                {isAdmin && myId && (
+                  <div className="inline-flex rounded-lg border border-border/60 bg-muted/40 p-0.5" role="group" aria-label="Whose leads">
+                    {([
+                      { key: "all", label: isSuperAdmin ? "All leads" : "My team", on: assignedTo === "all" },
+                      { key: "mine", label: "My leads", on: mineOnly },
+                    ] as const).map((o) => (
+                      <motion.button
+                        key={o.key}
+                        type="button"
+                        whileTap={{ scale: 0.97 }}
+                        aria-pressed={o.on}
+                        onClick={() => applyFilter(setAssignedTo, o.key === "mine" ? myId : "all")}
+                        className={cn(
+                          "relative whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                          o.on ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {o.on && (
+                          <motion.span
+                            layoutId="leads-scope-pill"
+                            className="absolute inset-0 rounded-md bg-primary"
+                            transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                          />
+                        )}
+                        <span className="relative z-10">{o.label}</span>
+                      </motion.button>
+                    ))}
+                  </div>
+                )}
                 <TodayLeadsButton active={isTodayActive} onClick={applyToday} />
                 <SplitTodayButton active={isSplitTodayActive} onClick={applySplitToday} />
                 <Button

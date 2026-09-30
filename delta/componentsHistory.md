@@ -1126,3 +1126,6 @@
 - `Sidebar` — "Calendar" nav item (`permModule: null`).
 - `app/(dashboard)/layout.tsx` — `/calendar` passes the permission redirect for every role (like `/profile`).
 - `NotificationBell` — icons for `meeting_scheduled`, `meeting_updated`, `meeting_reminder`, `meeting_cancelled`.
+
+### Change log — 2026-10-01 (Leads page)
+- Leads page — "All leads / My team | My leads" toggle for super admins and team leaders (shortcut for Assigned To = you, remembered per browser); team-leader detection falls back to `useMyTeam()`; "You" in the Assigned To filter and pill.

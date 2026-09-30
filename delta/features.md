@@ -612,7 +612,7 @@ Per-lead AI chat assistant powered by Anthropic Claude. Stores conversation memo
 
 Copy the template at the top and place it in the correct module section.
 
-**Feature count**: 16
+**Feature count**: 17
 *(Increment every time you add a feature)*
 
 
@@ -716,6 +716,21 @@ Copy the template at the top and place it in the correct module section.
 | GET | `/api/v1/mentors/schedule` | (existing) the mentors' LMS diary |
 
 **State**: React Query key `["meetings", …]`; mentors `["mentors","schedule",from,to]`
+
+**Change Log**:
+- 1.0.0 — Initial build
+
+---
+
+## Leads page — "My leads" toggle (2026-10-01)
+
+**Page**: `app/(dashboard)/leads/page.tsx`
+
+**What it does**: super admins (**All leads | My leads**) and team leaders (**My team | My leads**) can switch the list — and the board — to just the leads assigned to them. It is a shortcut for "Assigned To = you", so paging, the URL and the filter pill ("Assigned: You") follow it. The choice is remembered per browser (`crm_leads_scope`); a link that sets Assigned To itself wins and does not change it. BDEs see only their own leads already and get no toggle.
+
+**Also**: team leaders are now recognised from their own team (`GET /teams/mine`) when their role can't list teams, so their "Assigned To" filter lists their team (and "You") — before, it stayed empty for them.
+
+**API**: existing `GET /leads?assignedTo=<id>`, `GET /teams/mine` — no backend change.
 
 **Change Log**:
 - 1.0.0 — Initial build
