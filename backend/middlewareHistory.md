@@ -594,6 +594,7 @@ No module permission: booking time with colleagues is everyday work, like the me
 | GET | `/api/v1/users/:userId/leads` | `authenticate` → `selfOrOverseer()` |
 | GET | `/api/v1/users/:userId/lead-stats` | `authenticate` → `selfOrOverseer()` |
 | GET | `/api/v1/users/:userId/revenue` | `authenticate` → `selfOrOverseer()` |
+| GET | `/api/v1/users/:id/export-pdf` | `authenticate` → `selfOrOverseer("id")` (`/users/profile/export-pdf` stays self-only) |
 
 **`selfOrOverseer(param = "userId")`** (new, `middleware/permissions.ts`) — passes for the person themselves, a Super Admin or
 Reporter, a role with `users.view`, or a leader of a team that person is in; everyone else 403.

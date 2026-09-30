@@ -294,7 +294,8 @@ the timed daily split assigns the lead but its `lead_assigned` entry — and the
 
 **Rule:** when a list is limited by role (a BDE to their own leads, a team leader to their team), a query filter on the same
 field must be combined with that limit, not assigned over it; a filter pointing outside the limit returns nothing. Endpoints
-that serve one person's data (`/users/:userId/leads`, `lead-stats`, `revenue`) go through `selfOrOverseer()`.
+that serve one person's data (`/users/:userId/leads`, `lead-stats`, `revenue`, `/users/:id/export-pdf`) go through
+`selfOrOverseer()`.
 
 **Where:** `leadService.getLeads` (`narrow()`), `middleware/permissions.selfOrOverseer`. Tested 28/28 — every role's own view
 unchanged.

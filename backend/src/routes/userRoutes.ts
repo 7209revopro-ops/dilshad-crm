@@ -11,7 +11,7 @@ import {
 } from "../controllers/userController.js";
 import { exportUserPdf } from "../controllers/exportController.js";
 import { authenticate } from "../middleware/auth.js";
-import { checkPermission } from "../middleware/permissions.js";
+import { checkPermission, selfOrOverseer } from "../middleware/permissions.js";
 
 const router = Router();
 
@@ -33,6 +33,7 @@ router.get("/profile/export-pdf", exportUserPdf);
 router.get("/:id",     selfOrPermission,                   getUserById);
 router.put("/:id",     checkPermission("users", "edit"),   updateUser);
 router.delete("/:id",  checkPermission("users", "delete"), deleteUser);
-router.get("/:id/export-pdf", exportUserPdf);
+// Someone's performance PDF: their own, or someone who may see them — see selfOrOverseer.
+router.get("/:id/export-pdf", selfOrOverseer("id"), exportUserPdf);
 
 export default router;
