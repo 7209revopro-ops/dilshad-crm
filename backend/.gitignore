@@ -48,3 +48,7 @@ sheets
 
 # Telegram backup temp files
 backups/
+
+# logs
+logs/
+*.log
