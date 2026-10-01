@@ -35,7 +35,16 @@ const schema = z.object({
   totalFee:   z.coerce.number().min(0).optional(),
   paidAmount: z.coerce.number().min(0).optional(),
   notes:      z.string().optional(),
+  /** "" for an enrolment from before the question was asked — left unanswered unless answered here. */
+  bonus:       z.enum(["", "yes", "no"]).optional(),
+  bonusAmount: z.coerce.number().min(0).optional(),
+}).refine((v) => v.bonus !== "yes" || (v.bonusAmount ?? 0) > 0, {
+  message: "Enter the bonus amount, or choose no bonus",
+  path: ["bonusAmount"],
 });
+
+/** The bonus answer as the form holds it. */
+const bonusOf = (s: Student): "" | "yes" | "no" => (s.hasBonus === true ? "yes" : s.hasBonus === false ? "no" : "");
 
 type FormValues = z.infer<typeof schema>;
 
@@ -72,6 +81,8 @@ export function EditStudentModal({ open, student, onClose }: Props) {
       totalFee:   student.totalFee,
       paidAmount: student.paidAmount,
       notes:      student.notes      ?? "",
+      bonus:       bonusOf(student),
+      bonusAmount: student.bonusAmount ?? 0,
     },
   });
 
@@ -87,6 +98,8 @@ export function EditStudentModal({ open, student, onClose }: Props) {
         totalFee:   student.totalFee,
         paidAmount: student.paidAmount,
         notes:      student.notes      ?? "",
+        bonus:       bonusOf(student),
+        bonusAmount: student.bonusAmount ?? 0,
       });
     }
   }, [open, student]);
@@ -102,6 +115,10 @@ export function EditStudentModal({ open, student, onClose }: Props) {
       totalFee:   values.totalFee,
       paidAmount: values.paidAmount,
       notes:      values.notes || undefined,
+      // Only an answer is sent; an enrolment nobody asked about stays unanswered.
+      ...(values.bonus
+        ? { hasBonus: values.bonus === "yes", bonusAmount: values.bonus === "yes" ? values.bonusAmount ?? 0 : 0 }
+        : {}),
     };
 
     updateMut.mutate(
@@ -215,6 +232,33 @@ export function EditStudentModal({ open, student, onClose }: Props) {
               <Label htmlFor="paidAmount">Paid Amount (₹)</Label>
               <Input id="paidAmount" type="number" min={0} {...form.register("paidAmount")} />
             </div>
+          </div>
+
+          {/* Bonus — beside the fee, never part of it or of the balance */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Bonus given?</Label>
+              <Select
+                value={form.watch("bonus") || "unanswered"}
+                onValueChange={(v) => form.setValue("bonus", v === "unanswered" ? "" : (v as "yes" | "no"), { shouldValidate: true })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unanswered" disabled={Boolean(bonusOf(student))}>— Not answered —</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                  <SelectItem value="yes">Yes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.watch("bonus") === "yes" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="bonusAmount">Bonus amount</Label>
+                <Input id="bonusAmount" type="number" min={0} step="0.01" {...form.register("bonusAmount")} />
+                {form.formState.errors.bonusAmount && (
+                  <p className="text-xs text-destructive">{form.formState.errors.bonusAmount.message}</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Notes */}

@@ -13,6 +13,12 @@ function createError(msg: string, status: number) {
   return Object.assign(new Error(msg), { statusCode: status });
 }
 
+/** A bonus amount that can be recorded: a real number above zero. */
+function isBonusAmount(v: unknown): boolean {
+  const n = Number(v);
+  return v !== null && v !== "" && Number.isFinite(n) && n > 0;
+}
+
 // Auto-generate enrollment number: STU-0001, STU-0002, ...
 async function nextEnrollmentNumber(): Promise<string> {
   const last = await Student.findOne().sort({ createdAt: -1 }).select("enrollmentNumber").lean();
@@ -49,6 +55,8 @@ export class StudentService {
     language?: string;
     paymentMethod?: string;
     paymentReceipt?: { name: string; url: string; key: string; size?: number; mimeType?: string } | null;
+    hasBonus?: boolean;
+    bonusAmount?: number;
   }) {
     const existing = await Student.findOne({ leadId: data.leadId });
     if (existing) throw createError("A student already exists for this lead", 409);
@@ -70,9 +78,12 @@ export class StudentService {
       missing.push("payment method");
     }
     if (!data.paymentReceipt?.key || !data.paymentReceipt.url) missing.push("payment receipt");
+    // Yes or no, every time — and a yes is only an answer with its amount.
+    if (typeof data.hasBonus !== "boolean") missing.push("whether a bonus was given");
+    else if (data.hasBonus && !isBonusAmount(data.bonusAmount)) missing.push("the bonus amount");
     if (missing.length) {
       throw createError(
-        `A closing needs ${missing.join(", ")}. Upload the receipt and choose the language and payment method, then close again.`,
+        `A closing needs ${missing.join(", ")}. Upload the receipt, choose the language and payment method, and say whether a bonus was given, then close again.`,
         422,
       );
     }
@@ -108,6 +119,8 @@ export class StudentService {
       paymentReceipt: data.paymentReceipt
         ? { ...data.paymentReceipt, uploadedAt: new Date() }
         : undefined,
+      hasBonus: data.hasBonus,
+      bonusAmount: data.hasBonus ? Number(data.bonusAmount) : 0,
       status: "active",
     });
 
@@ -173,6 +186,20 @@ export class StudentService {
       ...(rep?.name ? { salespersonName: rep.name } : {}),
       enrolledOn: (student.enrollmentDate ?? new Date()).toISOString().slice(0, 10),
       declaredPaidMinor: Math.round((student.paidAmount ?? 0) * 100),
+      // The fee less what was paid, in the same minor units as the two figures
+      // it comes from, so finance sees exactly the difference of what it was
+      // sent. The bonus is never in it.
+      balanceMinor: Math.max(0, Math.round((student.totalFee ?? 0) * 100) - Math.round((student.paidAmount ?? 0) * 100)),
+      // Whether a bonus was given at the close, for information. Not sent for
+      // an enrolment from before it was asked: unknown is not "no".
+      ...(typeof student.hasBonus === "boolean"
+        ? {
+            bonus: {
+              given: student.hasBonus,
+              amountMinor: student.hasBonus ? Math.round((student.bonusAmount ?? 0) * 100) : 0,
+            },
+          }
+        : {}),
       modeOfStudy: "online" as const,
       // Taken at the close now, rather than sent empty for finance to record
       // as "Not specified" — which is what every enrolment from here used to
@@ -342,6 +369,18 @@ export class StudentService {
         (student as any)[field] = data[field];
       }
     }
+
+    /*
+     * The bonus, corrected after the close. Kept here: an enrolment already
+     * with finance is not re-sent for an edit — the bonus reaches finance with
+     * a correction only after finance sends the enrolment back.
+     */
+    if (typeof data.hasBonus === "boolean") student.hasBonus = data.hasBonus;
+    if (data.bonusAmount !== undefined) student.bonusAmount = Number(data.bonusAmount);
+    if (student.hasBonus === true && !isBonusAmount(student.bonusAmount)) {
+      throw createError("A bonus needs an amount above zero — or choose no bonus.", 422);
+    }
+    if (student.hasBonus !== true) student.bonusAmount = 0;
 
     // Recompute pendingAmount and feeStatus if fee fields changed
     const total   = (student as unknown as Record<string, number>).totalFee   as number ?? 0;

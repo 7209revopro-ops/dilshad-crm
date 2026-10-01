@@ -45,8 +45,8 @@ import type { LeadStatus } from "@/lib/statusConfig";
 import type { User } from "@/types";
 import { INITIAL_RESPONSE_CONFIG, PRIMARY_CONCERN_CONFIG, FOLLOWUP_STRATEGY_CONFIG } from "@/lib/leadConfig";
 import { ExactConcernEditor } from "@/components/leads/ExactConcernEditor";
-import { CreateStudentModal } from "@/components/students/CreateStudentModal";
-import { useStudentByLeadId } from "@/hooks/useStudents";
+import { CloseLeadDialog, CloseLeadsQueue } from "@/components/students/CloseLeadDialog";
+import { toast } from "@/lib/toast";
 import { LOST_REASONS, LostReasonModal } from "@/components/leads/LostReasonModal";
 import { TruncatedCell } from "@/components/leads/TruncatedCell";
 import { FollowupDetailsModal } from "@/components/leads/FollowupDetailsModal";
@@ -556,7 +556,7 @@ function LeadsPageContent() {
   const bulkAssignTeam = useBulkAssignLeadsToTeam();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { mutate: updateStatus, isPending: updateStatusPending } = useUpdateLeadStatus();
+  const { mutate: updateStatus, mutateAsync: updateStatusAsync, isPending: updateStatusPending } = useUpdateLeadStatus();
   const { mutate: updateLeadField } = useUpdateLead();
 
   // Clear selection when page/filters change
@@ -746,6 +746,8 @@ function LeadsPageContent() {
   // ── Student modal state ───────────────────────────────────────────────────────
   const [studentModalLead, setStudentModalLead] = useState<Lead | null>(null);
   const [pendingStatus,    setPendingStatus]    = useState<{ lead: Lead; status: LeadStatus } | null>(null);
+  /** Leads chosen to close together: their enrolments open one after another. */
+  const [closeQueue, setCloseQueue] = useState<string[] | null>(null);
 
   // ── Handlers ──────────────────────────────────────────────────────────────────
   const handleCreate = () => { setSelectedLead(null); setDialogOpen(true); };
@@ -1806,6 +1808,10 @@ function LeadsPageContent() {
                 } else if (bulkStatus === "followup") {
                   setBulkStatusOpen(false);
                   setBulkFollowupModalOpen(true);
+                } else if (bulkStatus === "closed") {
+                  // Closed only through each lead's enrolment, one after another.
+                  setBulkStatusOpen(false);
+                  setCloseQueue(Array.from(selectedIds));
                 } else {
                   bulkUpdateStatus.mutate(
                     { leadIds: Array.from(selectedIds), status: bulkStatus },
@@ -1977,48 +1983,35 @@ function LeadsPageContent() {
       </AnimatePresence>
 
       {/* ── Create Student Modal ──────────────────────────────────────────────── */}
+      {/* Dismissing is not closing: ✕ or Escape leaves the lead's status alone.
+          A lead marked closed with no enrolment behind it is one finance and
+          the LMS never hear about. */}
       {studentModalLead && (
-        <StudentModalWrapper
+        <CloseLeadDialog
+          key={studentModalLead._id}
           lead={studentModalLead}
-          pendingStatus={pendingStatus}
           onClose={() => { setStudentModalLead(null); setPendingStatus(null); }}
-          onSettled={() => {
+          onClosed={() => {
             if (pendingStatus) updateStatus({ id: pendingStatus.lead._id, status: pendingStatus.status });
             setStudentModalLead(null);
             setPendingStatus(null);
           }}
         />
       )}
+
+      {/* ── Several leads closed at once: an enrolment each ─────────────────── */}
+      {closeQueue && (
+        <CloseLeadsQueue
+          leadIds={closeQueue}
+          markClosed={(id) => updateStatusAsync({ id, status: "closed" })}
+          onDone={({ closed, skipped }) => {
+            setCloseQueue(null);
+            setSelectedIds(new Set());
+            if (skipped) toast.info(`${closed} closed · ${skipped} left as they were — no enrolment saved`);
+          }}
+        />
+      )}
     </div>
-  );
-}
-
-// Separate wrapper so useStudentByLeadId only fires when modal is open
-function StudentModalWrapper({ lead, pendingStatus, onClose, onSettled }: {
-  lead: Lead;
-  pendingStatus: { lead: Lead; status: LeadStatus } | null;
-  onClose: () => void;
-  onSettled: () => void;
-}) {
-  const { data: existingStudent, isLoading } = useStudentByLeadId(lead._id);
-
-  if (isLoading) return null;
-
-  // An enrolment that already exists is shown, not skipped. Closing a lead a
-  // second time — after it went to follow-up and came back — used to update the
-  // status silently and show nothing, so the close looked like it had failed.
-  return (
-    <CreateStudentModal
-      open
-      lead={lead}
-      existingStudent={existingStudent}
-      /* Dismissing is not closing. Both of these ran onSettled, which applied
-         the status — so ✕ or Escape closed the lead anyway and the enrolment
-         form was mandatory in appearance only. A lead marked closed with no
-         enrolment behind it is one finance and the LMS never hear about. */
-      onClose={onClose}
-      onCreated={onSettled}
-    />
   );
 }
 

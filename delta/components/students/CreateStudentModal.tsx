@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   GraduationCap, X, User2, Phone, Mail, BookOpen,
-  Calendar, DollarSign, StickyNote, CheckCircle2, Paperclip, Upload,
+  Calendar, DollarSign, StickyNote, CheckCircle2, Paperclip, Upload, Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,12 +37,14 @@ interface Props {
    * second close looked like nothing happened at all.
    */
   existingStudent?: Student | null;
+  /** "2 of 5" when this is one of several leads being closed together. */
+  progress?: string;
   /** Dismissing still closes the lead: the status was already chosen. */
   onClose: () => void;
   onCreated: () => void;
 }
 
-export function CreateStudentModal({ open, lead, existingStudent, onClose, onCreated }: Props) {
+export function CreateStudentModal({ open, lead, existingStudent, progress, onClose, onCreated }: Props) {
   const editing = Boolean(existingStudent);
 
   /** The course the lead already carries, if it was picked during the sale. */
@@ -123,12 +125,36 @@ export function CreateStudentModal({ open, lead, existingStudent, onClose, onCre
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
+  /*
+   * Whether a bonus was given, and how much.
+   *
+   * Asked at every close — yes or no, with the amount when yes — because the
+   * people who approve, teach and mentor this client all need to know what was
+   * promised. Beside the money, never in it: the balance above is the fee less
+   * what was paid, whatever the bonus. An enrolment from before this was asked
+   * starts unanswered, and can be answered here.
+   */
+  const [bonusChoice, setBonusChoice] = useState<"" | "yes" | "no">(
+    existingStudent?.hasBonus === true ? "yes" : existingStudent?.hasBonus === false ? "no" : "",
+  );
+  const [bonusInput, setBonusInput] = useState(
+    existingStudent?.hasBonus ? String(existingStudent.bonusAmount || "") : "",
+  );
+  const bonusAmount = Math.max(0, Number(bonusInput) || 0);
+  const bonusAmountMissing = bonusChoice === "yes" && !(bonusAmount > 0);
+  /** Only what was answered is sent: unanswered stays unanswered, not "no". */
+  const bonusFields = bonusChoice
+    ? { hasBonus: bonusChoice === "yes", bonusAmount: bonusChoice === "yes" ? bonusAmount : 0 }
+    : {};
+
   const missing = editing
-    ? []
+    ? [bonusAmountMissing && "the bonus amount"].filter(Boolean) as string[]
     : [
         !language && "language",
         !paymentMethod && "payment method",
         !receipt && "payment receipt",
+        !bonusChoice && "whether a bonus was given",
+        bonusAmountMissing && "the bonus amount",
       ].filter(Boolean) as string[];
 
   async function handleReceipt(file: File) {
@@ -185,6 +211,7 @@ export function CreateStudentModal({ open, lead, existingStudent, onClose, onCre
           totalFee,
           paidAmount,
           notes: notes || undefined,
+          ...bonusFields,
         },
       });
       onCreated();
@@ -218,6 +245,7 @@ export function CreateStudentModal({ open, lead, existingStudent, onClose, onCre
       language,
       paymentMethod,
       paymentReceipt: receipt,
+      ...bonusFields,
     });
     onCreated();
   }
@@ -249,6 +277,7 @@ export function CreateStudentModal({ open, lead, existingStudent, onClose, onCre
                   </DialogHeader>
                   <p className="text-xs text-muted-foreground">
                     {lead.name} · {editing ? `Enrolled ${existingStudent?.enrollmentNumber ?? ""}`.trim() : "Lead closed"}
+                    {progress ? ` · ${progress}` : ""}
                   </p>
                 </div>
               </div>
@@ -326,9 +355,12 @@ export function CreateStudentModal({ open, lead, existingStudent, onClose, onCre
                     </div>
                     <div className="rounded-lg bg-card p-2 border border-border/30">
                       <p className={cn("text-sm font-bold", pending > 0 ? "text-amber-400" : "text-green-400")}>{fmtFull(pending)}</p>
-                      <p className="text-[10px] text-muted-foreground">Pending</p>
+                      <p className="text-[10px] text-muted-foreground">Balance</p>
                     </div>
                   </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Balance = total fee − paid. A bonus is never part of it.
+                  </p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <p className="text-[11px] text-muted-foreground">Total fee</p>
@@ -367,6 +399,59 @@ export function CreateStudentModal({ open, lead, existingStudent, onClose, onCre
                       />
                     </div>
                   )}
+
+                  {/* The bonus: asked, answered, and kept beside the money. */}
+                  <div className="space-y-1.5 border-t border-border/30 pt-2">
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <Gift className="h-3 w-3" /> Bonus given?{!editing && " *"}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {(["no", "yes"] as const).map((choice) => (
+                        <button
+                          key={choice}
+                          type="button"
+                          onClick={() => setBonusChoice(choice)}
+                          className={cn(
+                            "h-8 rounded-md border px-3 text-xs font-medium transition-colors",
+                            bonusChoice === choice
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                          )}
+                        >
+                          {choice === "yes" ? "Yes" : "No"}
+                        </button>
+                      ))}
+                      <AnimatePresence>
+                        {bonusChoice === "yes" && (
+                          <motion.div
+                            initial={{ opacity: 0, x: -6 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -6 }}
+                            className="flex-1"
+                          >
+                            <Input
+                              type="number" min="0" step="0.01" value={bonusInput}
+                              onChange={(e) => setBonusInput(e.target.value)}
+                              placeholder="Bonus amount" className="h-8 text-xs"
+                              aria-label="Bonus amount"
+                            />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                    {/* Where the answer goes. After the close an edit stays in
+                        the CRM: finance only takes a changed enrolment when it
+                        has sent it back to be corrected. */}
+                    {bonusChoice && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {editing
+                          ? "Saved here. Finance sees a change only if it sends this enrolment back for correction."
+                          : bonusChoice === "yes"
+                            ? `${bonusAmount > 0 ? fmtFull(bonusAmount) : "The"} bonus goes to finance with the enrolment, and on to the LMS and Tetra Commission — outside the fee and balance.`
+                            : "No bonus — recorded as such with the enrolment."}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </motion.div>
 

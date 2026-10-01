@@ -52,6 +52,7 @@ import type { Team } from "@/types/team";
 import LeadDialog from "@/components/leads/LeadDialog";
 import { LostReasonModal } from "@/components/leads/LostReasonModal";
 import { FollowupDetailsModal } from "@/components/leads/FollowupDetailsModal";
+import { CloseLeadDialog } from "@/components/students/CloseLeadDialog";
 import { fmtFull, getCurrencySymbol } from "@/lib/currency";
 import { INITIAL_RESPONSE_CONFIG, PRIMARY_CONCERN_CONFIG, FOLLOWUP_STRATEGY_CONFIG } from "@/lib/leadConfig";
 
@@ -952,6 +953,8 @@ export function KanbanBoard({ filters, canEdit }: KanbanBoardProps) {
   const [noteLead, setNoteLead]             = useState<Lead | null>(null);
   const [lostModalLead, setLostModalLead]   = useState<{ leadId: string; name: string } | null>(null);
   const [followupModalLead, setFollowupModalLead] = useState<{ leadId: string; name: string } | null>(null);
+  /** A card dropped on Closed, waiting for its enrolment before it moves. */
+  const [closeLead, setCloseLead] = useState<Lead | null>(null);
 
   const { mutate: updateStatus, isPending: statusPending } = useUpdateLeadStatus();
   const { mutate: updateCNC }    = useUpdateCallNotConnected();
@@ -1018,6 +1021,12 @@ export function KanbanBoard({ filters, canEdit }: KanbanBoardProps) {
       if (targetStatus === "followup") {
         // Mandatory follow-up details before the move applies
         setFollowupModalLead({ leadId, name: lead.name });
+        return;
+      }
+
+      if (targetStatus === "closed") {
+        // The enrolment first: the card moves only once it is saved.
+        setCloseLead(lead);
         return;
       }
 
@@ -1171,6 +1180,29 @@ export function KanbanBoard({ filters, canEdit }: KanbanBoardProps) {
         }}
         onCancel={() => setFollowupModalLead(null)}
       />
+
+      {/* Enrolment — fires when a card is dragged to Closed. Dismissed, the
+          card stays where it was: a closed lead with no enrolment is a sale
+          finance, the LMS and Tetra Commission never hear of. */}
+      {closeLead && (
+        <CloseLeadDialog
+          key={closeLead._id}
+          lead={closeLead}
+          onClose={() => setCloseLead(null)}
+          onClosed={() => {
+            const leadId = closeLead._id;
+            setCloseLead(null);
+            setLocalOverrides((prev) => ({ ...prev, [leadId]: "closed" }));
+            updateStatus(
+              { id: leadId, status: "closed" },
+              {
+                onSuccess: () => setLocalOverrides((p) => { const n = { ...p }; delete n[leadId]; return n; }),
+                onError:   () => setLocalOverrides((p) => { const n = { ...p }; delete n[leadId]; return n; }),
+              },
+            );
+          }}
+        />
+      )}
     </>
   );
 }

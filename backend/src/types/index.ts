@@ -440,6 +440,10 @@ export interface IStudent extends Document {
   /** Proof the money was taken, handed on to finance with the enrolment. */
   paymentReceipt?: StoredFile | null;
   notes?: string;
+  /** Whether a bonus was given at the close — unset on enrolments from before it was asked. */
+  hasBonus?: boolean | null;
+  /** The bonus, in the same currency as the fee; 0 when none. Never part of the balance. */
+  bonusAmount?: number;
   /** Where this enrolment ended up in Delta Finance, once handed over. */
   financeInvoiceId?: string | null;
   financeInvoiceNumber?: string | null;

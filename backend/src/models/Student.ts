@@ -79,6 +79,16 @@ const studentSchema = new Schema<IStudent>(
       uploadedAt: { type: Date },
     },
     notes: { type: String, trim: true, maxlength: 2000 },
+    /**
+     * Whether the client was given a bonus with this enrolment, and how much.
+     *
+     * Asked at the close, and required there — yes or no, with the amount when
+     * yes. Information beside the money, never in it: the bonus is not part of
+     * the fee, of what was paid, or of the balance (fee − paid). Unset on
+     * enrolments from before it was asked, which is different from "no".
+     */
+    hasBonus: { type: Boolean },
+    bonusAmount: { type: Number, min: 0, default: 0 },
 
     /*
      * Where this enrolment ended up in Delta Finance.

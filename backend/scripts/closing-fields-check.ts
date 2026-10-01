@@ -59,6 +59,8 @@ async function close(over: Record<string, unknown>) {
     paymentReceipt: receipt,
     totalFee: 1000,
     paidAmount: 500,
+    // A complete close answers the bonus question too; "no" is an answer.
+    hasBonus: false,
     ...over,
   } as Parameters<typeof svc.createStudent>[0]);
 }
@@ -131,6 +133,80 @@ step("Leaving older enrolments alone");
   const doc = await Student.findById(raw.insertedId).lean();
   check("an enrolment made before these fields still loads", Boolean(doc), "it did not");
   check("...with nothing invented for it", !doc?.language && !doc?.paymentMethod && !doc?.paymentReceipt);
+}
+
+step("The bonus: asked at every close, beside the money and never in it");
+{
+  const m = await refused({ hasBonus: undefined });
+  check("Case 3 — a close that does not say whether a bonus was given is refused", /bonus/i.test(m ?? ""), `"${m}"`);
+}
+for (const amount of [undefined, 0, -50, "abc", ""]) {
+  const m = await refused({ hasBonus: true, bonusAmount: amount });
+  check(`Case 3 — a bonus given with amount ${JSON.stringify(amount)} is refused, naming the amount`, /bonus amount/i.test(m ?? ""), `"${m}"`);
+}
+{
+  const m = await refused({ hasBonus: undefined, language: undefined });
+  check("...and named together with anything else missing", /bonus/i.test(m ?? "") && /language/i.test(m ?? ""), `"${m}"`);
+}
+let withBonusId = "";
+{
+  const s = await close({ name: "Bonus Client", hasBonus: true, bonusAmount: 250 });
+  withBonusId = String((s as { _id: unknown })._id);
+  const doc = await Student.findById(withBonusId).lean();
+  check("Case 1 — a bonus given is stored with its amount", doc?.hasBonus === true && doc?.bonusAmount === 250, JSON.stringify({ h: doc?.hasBonus, a: doc?.bonusAmount }));
+  check("...and is not in the balance: fee − paid", doc?.pendingAmount === 500, `pending=${doc?.pendingAmount}`);
+
+  const payload = await svc.buildHandoverPayload(withBonusId) as Record<string, any>;
+  check("Case 1 — finance is told the bonus, in minor units", payload?.bonus?.given === true && payload?.bonus?.amountMinor === 25_000, JSON.stringify(payload?.bonus));
+  check("...and the balance, exactly the fee less what was paid", payload?.balanceMinor === 50_000 && payload?.course?.amountMinor - payload?.declaredPaidMinor === payload?.balanceMinor,
+    `balance=${payload?.balanceMinor} fee=${payload?.course?.amountMinor} paid=${payload?.declaredPaidMinor}`);
+}
+{
+  const s = await close({ name: "No Bonus Client", hasBonus: false, bonusAmount: 99 });
+  const doc = await Student.findById((s as { _id: unknown })._id).lean();
+  check("Case 2 — no bonus is stored as no, with no amount whatever was sent", doc?.hasBonus === false && doc?.bonusAmount === 0, JSON.stringify({ h: doc?.hasBonus, a: doc?.bonusAmount }));
+  const payload = await svc.buildHandoverPayload(String(doc?._id)) as Record<string, any>;
+  check("...and finance is told \"no\"", payload?.bonus?.given === false && payload?.bonus?.amountMinor === 0, JSON.stringify(payload?.bonus));
+}
+{
+  const s = await close({ name: "Overpaid Client", totalFee: 1000, paidAmount: 1200 });
+  const payload = await svc.buildHandoverPayload(String((s as { _id: unknown })._id)) as Record<string, any>;
+  check("Case 2 — paid in full or more: the balance is zero, never negative", payload?.balanceMinor === 0, `balance=${payload?.balanceMinor}`);
+  const odd = await close({ name: "Odd Fee Client", totalFee: 1000.1, paidAmount: 0.3 });
+  const p2 = await svc.buildHandoverPayload(String((odd as { _id: unknown })._id)) as Record<string, any>;
+  check("Case 2 — fractions: the balance is the exact difference of the minor units sent", p2?.balanceMinor === 100_010 - 30 && p2?.course?.amountMinor - p2?.declaredPaidMinor === p2?.balanceMinor,
+    `balance=${p2?.balanceMinor}`);
+}
+{
+  // An enrolment from before the question: unknown is not "no", so nothing is sent.
+  const raw = await Student.collection.insertOne({
+    enrollmentNumber: "EN-OLD-2", name: "Unasked Client", leadId: new Types.ObjectId(),
+    enrollmentDate: new Date(), totalFee: 800, paidAmount: 200, pendingAmount: 600, feeStatus: "partial", status: "active",
+  });
+  const payload = await svc.buildHandoverPayload(String(raw.insertedId)) as Record<string, any>;
+  check("Case 2 — an enrolment from before the question sends no bonus at all", payload && !("bonus" in payload) && payload.balanceMinor === 60_000,
+    JSON.stringify({ bonus: payload?.bonus, balance: payload?.balanceMinor }));
+}
+
+step("Correcting the bonus after the close — kept in the CRM");
+{
+  const { FinanceHandover } = await import("../src/models/FinanceHandover.js");
+  const before = await FinanceHandover.countDocuments({});
+  const bad = await svc.updateStudent(withBonusId, { hasBonus: true, bonusAmount: 0 } as never).then(() => null, (e: Error & { statusCode?: number }) => e);
+  check("Case 3 — a bonus changed to no amount is refused", bad?.statusCode === 422 && /bonus/i.test(bad.message), `${bad?.statusCode} ${bad?.message}`);
+  const kept = await Student.findById(withBonusId).lean();
+  check("...and the stored bonus is unchanged", kept?.bonusAmount === 250);
+
+  await svc.updateStudent(withBonusId, { bonusAmount: 300 } as never);
+  check("Case 1 — the amount can be corrected", (await Student.findById(withBonusId).lean())?.bonusAmount === 300);
+  await svc.updateStudent(withBonusId, { hasBonus: false } as never);
+  const off = await Student.findById(withBonusId).lean();
+  check("Case 1 — changed to no bonus, the amount goes with it", off?.hasBonus === false && off?.bonusAmount === 0, JSON.stringify({ h: off?.hasBonus, a: off?.bonusAmount }));
+  const unasked = await Student.findOne({ enrollmentNumber: "EN-OLD-2" }).lean();
+  await svc.updateStudent(String(unasked?._id), { notes: "touched" } as never);
+  check("Case 2 — editing an older enrolment does not answer the bonus for it", (await Student.findById(unasked?._id).lean())?.hasBonus == null);
+  check("...and no edit sends anything to finance — corrections go only when finance sends one back",
+    (await FinanceHandover.countDocuments({})) === before, `${before} → ${await FinanceHandover.countDocuments({})}`);
 }
 
 await mongoose.disconnect();

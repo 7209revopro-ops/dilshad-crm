@@ -36,6 +36,10 @@ export interface Student {
   language?: string;
   paymentMethod?: string;
   paymentReceipt?: { name: string; url: string; key: string; size?: number; mimeType?: string } | null;
+  /** Whether a bonus was given at the close. Absent on enrolments from before it was asked. */
+  hasBonus?: boolean | null;
+  /** The bonus, in the fee's currency; 0 when none. Never part of the balance. */
+  bonusAmount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -82,6 +86,8 @@ export interface CreateStudentInput {
   language?: string;
   paymentMethod?: string;
   paymentReceipt?: { name: string; url: string; key: string; size?: number; mimeType?: string } | null;
+  hasBonus?: boolean;
+  bonusAmount?: number;
 }
 
 /**

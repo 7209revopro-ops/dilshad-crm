@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft, GraduationCap, Phone, Mail, BookOpen, Users, User2,
   Calendar, DollarSign, StickyNote, ExternalLink, Edit2, Loader2,
-  CheckCircle2, XCircle, AlertTriangle, Target, MessageSquare,
+  CheckCircle2, XCircle, AlertTriangle, Target, MessageSquare, Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -161,7 +161,7 @@ export default function StudentDetailPage() {
                   {[
                     { label: "Total",   value: fmtFull(student.totalFee),    cls: "text-foreground" },
                     { label: "Paid",    value: fmtFull(student.paidAmount),   cls: "text-green-400" },
-                    { label: "Pending", value: fmtFull(student.pendingAmount),cls: student.pendingAmount > 0 ? "text-amber-400" : "text-muted-foreground" },
+                    { label: "Balance", value: fmtFull(student.pendingAmount),cls: student.pendingAmount > 0 ? "text-amber-400" : "text-muted-foreground" },
                   ].map(({ label, value, cls }) => (
                     <div key={label} className="rounded-lg bg-muted/30 p-2 border border-border/30">
                       <p className={cn("text-sm font-bold tabular-nums", cls)}>{value}</p>
@@ -169,6 +169,15 @@ export default function StudentDetailPage() {
                     </div>
                   ))}
                 </div>
+                {/* The bonus given at the close: beside the money, never in the balance. */}
+                {typeof student.hasBonus === "boolean" && (
+                  <div className="flex items-center justify-between rounded-lg border border-border/30 bg-muted/20 px-2.5 py-1.5 text-[11px]">
+                    <span className="flex items-center gap-1 text-muted-foreground"><Gift className="h-3 w-3" /> Bonus</span>
+                    <span className={cn("font-semibold tabular-nums", student.hasBonus ? "text-violet-400" : "text-muted-foreground")}>
+                      {student.hasBonus ? fmtFull(student.bonusAmount ?? 0) : "None"}
+                    </span>
+                  </div>
+                )}
                 {student.totalFee > 0 && (
                   <div className="space-y-1">
                     <div className="flex justify-between text-[11px]">
