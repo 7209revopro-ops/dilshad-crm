@@ -7,6 +7,8 @@ const config: Config = {
     "./components/**/*.{ts,tsx}",
     "./app/**/*.{ts,tsx}",
     "./src/**/*.{ts,tsx}",
+    // lib/statusConfig.ts holds every status colour; unscanned, a class used only there never exists
+    "./lib/**/*.{ts,tsx}",
   ],
   prefix: "",
   theme: {

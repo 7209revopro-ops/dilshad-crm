@@ -50,6 +50,7 @@ import { toast } from "@/lib/toast";
 import { LOST_REASONS, LostReasonModal } from "@/components/leads/LostReasonModal";
 import { TruncatedCell } from "@/components/leads/TruncatedCell";
 import { FollowupDetailsModal } from "@/components/leads/FollowupDetailsModal";
+import { MeetingScheduledModal } from "@/components/leads/MeetingScheduledModal";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -550,6 +551,7 @@ function LeadsPageContent() {
   const [followupModalOpen,     setFollowupModalOpen]     = useState(false);
   const [followupModalLead,     setFollowupModalLead]     = useState<Lead | null>(null);
   const [bulkFollowupModalOpen, setBulkFollowupModalOpen] = useState(false);
+  const [meetingModalLead,      setMeetingModalLead]      = useState<Lead | null>(null);
 
   const bulkUpdateStatus = useBulkUpdateLeadStatus();
   const bulkDeleteLeads = useBulkDeleteLeads();
@@ -762,6 +764,9 @@ function LeadsPageContent() {
     } else if (s === "followup") {
       setFollowupModalLead(l);
       setFollowupModalOpen(true);
+    } else if (s === "meeting_scheduled") {
+      // When the meeting is — it becomes a reminder
+      setMeetingModalLead(l);
     } else if (s === "closed") {
       setPendingStatus({ lead: l, status: s });
       setStudentModalLead(l);
@@ -1768,6 +1773,21 @@ function LeadsPageContent() {
         onCancel={() => { setFollowupModalOpen(false); setFollowupModalLead(null); }}
       />
 
+      {/* Single-lead meeting time — mandatory for Meeting Scheduled; becomes a reminder */}
+      <MeetingScheduledModal
+        open={!!meetingModalLead}
+        leadName={meetingModalLead?.name}
+        loading={updateStatusPending}
+        onConfirm={(d) => {
+          if (!meetingModalLead) return;
+          updateStatus(
+            { id: meetingModalLead._id, status: "meeting_scheduled", ...d },
+            { onSuccess: () => setMeetingModalLead(null) },
+          );
+        }}
+        onCancel={() => setMeetingModalLead(null)}
+      />
+
       {/* Bulk follow-up details modal */}
       <FollowupDetailsModal
         open={bulkFollowupModalOpen}
@@ -1802,7 +1822,8 @@ function LeadsPageContent() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(STATUS_LABELS) as LeadStatus[]).map((s) => (
+                {/* Not Meeting Scheduled: each lead needs its own meeting time */}
+                {(Object.keys(STATUS_LABELS) as LeadStatus[]).filter((s) => s !== "meeting_scheduled").map((s) => (
                   <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
                 ))}
               </SelectContent>

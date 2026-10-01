@@ -401,3 +401,10 @@ Copy the template at the top and place it at the **top** of the correct category
 
 **Rule — never do this again**:
 > A dialog mounted once and reused for different records resets its own form state when it opens for a record (`useEffect` on `open` + the record id), and every way of closing it goes through the same reset.
+
+### Tailwind never scanned `lib/` (2026-10-01)
+- **Category**: styling
+
+**What happened**: `tailwind.config.ts` scanned `pages`, `components`, `app` and `src` only, yet every status colour lives in `lib/statusConfig.ts`. A class used only there was never generated — MIA's Kanban drop tint (`bg-rose-500/5`) had none, and the new statuses' teal and pink classes would have been missing too. It worked for most statuses only because the same classes happened to appear in some page.
+
+**Rule**: any folder whose files hold Tailwind class strings is in `content` — `lib/` is now.

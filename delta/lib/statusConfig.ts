@@ -1,6 +1,6 @@
 export const LEAD_STATUSES = [
-  "new", "assigned", "pending_response", "followup",
-  "closed", "lost", "not_connected", "mia", "repeated", "callback", "cnc",
+  "new", "assigned", "pending_response", "followup", "meeting_scheduled",
+  "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc",
 ] as const;
 
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
@@ -68,6 +68,18 @@ export const STATUS_META: Record<LeadStatus, StatusMeta> = {
     dropZone:   "border-orange-500/50 bg-orange-500/5",
     badge:      "bg-orange-500/15 text-orange-400 border-orange-500/30",
   },
+  meeting_scheduled: {
+    label: "Meeting Scheduled",
+    color:      "bg-teal-500/15 text-teal-400 border-teal-500/30",
+    dot:        "bg-teal-400",
+    bar:        "bg-teal-500",
+    text:       "text-teal-400",
+    chartColor: "#14b8a6",
+    header:     "bg-teal-500/15 text-teal-400",
+    border:     "border-teal-500/25",
+    dropZone:   "border-teal-500/50 bg-teal-500/5",
+    badge:      "bg-teal-500/15 text-teal-400 border-teal-500/30",
+  },
   closed: {
     label: "Closed",
     color:      "bg-green-500/15 text-green-400 border-green-500/30",
@@ -103,6 +115,18 @@ export const STATUS_META: Record<LeadStatus, StatusMeta> = {
     border:     "border-neutral-500/25",
     dropZone:   "border-neutral-500/50 bg-neutral-500/5",
     badge:      "bg-neutral-500/15 text-neutral-400 border-neutral-500/30",
+  },
+  wrong_number: {
+    label: "Wrong Number",
+    color:      "bg-pink-500/15 text-pink-400 border-pink-500/30",
+    dot:        "bg-pink-400",
+    bar:        "bg-pink-500",
+    text:       "text-pink-400",
+    chartColor: "#ec4899",
+    header:     "bg-pink-500/15 text-pink-400",
+    border:     "border-pink-500/25",
+    dropZone:   "border-pink-500/50 bg-pink-500/5",
+    badge:      "bg-pink-500/15 text-pink-400 border-pink-500/30",
   },
   mia: {
     label: "MIA",

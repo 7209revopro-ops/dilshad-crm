@@ -55,6 +55,7 @@ const LOST_REASON_LABELS: Record<string, string> = Object.fromEntries(
   LOST_REASONS.map((r) => [r.value, r.label]),
 );
 import { FollowupDetailsModal } from "@/components/leads/FollowupDetailsModal";
+import { MeetingScheduledModal } from "@/components/leads/MeetingScheduledModal";
 import { fmtFull } from "@/lib/currency";
 import { INITIAL_RESPONSE_CONFIG, PRIMARY_CONCERN_CONFIG, FOLLOWUP_STRATEGY_CONFIG } from "@/lib/leadConfig";
 import { LEAD_STATUSES, STATUS_META } from "@/lib/statusConfig";
@@ -487,6 +488,7 @@ export default function LeadDetailPage() {
   const [showStudentModal,  setShowStudentModal]  = useState(false);
   const [lostModalOpen,     setLostModalOpen]     = useState(false);
   const [followupModalOpen, setFollowupModalOpen] = useState(false);
+  const [meetingModalOpen,  setMeetingModalOpen]  = useState(false);
   const [pendingLostStatus, setPendingLostStatus] = useState<LeadStatus | null>(null);
   const assignLead = useAssignLead();
   const assignToTeam = useAssignLeadToTeam();
@@ -926,6 +928,9 @@ export default function LeadDetailPage() {
                             setLostModalOpen(true);
                           } else if (newStatus === "followup") {
                             setFollowupModalOpen(true);
+                          } else if (newStatus === "meeting_scheduled") {
+                            // When the meeting is — it becomes a reminder
+                            setMeetingModalOpen(true);
                           } else if (newStatus === "closed") {
                             /*
                              * Held, not written.
@@ -1463,6 +1468,20 @@ export default function LeadDetailPage() {
           );
         }}
         onCancel={() => setFollowupModalOpen(false)}
+      />
+
+      {/* Meeting time — mandatory when status → meeting_scheduled; becomes a reminder */}
+      <MeetingScheduledModal
+        open={meetingModalOpen}
+        leadName={lead.name}
+        loading={updateStatus.isPending}
+        onConfirm={(d) => {
+          updateStatus.mutate(
+            { id: lead._id, status: "meeting_scheduled", ...d },
+            { onSuccess: () => setMeetingModalOpen(false) },
+          );
+        }}
+        onCancel={() => setMeetingModalOpen(false)}
       />
     </div>
   );

@@ -1399,3 +1399,7 @@ Copy the template at the top of this file and add under the correct module secti
 
 **File:** `hooks/useTeams.ts` · `GET /teams/:id/member-split?dateFrom=&dateTo=` (Dubai days)
 `TeamMemberSplitItem` now extends `Partial<Record<LeadStatus, number>>` (the 11 statuses of `lib/statusConfig.ts`) instead of the old 13 fixed keys. A count may be missing (an API that predates the status) — read it as `m[s] ?? 0`; `total` still includes those leads.
+
+## useUpdateLeadStatus — meeting (changed 2026-10-01)
+
+**File:** `hooks/useLeads.ts` · `PATCH /leads/:id/status` — also sends `meetingAt` (ISO) and `meetingNote`; `meetingAt` is required by the server for `meeting_scheduled`, which then creates the meeting reminder. `useBulkUpdateLeadStatus` never sends `meeting_scheduled` (the server refuses it in bulk).

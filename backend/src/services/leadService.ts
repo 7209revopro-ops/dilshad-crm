@@ -762,6 +762,7 @@ export class LeadService {
     lostReason?: string,
     lostNotes?: string,
     followUp?: { note: string; followedUpAt: Date; nextFollowUpAt?: Date | null },
+    meeting?: { at: Date; note?: string },
   ) {
     const lead = await Lead.findById(id);
     if (!lead)
@@ -798,6 +799,23 @@ export class LeadService {
       }
     }
 
+    // ── Meeting scheduled: the meeting time becomes a reminder ────────────────
+    // Reminders notify their createdBy, so it is the lead's owner — the person who
+    // goes to the meeting — or, for a lead nobody owns, whoever booked it.
+    let meetingNote = "";
+    if (status === "meeting_scheduled" && meeting) {
+      (lead.reminders as unknown as Array<Record<string, unknown>>).push({
+        title: "Meeting scheduled",
+        note: meeting.note ?? "",
+        remindAt: meeting.at,
+        createdBy: lead.assignedTo ? String(lead.assignedTo) : performedById,
+        isDone: false,
+      });
+      meetingNote = ` — meeting on ${meeting.at.toLocaleString("en-GB", {
+        timeZone: "Asia/Dubai", dateStyle: "medium", timeStyle: "short",
+      })} (Dubai)`;
+    }
+
     if (status === "lost") {
       (lead as unknown as Record<string, unknown>).lostReason = lostReason ?? null;
       (lead as unknown as Record<string, unknown>).lostNotes  = lostNotes  ?? null;
@@ -810,7 +828,7 @@ export class LeadService {
     addLog(
       lead as never,
       "status_changed",
-      `Status changed from "${prevStatus}" to "${status}"`,
+      `Status changed from "${prevStatus}" to "${status}"${meetingNote}`,
       performedById,
       {
         status:     { from: prevStatus, to: status },
@@ -1063,7 +1081,8 @@ export class LeadService {
       "repeated",
       "pending_response",
       "not_connected",
-
+      "meeting_scheduled",
+      "wrong_number",
     ];
     const [total, ...statusCounts] = await Promise.all([
       Lead.countDocuments({ assignedTo: userId }),
@@ -1086,7 +1105,8 @@ export class LeadService {
       repeated: statusCounts[8],
       pending_response: statusCounts[9],
       not_connected: statusCounts[10],
-     
+      meeting_scheduled: statusCounts[11],
+      wrong_number: statusCounts[12],
     };
   }
 

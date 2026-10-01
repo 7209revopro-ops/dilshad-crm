@@ -177,11 +177,13 @@ export const useUpdateLead = () => {
 export const useUpdateLeadStatus = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status, lostReason, lostNotes, followUpNote, followUpAt, nextFollowUpAt }: {
+    mutationFn: async ({ id, status, lostReason, lostNotes, followUpNote, followUpAt, nextFollowUpAt, meetingAt, meetingNote }: {
       id: string; status: Lead["status"]; lostReason?: string; lostNotes?: string;
       followUpNote?: string; followUpAt?: string; nextFollowUpAt?: string;
+      /** Required for meeting_scheduled — the meeting time (ISO); the server makes it a reminder */
+      meetingAt?: string; meetingNote?: string;
     }) => {
-      const response = await api.patch<ApiResponse<Lead>>(`/leads/${id}/status`, { status, lostReason, lostNotes, followUpNote, followUpAt, nextFollowUpAt });
+      const response = await api.patch<ApiResponse<Lead>>(`/leads/${id}/status`, { status, lostReason, lostNotes, followUpNote, followUpAt, nextFollowUpAt, meetingAt, meetingNote });
       return response.data.data!;
     },
     onSuccess: (_, vars) => {

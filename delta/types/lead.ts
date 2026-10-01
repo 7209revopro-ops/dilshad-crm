@@ -2,7 +2,7 @@ import type { User } from "@/types";
 import type { Team } from "@/types/team";
 import type { Course } from "@/types/course";
 
-export type LeadStatus = "new" | "assigned" | "pending_response" | "followup" | "closed" | "lost" | "not_connected" | "mia" | "repeated" | "callback" | "cnc";
+export type LeadStatus = "new" | "assigned" | "pending_response" | "followup" | "meeting_scheduled" | "closed" | "lost" | "not_connected" | "wrong_number" | "mia" | "repeated" | "callback" | "cnc";
 
 export type InitialLeadResponse  = "very_interested" | "not_interested" | "let_me_think";
 export type PrimaryConcern       = "risk" | "price" | "time" | "trust" | "exact_concern";
@@ -151,9 +151,12 @@ export interface LeadStats {
   assigned: number;
   pending_response: number;
   followup: number;
+  /** Missing from an API that predates the status */
+  meeting_scheduled?: number;
   closed: number;
   lost: number;
   not_connected: number;
+  wrong_number?: number;
   mia: number;
   repeated: number;
   callback: number;

@@ -33,7 +33,7 @@ async function tick() {
     const candidates = await Lead.find({
       nextFollowUpAt: { $ne: null, $lte: cutoff },
       assignedTo: { $ne: null },
-      status: { $nin: ["closed", "lost"] },
+      status: { $nin: ["closed", "lost", "wrong_number"] },
     })
       .select("name nextFollowUpAt assignedTo team followUps.followedUpAt missedFollowUpWarnedAt")
       .limit(200)

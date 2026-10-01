@@ -30,7 +30,8 @@ const createLeadSchema = z.object({
   source: z.string({ error: "Source is required" }).trim().min(1, "Source is required").max(100),
   course: z.string().optional().nullable(),
   status: z
-    .enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "mia", "repeated", "callback", "cnc"])
+    // Not meeting_scheduled: that needs a meeting time, so only PATCH /leads/:id/status sets it
+    .enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"])
     .optional(),
   team: z.string().optional().nullable(),
   assignedTo: z.string().optional(),
@@ -58,7 +59,8 @@ const updateLeadSchema = z.object({
   source: z.string().max(100).optional().nullable(),
   course: z.string().optional().nullable(),
   status: z
-    .enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "mia", "repeated", "callback", "cnc"])
+    // Not meeting_scheduled: that needs a meeting time, so only PATCH /leads/:id/status sets it
+    .enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"])
     .optional(),
   assignedTo: z.string().optional().nullable(),
   initialLeadResponse: z.string().optional().nullable(),
@@ -79,15 +81,29 @@ const updateLeadSchema = z.object({
 
 const LOST_REASONS = ["price_too_high", "not_interested", "competitor", "unresponsive", "budget_issue", "wrong_timing", "other"] as const;
 
+/** A meeting may be booked a few minutes late (clocks drift) but not for a time already gone. */
+const MEETING_PAST_GRACE_MS = 5 * 60_000;
+
 const updateStatusSchema = z.object({
-  status: z.enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "mia", "repeated", "callback", "cnc"]),
+  status: z.enum(["new", "assigned", "pending_response", "followup", "meeting_scheduled", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"]),
   lostReason: z.enum(LOST_REASONS).optional(),
   lostNotes:  z.string().max(500).optional(),
   // Mandatory when status → followup (details + when it happened)
   followUpNote:   z.string().max(2000).optional(),
   followUpAt:     z.string().optional(),
   nextFollowUpAt: z.string().optional().nullable(),
+  // Mandatory when status → meeting_scheduled: when the meeting is (it becomes a reminder)
+  meetingAt:   z.string().optional(),
+  meetingNote: z.string().max(500).optional(),
 }).superRefine((data, ctx) => {
+  if (data.status === "meeting_scheduled") {
+    const at = data.meetingAt ? new Date(data.meetingAt) : null;
+    if (!at || isNaN(at.getTime())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["meetingAt"], message: "Meeting date & time is required when status is meeting scheduled" });
+    } else if (at.getTime() < Date.now() - MEETING_PAST_GRACE_MS) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["meetingAt"], message: "The meeting time has already passed" });
+    }
+  }
   if (data.status === "lost" && !data.lostReason) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lostReason"], message: "Lost reason is required when status is lost" });
   }
@@ -235,6 +251,7 @@ function mapLegacyStatus(raw: string): string {
   if (v.includes("pending") || v.includes("pending_response"))  return "pending_response";
   if (v.includes("follow"))                                      return "followup";
   if (v.includes("not connect") || v === "not_connected")        return "not_connected";
+  if (v.includes("wrong"))                                       return "wrong_number";
   if (v === "closed" || v === "close")                           return "closed";
   if (v === "lost")                                              return "lost";
   if (v === "repeated" || v === "repeat")                        return "repeated";
@@ -492,7 +509,7 @@ export const uploadLegacyLeads = async (
     }> = [];
 
     // Terminal statuses — never override even when counselor is selected
-    const TERMINAL_STATUSES = new Set(["closed", "lost", "not_connected", "repeated", "cnc", "mia"]);
+    const TERMINAL_STATUSES = new Set(["closed", "lost", "not_connected", "wrong_number", "repeated", "cnc", "mia"]);
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i] as unknown[];
@@ -811,6 +828,9 @@ export const updateLeadStatus = async (
               ? new Date(parsed.data.nextFollowUpAt)
               : null,
           }
+        : undefined,
+      parsed.data.status === "meeting_scheduled"
+        ? { at: new Date(parsed.data.meetingAt!), note: parsed.data.meetingNote?.trim() || undefined }
         : undefined,
     );
     sendSuccess(res, "Lead status updated successfully", lead);
@@ -1135,7 +1155,8 @@ export const bulkUpdateLeadStatus = async (
   try {
     const parsed = bulkLeadIdsSchema
       .extend({
-        status:     z.enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "mia", "repeated", "callback", "cnc"]),
+        // Not meeting_scheduled: each lead needs its own meeting time
+        status:     z.enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"]),
         lostReason: z.enum(LOST_REASONS).optional(),
         lostNotes:  z.string().max(500).optional(),
         followUpNote:   z.string().max(2000).optional(),

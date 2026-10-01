@@ -7,7 +7,7 @@ import {
   ArrowLeft, Loader2, ChevronLeft, ChevronRight,
   FileText, Users, Clock, CheckCircle2, XCircle,
   TrendingUp, Search, Mail, Phone, Shield, Calendar,
-  Activity, StickyNote, ExternalLink, PhoneMissed,
+  Activity, StickyNote, ExternalLink, PhoneMissed, CalendarClock, PhoneOff,
   BookMarked, Sparkles, Star, Filter, X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -203,6 +203,16 @@ export default function UserDetailPage() {
       filterKey: "followup",
     },
     {
+      title: "Meeting Scheduled",
+      value: stats?.meeting_scheduled ?? 0,
+      icon: CalendarClock,
+      color: "text-teal-400",
+      bg: "bg-teal-500/10",
+      border: "border-teal-500/20",
+      activeRing: "ring-teal-400/40",
+      filterKey: "meeting_scheduled",
+    },
+    {
       title: "Pending Response",
       value: stats?.pending_response ?? 0,
       icon: Sparkles,
@@ -231,6 +241,16 @@ export default function UserDetailPage() {
       border: "border-neutral-500/20",
       activeRing: "ring-neutral-400/40",
       filterKey: "not_connected",
+    },
+    {
+      title: "Wrong Number",
+      value: stats?.wrong_number ?? 0,
+      icon: PhoneOff,
+      color: "text-pink-400",
+      bg: "bg-pink-500/10",
+      border: "border-pink-500/20",
+      activeRing: "ring-pink-400/40",
+      filterKey: "wrong_number",
     },
     {
       title: "Closed",

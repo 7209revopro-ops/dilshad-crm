@@ -706,3 +706,9 @@ replacing it; one outside the limit returns an empty page. Super admins and repo
 - `getTeamMemberSplit(teamId, dateFrom?, dateTo?)` — one count per `LEAD_STATUS_VALUES` status (was a fixed list of 13,
   seven of which no lead can have); `total` still counts every lead, so a stored status outside the list shows as the
   difference. Dubai days via `gstDayRange`; a malformed team id is a 400.
+
+## leadService.updateLeadStatus — meeting (changed 2026-10-01)
+
+New 7th parameter `meeting?: { at: Date; note?: string }` — with `status === "meeting_scheduled"` it adds the meeting reminder
+(for the lead's owner, else the performer) and appends the meeting time to the history line. `getUserLeadStats` also returns
+`meeting_scheduled` and `wrong_number`.

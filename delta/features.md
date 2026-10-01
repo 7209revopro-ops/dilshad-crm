@@ -754,3 +754,14 @@ Copy the template at the top and place it in the correct module section.
 
 **Change Log**:
 - 1.0.0 — Initial build
+
+## Statuses: Wrong Number & Meeting Scheduled (2026-10-01)
+
+**Where**: every status menu, filter and Kanban column; `components/leads/MeetingScheduledModal.tsx`
+
+**What it does**: **Wrong Number** marks a lead whose number is wrong — no questions asked, counted with the lost leads in reports. **Meeting Scheduled** asks when the meeting is (date & time, Dubai) and for an optional note; saving sets the status and gives the lead's owner a reminder at that time (with a heads-up 30 minutes before), recorded in the lead's history and listed with its reminders, where it can be edited to move the meeting. Not offered in bulk status changes.
+
+**API**: `PATCH /leads/:id/status` with `meetingAt` / `meetingNote`.
+
+**Change Log**:
+- 1.0.0 — Initial build

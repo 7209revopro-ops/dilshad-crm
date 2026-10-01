@@ -143,12 +143,14 @@ function pdfTable(
   startX:  number,
   startY:  number,
   rowH     = 20,
+  /** Smaller for a table with many narrow columns, so each header stays on one line */
+  headerSize = 7.5,
 ) {
   const totalW = colW.reduce((a, b) => a + b, 0);
 
   // Header row
   doc.rect(startX, startY, totalW, rowH).fill(BLUE);
-  doc.fillColor(WHITE).font("Helvetica-Bold").fontSize(7.5);
+  doc.fillColor(WHITE).font("Helvetica-Bold").fontSize(headerSize);
   let x = startX;
   headers.forEach((h, i) => {
     doc.text(h, x + 4, startY + 6, { width: colW[i] - 6, align: i === 0 ? "left" : "center" });
@@ -418,9 +420,11 @@ const TEAM_PDF_STATUS: Record<LeadStatus, { short: string; color: string }> = {
   assigned:         { short: "Assigned",  color: "#eab308" },
   pending_response: { short: "Pending",   color: "#8b5cf6" },
   followup:         { short: "Follow Up", color: "#f97316" },
+  meeting_scheduled:{ short: "Meeting",   color: "#14b8a6" },
   closed:           { short: "Closed",    color: "#22c55e" },
   lost:             { short: "Lost",      color: "#ef4444" },
   not_connected:    { short: "Not Conn.", color: "#64748b" },
+  wrong_number:     { short: "Wrong No",  color: "#ec4899" },
   mia:              { short: "MIA",       color: "#f43f5e" },
   repeated:         { short: "Repeated",  color: "#06b6d4" },
   callback:         { short: "Call Back", color: "#0ea5e9" },
@@ -540,19 +544,20 @@ export const exportTeamPdf = async (
     // Member table
     doc.fillColor(DARK).font("Helvetica-Bold").fontSize(10).text("Member Performance", 40, y);
     y += 12;
-    const fixedW  = 120 + 34 + 56 + (showOther ? 34 : 0) + 36;    // member, total, revenue, [other], conv %
+    // Thirteen status columns: 6.5pt headers fit a ~39pt column ("Follow Up", "Not Conn." ≈ 31pt)
+    const fixedW  = 110 + 30 + 48 + (showOther ? 30 : 0) + 34;    // member, total, revenue, [other], conv %
     const statusW = Math.floor((W - fixedW) / LEAD_STATUS_VALUES.length);
     const mHeaders = [
       "Member", "Total", "Revenue(₹)",
       ...LEAD_STATUS_VALUES.map((s) => teamPdfStatus(s).short),
       ...(showOther ? ["Other"] : []), "Conv %",
     ];
-    const mColW = [120, 34, 56, ...LEAD_STATUS_VALUES.map(() => statusW), ...(showOther ? [34] : []), 36];
+    const mColW = [110, 30, 48, ...LEAD_STATUS_VALUES.map(() => statusW), ...(showOther ? [30] : []), 34];
     y = pdfTable(doc, mHeaders, mColW, memberRows.map((r) => [
       r.name, r.total, r.totalPayments,
       ...LEAD_STATUS_VALUES.map((s) => r.counts[s]),
       ...(showOther ? [r.other] : []), `${r.cr}%`,
-    ]), 40, y);
+    ]), 40, y, 20, 6.5);
 
     pdfFooter(doc);
     doc.end();

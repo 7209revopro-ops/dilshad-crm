@@ -502,6 +502,8 @@ Each feature documents:
 - Added user-scoped PDF export
 - 2026-10-01 — team PDF: the lead model's current statuses (+ Other when one is stored that the model doesn't list),
   landscape, the period as Dubai days, 400 on a malformed date. The user PDF is unchanged.
+- 2026-10-01 — team PDF: Meeting Scheduled and Wrong Number columns; its member table's headers are 6.5pt so thirteen
+  status columns stay on one line.
 
 
 ---

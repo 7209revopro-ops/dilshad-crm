@@ -712,3 +712,21 @@ A lead created through `POST /leads` must carry a source (trimmed, 1–100 chara
 required"). Email stays optional. Editing a lead (`PUT /leads/:id`) is unchanged, so older leads without a source still save.
 Excel uploads and the sheet sync (`POST /sheets/sync/batch`, used by the Apps Script and the Root lead router) have their own
 routes and still take rows without a source.
+
+## Statuses: Wrong Number, Meeting Scheduled (2026-10-01)
+
+**Files**: `models/Lead.ts`, `types/index.ts`, `controllers/leadController.ts`, `services/leadService.ts`,
+`services/reportService.ts`, `controllers/exportController.ts`, `services/followupWarningScheduler.ts`
+
+1. **Wrong Number** (`wrong_number`) — a plain status, settable everywhere a status is (single, bulk, lead edit, create). A dead
+   lead: reports count it with Lost (every `lost` / `$nin` group next to `mia`/`cnc`), the missed-follow-up warning skips it,
+   old-leads upload maps "wrong…" to it and treats it as terminal, Redistribute today leaves it alone.
+2. **Meeting Scheduled** (`meeting_scheduled`) — only through `PATCH /leads/:id/status`, which requires `meetingAt` (a date, not
+   more than 5 minutes in the past) and takes an optional `meetingNote` (≤ 500). Create, lead edit and both bulk endpoints refuse
+   it, so no route sets it without a time.
+3. **The reminder** — saving pushes a lead reminder `{ title: "Meeting scheduled", note, remindAt: meetingAt }` whose
+   `createdBy` (the person the reminder scheduler notifies) is the lead's owner, or whoever booked it when nobody owns the lead.
+   The usual reminder rules apply: a heads-up 1–31 minutes before, then on time. The history line reads
+   `… to "meeting_scheduled" — meeting on 3 Oct 2026 at 16:00 (Dubai)`. Moving a meeting = editing its reminder.
+4. **Reports** count Meeting Scheduled with Follow-up ("in follow-up" / `followup` groups); the overview, user/team rankings,
+   timeline, team Report and team PDF list both statuses. Redistribute today leaves Meeting Scheduled with its owner.

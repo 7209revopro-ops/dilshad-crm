@@ -164,9 +164,11 @@ interface TeamDashboardData {
     assigned: number;
     pending_response: number;
     followup: number;
+    meeting_scheduled?: number;
     closed: number;
     lost: number;
     not_connected: number;
+    wrong_number?: number;
     mia: number;
     repeated: number;
     callback: number;

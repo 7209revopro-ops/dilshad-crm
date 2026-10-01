@@ -8,7 +8,11 @@ mark and a redesigned login. Backend: Bun + Express + Mongoose on **port 7868** 
 Frontend: Next.js 14 in `delta/` (dev 3001, start 3007). Database: MongoDB `dilshad_crm` (connection in `backend/.env`).
 
 ## Last working item
-2026-10-01: new leads need a source (form + `POST /leads`; email optional; edits, uploads and the sheet sync unchanged); a
+2026-10-01: new statuses **Wrong Number** and **Meeting Scheduled** — the latter asks for the meeting time and gives the
+lead's owner a reminder then; 33/33 API checks, the reminder firing end to end, and UI checks on a scratch database;
+pushed 2026-10-01. Until the API is deployed, the new statuses fail to save on the live web app.
+
+Before that: 2026-10-01: new leads need a source (form + `POST /leads`; email optional; edits, uploads and the sheet sync unchanged); a
 super admin can reassign any lead from the Leads list ("Assign to" next to Call and Note). 21/21 API checks + UI checks on a
 scratch database; pushed 2026-10-01 (the server check needs the backend deployed).
 
@@ -37,6 +41,9 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
 - **P2 — Old status list in other exports.** The Reports page's Excel/PDF export, the user PDF, the Sales Funnel's
   "qualified" step and the AI insights still use statuses that no longer exist (Interested, Booking, RNR…); their dates are
   read as UTC days, and the PDF dialog's period buttons use the browser's calendar. The team Report and team PDF are fixed.
+- **P2 — Team dashboard, Members tab and team bulk status on the old status list (pre-existing).** `teamService`
+  counts Booking, RNR, WhatsApp… for the team dashboard, member stats and rankings, and the team page's bulk "Change Status"
+  offers them; Pending Response, Not Connected, Lost, MIA, Repeated and the two new statuses show 0 there.
 - **P2 — PDF exports (pre-existing).** Every PDF comes out with two extra pages (the footer is written below the page margin,
   which starts a new page), and "₹" and "→" don't render in the built-in font.
 - **P2 — Committed build junk.** 956 `CallRecorder/app/build` files, a root `.DS_Store` and `delta/public/swe-worker-*.js` are
@@ -74,3 +81,4 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
 - 2026-10-01 — Team Report and team PDF count the current lead statuses (+ Other), periods in Dubai days; "Redistribute
   today" also moves Pending Response, Not Connected, MIA and Repeated leads. Needs the backend deployed for the new counts.
 - 2026-10-01 — New leads need a source (form + server); super admin "Assign to" button on the Leads list.
+- 2026-10-01 — Statuses Wrong Number and Meeting Scheduled (meeting time → reminder for the lead's owner); Tailwind scans `lib/`.

@@ -3,9 +3,11 @@ export type LeadStatus =
   | "assigned"
   | "pending_response"
   | "followup"
+  | "meeting_scheduled"
   | "closed"
   | "lost"
   | "not_connected"
+  | "wrong_number"
   | "mia"
   | "repeated"
   | "callback"
@@ -53,6 +55,9 @@ export interface TimelinePoint {
   closed:           number;
   lost:             number;
   not_connected:    number;
+  /** Missing from an API that predates these two statuses */
+  meeting_scheduled?: number;
+  wrong_number?:    number;
   mia:              number;
   repeated:         number;
   callback:         number;
@@ -77,6 +82,9 @@ export interface UserRankItem {
   closed:           number;
   lost:             number;
   not_connected:    number;
+  /** Missing from an API that predates these two statuses */
+  meeting_scheduled?: number;
+  wrong_number?:    number;
   mia:              number;
   repeated:         number;
   callback:         number;
@@ -101,6 +109,9 @@ export interface TeamRankItem {
   closed:           number;
   lost:             number;
   not_connected:    number;
+  /** Missing from an API that predates these two statuses */
+  meeting_scheduled?: number;
+  wrong_number?:    number;
   mia:              number;
   repeated:         number;
   callback:         number;
@@ -131,6 +142,9 @@ export interface TeamSplitSummaryItem {
   closed:           number;
   lost:             number;
   not_connected:    number;
+  /** Missing from an API that predates these two statuses */
+  meeting_scheduled?: number;
+  wrong_number?:    number;
   mia:              number;
   repeated:         number;
   callback:         number;

@@ -1137,3 +1137,11 @@
 - `LeadDialog` — on create, Source is required ("Source *", "Source is required" under the field); Email is labelled "(optional)". Editing is unchanged.
 - `AssignLeadDialog` — rewritten for the Leads list's row button: shows who has the lead now, the current owner is disabled in the list, no "Auto Assign All Unassigned" (it assigned every unassigned lead from a one-lead dialog); the pick is cleared on every opening and on Cancel.
 - Leads page — "Assign to" (UserPlus) button next to Call and Note on each row, super admin only, in the phone cards and the desktop table (visible on keyboard focus too); the phone card's action icons wrap three to a row so the lead's details keep their width.
+
+### Change log — 2026-10-01 (Wrong Number, Meeting Scheduled)
+- `lib/statusConfig.ts` — `meeting_scheduled` (teal) and `wrong_number` (pink); every status menu, filter, Kanban column, team Report column and badge picks them up.
+- `MeetingScheduledModal` (new, `components/leads/`) — meeting date & time (GST, required, not in the past) + optional note; shown when a lead is moved to Meeting Scheduled from the lead page, the Leads list row, a Kanban drop (also on the profile page and the team member board) or the profile page list. It stays open if saving fails; dismissing leaves the lead as it was.
+- Leads page bulk "Change Status" — Meeting Scheduled is not offered.
+- Profile and user pages — "Meeting Scheduled" and "Wrong Number" stat cards.
+- `lib/animations.ts` — `overlayVariants`, `modalVariants`.
+- `tailwind.config.ts` — scans `lib/` too.

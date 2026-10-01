@@ -9,7 +9,7 @@ import {
   TrendingUp, Search, Mail, Phone, Shield, Calendar,
   Activity, StickyNote, ExternalLink, PhoneMissed,
   BookMarked, Sparkles, Star, Filter, X as XIcon,
-  LayoutGrid, List, ChevronDown, MessageCircle,
+  LayoutGrid, List, ChevronDown, MessageCircle, CalendarClock, PhoneOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,7 @@ import { QuickNoteDialog } from "@/components/leads/QuickNoteDialog";
 import { ExactConcernEditor } from "@/components/leads/ExactConcernEditor";
 import { ClickToCall } from "@/components/leads/ClickToCall";
 import { FollowupDetailsModal } from "@/components/leads/FollowupDetailsModal";
+import { MeetingScheduledModal } from "@/components/leads/MeetingScheduledModal";
 import { LostReasonModal } from "@/components/leads/LostReasonModal";
 import { CreateStudentModal } from "@/components/students/CreateStudentModal";
 import { useStudentByLeadId } from "@/hooks/useStudents";
@@ -108,6 +109,7 @@ export default function ProfilePage() {
   // Status-change modal state — same intercepts as the Leads page
   const [lostModalLead,     setLostModalLead]     = useState<Lead | null>(null);
   const [followupModalLead, setFollowupModalLead] = useState<Lead | null>(null);
+  const [meetingModalLead,  setMeetingModalLead]  = useState<Lead | null>(null);
   const [studentModalLead,  setStudentModalLead]  = useState<Lead | null>(null);
   const [pendingStatus,     setPendingStatus]     = useState<{ lead: Lead; status: LeadStatus } | null>(null);
   const { mutate: updateStatus, isPending: statusSaving } = useUpdateLeadStatus();
@@ -118,6 +120,8 @@ export default function ProfilePage() {
       setLostModalLead(l);
     } else if (s === "followup") {
       setFollowupModalLead(l);
+    } else if (s === "meeting_scheduled") {
+      setMeetingModalLead(l);
     } else if (s === "closed") {
       setPendingStatus({ lead: l, status: s });
       setStudentModalLead(l);
@@ -195,9 +199,11 @@ export default function ProfilePage() {
     { title: "Assigned",         value: stats?.assigned         ?? 0, icon: Users,       color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20", activeRing: "ring-yellow-400/40", filterKey: "assigned"         },
     { title: "Pending Response", value: stats?.pending_response ?? 0, icon: Sparkles,    color: "text-violet-400", bg: "bg-violet-500/10", border: "border-violet-500/20", activeRing: "ring-violet-400/40", filterKey: "pending_response" },
     { title: "Follow Up",        value: stats?.followup         ?? 0, icon: Clock,       color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20", activeRing: "ring-orange-400/40", filterKey: "followup"         },
+    { title: "Meeting Scheduled", value: stats?.meeting_scheduled ?? 0, icon: CalendarClock, color: "text-teal-400", bg: "bg-teal-500/10", border: "border-teal-500/20", activeRing: "ring-teal-400/40", filterKey: "meeting_scheduled" },
     { title: "Closed",           value: stats?.closed           ?? 0, icon: CheckCircle2,color: "text-green-400",  bg: "bg-green-500/10",  border: "border-green-500/20",  activeRing: "ring-green-400/40",  filterKey: "closed"           },
     { title: "Lost",             value: stats?.lost             ?? 0, icon: XCircle,     color: "text-red-400",    bg: "bg-red-500/10",    border: "border-red-500/20",    activeRing: "ring-red-400/40",    filterKey: "lost"             },
     { title: "Not Connected",    value: stats?.not_connected    ?? 0, icon: PhoneMissed, color: "text-neutral-400",  bg: "bg-neutral-500/10",  border: "border-neutral-500/20",  activeRing: "ring-neutral-400/40",  filterKey: "not_connected"    },
+    { title: "Wrong Number",     value: stats?.wrong_number     ?? 0, icon: PhoneOff,    color: "text-pink-400",   bg: "bg-pink-500/10",   border: "border-pink-500/20",   activeRing: "ring-pink-400/40",   filterKey: "wrong_number"     },
     { title: "MIA",              value: stats?.mia              ?? 0, icon: XCircle,     color: "text-rose-400",   bg: "bg-rose-500/10",   border: "border-rose-500/20",   activeRing: "ring-rose-400/40",   filterKey: "mia"              },
     { title: "CNC",              value: stats?.cnc              ?? 0, icon: PhoneMissed, color: "text-amber-400",  bg: "bg-amber-500/10",  border: "border-amber-500/20",  activeRing: "ring-amber-400/40",  filterKey: "cnc"              },
   ];
@@ -639,6 +645,20 @@ export default function ProfilePage() {
           updateStatus(
             { id: followupModalLead._id, status: "followup", ...d },
             { onSuccess: () => setFollowupModalLead(null) },
+          );
+        }}
+      />
+
+      <MeetingScheduledModal
+        open={!!meetingModalLead}
+        leadName={meetingModalLead?.name}
+        loading={statusSaving}
+        onCancel={() => setMeetingModalLead(null)}
+        onConfirm={(d) => {
+          if (!meetingModalLead) return;
+          updateStatus(
+            { id: meetingModalLead._id, status: "meeting_scheduled", ...d },
+            { onSuccess: () => setMeetingModalLead(null) },
           );
         }}
       />

@@ -4,8 +4,8 @@ import { Team } from "../models/Team.js";
 import { User } from "../models/User.js";
 
 const ALL_STATUSES = [
-  "new", "assigned", "pending_response", "followup", "closed", "lost",
-  "not_connected", "mia", "repeated", "callback", "cnc",
+  "new", "assigned", "pending_response", "followup", "meeting_scheduled", "closed", "lost",
+  "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc",
 ] as const;
 
 type LeadStatus = (typeof ALL_STATUSES)[number];
@@ -209,6 +209,7 @@ export class ReportService {
           pendingAmount: 1,
           new: 1, assigned: 1, pending_response: 1, followup: 1,
           lost: 1, not_connected: 1, mia: 1, repeated: 1, callback: 1, cnc: 1, closed: 1,
+          meeting_scheduled: 1, wrong_number: 1,
           conversionRate: {
             $cond: [
               { $gt: ["$total", 0] },
@@ -264,6 +265,7 @@ export class ReportService {
           totalPayments: 1,
           new: 1, assigned: 1, pending_response: 1, followup: 1,
           lost: 1, not_connected: 1, mia: 1, repeated: 1, callback: 1, cnc: 1, closed: 1,
+          meeting_scheduled: 1, wrong_number: 1,
           conversionRate: {
             $cond: [
               { $gt: ["$total", 0] },
@@ -337,6 +339,7 @@ export class ReportService {
           count:    1,
           new: 1, assigned: 1, pending_response: 1, followup: 1,
           lost: 1, not_connected: 1, mia: 1, repeated: 1, callback: 1, cnc: 1, closed: 1,
+          meeting_scheduled: 1, wrong_number: 1,
         } as Record<string, unknown>,
       },
     ]);
@@ -383,7 +386,7 @@ export class ReportService {
       // also accumulate status breakdown per team
       const statusKey = `${tname}__status`;
       if (!bucket[statusKey]) {
-        bucket[statusKey] = { new: 0, assigned: 0, pending_response: 0, followup: 0, closed: 0, lost: 0, not_connected: 0, mia: 0, repeated: 0, callback: 0, cnc: 0 };
+        bucket[statusKey] = { new: 0, assigned: 0, pending_response: 0, followup: 0, closed: 0, lost: 0, not_connected: 0, mia: 0, repeated: 0, callback: 0, cnc: 0, meeting_scheduled: 0, wrong_number: 0 };
       }
       ALL_STATUSES.forEach((s) => {
         bucket[statusKey][s] = (bucket[statusKey][s] ?? 0) + ((row[s] as number) ?? 0);
@@ -1501,10 +1504,10 @@ export class ReportService {
           _id: null,
           total:          { $sum: 1 },
           contacted:      { $sum: { $cond: [{ $and: [{ $ifNull: ["$firstContactTime", false] }] }, 1, 0] } },
-          followUp:       { $sum: { $cond: [{ $in: ["$status", ["followup", "callback"]] }, 1, 0] } },
+          followUp:       { $sum: { $cond: [{ $in: ["$status", ["followup", "callback", "meeting_scheduled"]] }, 1, 0] } },
           interested:     { $sum: { $cond: [{ $eq: ["$initialLeadResponse", "very_interested"] }, 1, 0] } },
           notInterested:  { $sum: { $cond: [{ $eq: ["$initialLeadResponse", "not_interested"] }, 1, 0] } },
-          lost:           { $sum: { $cond: [{ $in: ["$status", ["lost", "mia"]] }, 1, 0] } },
+          lost:           { $sum: { $cond: [{ $in: ["$status", ["lost", "mia", "wrong_number"]] }, 1, 0] } },
           converted:      { $sum: { $cond: [{ $eq: ["$status", "closed"] }, 1, 0] } },
         },
       },
@@ -1544,10 +1547,10 @@ export class ReportService {
           _id:          { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
           total:        { $sum: 1 },
           contacted:    { $sum: { $cond: [{ $ifNull: ["$firstContactTime", false] }, 1, 0] } },
-          followUp:     { $sum: { $cond: [{ $in: ["$status", ["followup", "callback"]] }, 1, 0] } },
+          followUp:     { $sum: { $cond: [{ $in: ["$status", ["followup", "callback", "meeting_scheduled"]] }, 1, 0] } },
           interested:   { $sum: { $cond: [{ $eq: ["$initialLeadResponse", "very_interested"] }, 1, 0] } },
           notInterested:{ $sum: { $cond: [{ $eq: ["$initialLeadResponse", "not_interested"] }, 1, 0] } },
-          lost:         { $sum: { $cond: [{ $in: ["$status", ["lost", "mia"]] }, 1, 0] } },
+          lost:         { $sum: { $cond: [{ $in: ["$status", ["lost", "mia", "wrong_number"]] }, 1, 0] } },
           converted:    { $sum: { $cond: [{ $eq: ["$status", "closed"] }, 1, 0] } },
         },
       },
@@ -1594,7 +1597,7 @@ export class ReportService {
           converted:      { $sum: { $cond: [{ $eq: ["$status", "closed"] }, 1, 0] } },
           contacted:      { $sum: { $cond: [{ $ifNull: ["$firstContactTime", false] }, 1, 0] } },
           withFollowUp:   { $sum: { $cond: [{ $gt: [{ $size: { $ifNull: ["$followUps", []] } }, 0] }, 1, 0] } },
-          lost:           { $sum: { $cond: [{ $in: ["$status", ["lost", "mia"]] }, 1, 0] } },
+          lost:           { $sum: { $cond: [{ $in: ["$status", ["lost", "mia", "wrong_number"]] }, 1, 0] } },
           totalRespMs: {
             $sum: {
               $cond: [
@@ -1746,11 +1749,11 @@ export class ReportService {
             { $in: ["$status", ["booking", "partialbooking"]] },
           ]}, 1, 0] } },
           inFollowUp: { $sum: { $cond: [{ $or: [
-            { $in: ["$status", ["followup", "callback"]] },
+            { $in: ["$status", ["followup", "callback", "meeting_scheduled"]] },
             { $gt: [{ $size: { $ifNull: ["$followUps", []] } }, 0] },
           ]}, 1, 0] } },
           converted:  { $sum: { $cond: [{ $eq:  ["$status", "closed"] }, 1, 0] } },
-          lost:       { $sum: { $cond: [{ $in:  ["$status", ["lost", "mia", "cnc"]] }, 1, 0] } },
+          lost:       { $sum: { $cond: [{ $in:  ["$status", ["lost", "mia", "cnc", "wrong_number"]] }, 1, 0] } },
         },
       },
     ]);
@@ -1777,7 +1780,7 @@ export class ReportService {
         total:     { $sum: 1 },
         contacted: { $sum: { $cond: [{ $gt: [{ $ifNull: ["$firstContactTime", null] }, null] }, 1, 0] } },
         converted: { $sum: { $cond: [{ $eq: ["$status", "closed"] }, 1, 0] } },
-        lost:      { $sum: { $cond: [{ $in: ["$status", ["lost", "mia", "cnc"]] }, 1, 0] } },
+        lost:      { $sum: { $cond: [{ $in: ["$status", ["lost", "mia", "cnc", "wrong_number"]] }, 1, 0] } },
       }},
       { $sort: { total: -1 } }, { $limit: 10 },
     ]);
@@ -1792,7 +1795,7 @@ export class ReportService {
         total:      { $sum: 1 },
         contacted:  { $sum: { $cond: [{ $gt: [{ $ifNull: ["$firstContactTime", null] }, null] }, 1, 0] } },
         converted:  { $sum: { $cond: [{ $eq: ["$status", "closed"] }, 1, 0] } },
-        inFollowUp: { $sum: { $cond: [{ $in: ["$status", ["followup", "callback"]] }, 1, 0] } },
+        inFollowUp: { $sum: { $cond: [{ $in: ["$status", ["followup", "callback", "meeting_scheduled"]] }, 1, 0] } },
       }},
       { $sort: { converted: -1 } }, { $limit: 10 },
     ]);
@@ -1848,7 +1851,7 @@ export class ReportService {
         assignedTo:       { $ne: null },
         firstContactTime: null,
         assignedAt:       { $lt: threshold },
-        status:           { $nin: ["lost", "mia", "cnc", "closed"] },
+        status:           { $nin: ["lost", "mia", "cnc", "wrong_number", "closed"] },
       })
         .populate("assignedTo", "name email")
         .populate("team",       "name")
@@ -1861,7 +1864,7 @@ export class ReportService {
       Lead.find({
         ...teamFilter,
         nextFollowUpAt: { $lt: now, $ne: null },
-        status:         { $nin: ["closed", "lost", "mia", "cnc"] },
+        status:         { $nin: ["closed", "lost", "mia", "cnc", "wrong_number"] },
       })
         .populate("assignedTo", "name email")
         .populate("team",       "name")
@@ -1871,10 +1874,10 @@ export class ReportService {
         .lean(),
 
       // Lost count — last 7 days
-      Lead.countDocuments({ ...teamFilter, status: { $in: ["lost", "mia"] }, updatedAt: { $gte: last7 } }),
+      Lead.countDocuments({ ...teamFilter, status: { $in: ["lost", "mia", "wrong_number"] }, updatedAt: { $gte: last7 } }),
 
       // Lost count — previous 7 days
-      Lead.countDocuments({ ...teamFilter, status: { $in: ["lost", "mia"] }, updatedAt: { $gte: prev7, $lt: last7 } }),
+      Lead.countDocuments({ ...teamFilter, status: { $in: ["lost", "mia", "wrong_number"] }, updatedAt: { $gte: prev7, $lt: last7 } }),
     ]);
 
     const spikePct = lostPrev > 0
@@ -2013,8 +2016,8 @@ export class ReportService {
           _id:       { id: "$assignedTo", name: { $ifNull: ["$u.name", "Unknown"] } },
           total:     { $sum: 1 },
           closed:    { $sum: { $cond: [{ $eq: ["$status", "closed"] }, 1, 0] } },
-          lost:      { $sum: { $cond: [{ $in: ["$status", ["lost", "mia", "cnc"]] }, 1, 0] } },
-          followup:  { $sum: { $cond: [{ $in: ["$status", ["followup", "callback"]] }, 1, 0] } },
+          lost:      { $sum: { $cond: [{ $in: ["$status", ["lost", "mia", "cnc", "wrong_number"]] }, 1, 0] } },
+          followup:  { $sum: { $cond: [{ $in: ["$status", ["followup", "callback", "meeting_scheduled"]] }, 1, 0] } },
           new_assigned: { $sum: { $cond: [{ $in: ["$status", ["new", "assigned"]] }, 1, 0] } },
         },
       },

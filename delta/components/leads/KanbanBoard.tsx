@@ -52,6 +52,7 @@ import type { Team } from "@/types/team";
 import LeadDialog from "@/components/leads/LeadDialog";
 import { LostReasonModal } from "@/components/leads/LostReasonModal";
 import { FollowupDetailsModal } from "@/components/leads/FollowupDetailsModal";
+import { MeetingScheduledModal } from "@/components/leads/MeetingScheduledModal";
 import { CloseLeadDialog } from "@/components/students/CloseLeadDialog";
 import { fmtFull, getCurrencySymbol } from "@/lib/currency";
 import { INITIAL_RESPONSE_CONFIG, PRIMARY_CONCERN_CONFIG, FOLLOWUP_STRATEGY_CONFIG } from "@/lib/leadConfig";
@@ -953,6 +954,7 @@ export function KanbanBoard({ filters, canEdit }: KanbanBoardProps) {
   const [noteLead, setNoteLead]             = useState<Lead | null>(null);
   const [lostModalLead, setLostModalLead]   = useState<{ leadId: string; name: string } | null>(null);
   const [followupModalLead, setFollowupModalLead] = useState<{ leadId: string; name: string } | null>(null);
+  const [meetingModalLead,  setMeetingModalLead]  = useState<{ leadId: string; name: string } | null>(null);
   /** A card dropped on Closed, waiting for its enrolment before it moves. */
   const [closeLead, setCloseLead] = useState<Lead | null>(null);
 
@@ -1021,6 +1023,12 @@ export function KanbanBoard({ filters, canEdit }: KanbanBoardProps) {
       if (targetStatus === "followup") {
         // Mandatory follow-up details before the move applies
         setFollowupModalLead({ leadId, name: lead.name });
+        return;
+      }
+
+      if (targetStatus === "meeting_scheduled") {
+        // The meeting time first — it becomes a reminder
+        setMeetingModalLead({ leadId, name: lead.name });
         return;
       }
 
@@ -1179,6 +1187,29 @@ export function KanbanBoard({ filters, canEdit }: KanbanBoardProps) {
           );
         }}
         onCancel={() => setFollowupModalLead(null)}
+      />
+
+      {/* Meeting time — fires when a card is dragged to Meeting Scheduled */}
+      <MeetingScheduledModal
+        open={!!meetingModalLead}
+        leadName={meetingModalLead?.name}
+        loading={statusPending}
+        onConfirm={(d) => {
+          if (!meetingModalLead) return;
+          const { leadId } = meetingModalLead;
+          setLocalOverrides((prev) => ({ ...prev, [leadId]: "meeting_scheduled" }));
+          updateStatus(
+            { id: leadId, status: "meeting_scheduled", ...d },
+            {
+              onSuccess: () => {
+                setLocalOverrides((p) => { const n = { ...p }; delete n[leadId]; return n; });
+                setMeetingModalLead(null);
+              },
+              onError: () => setLocalOverrides((p) => { const n = { ...p }; delete n[leadId]; return n; }),
+            },
+          );
+        }}
+        onCancel={() => setMeetingModalLead(null)}
       />
 
       {/* Enrolment — fires when a card is dragged to Closed. Dismissed, the
