@@ -16,6 +16,44 @@ function populatedTeam(id: string) {
     .populate("members", "name email designation status");
 }
 
+// ─── Team report helpers ──────────────────────────────────────────────────────
+
+/**
+ * Every status a lead can have, read from the lead model, in its order. The team report and the team PDF count
+ * exactly these, so a status added to the model shows up there without a second list to keep in step.
+ */
+export const LEAD_STATUS_VALUES: readonly string[] =
+  (Lead.schema.path("status") as unknown as { enumValues: string[] }).enumValues;
+
+const DAY_MS = 86_400_000;
+const GST_OFFSET_MS = 4 * 3_600_000; // Dubai is UTC+4 all year
+
+/** Midnight at the start of a "YYYY-MM-DD" day in Dubai. A malformed or impossible day (2026-02-30) is a 400. */
+function gstMidnight(day: string): Date {
+  const start = new Date(`${day}T00:00:00+04:00`);
+  const roundTrip = isNaN(start.getTime())
+    ? ""
+    : new Date(start.getTime() + GST_OFFSET_MS).toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || roundTrip !== day) {
+    const err = new Error("Invalid date — expected YYYY-MM-DD") as Error & { statusCode: number };
+    err.statusCode = 400;
+    throw err;
+  }
+  return start;
+}
+
+/**
+ * A report period as a `createdAt` range: `dateFrom` to `dateTo` inclusive, as the Dubai calendar days the app
+ * shows. Read as UTC days instead, every period would start and end at 4 a.m. Dubai time.
+ */
+export function gstDayRange(dateFrom?: string, dateTo?: string): { $gte?: Date; $lt?: Date } | undefined {
+  if (!dateFrom && !dateTo) return undefined;
+  const range: { $gte?: Date; $lt?: Date } = {};
+  if (dateFrom) range.$gte = gstMidnight(dateFrom);
+  if (dateTo)   range.$lt  = new Date(gstMidnight(dateTo).getTime() + DAY_MS);
+  return range;
+}
+
 // ─── TeamService ──────────────────────────────────────────────────────────────
 
 export class TeamService {
@@ -228,24 +266,18 @@ export class TeamService {
 
   // ── Get team member split by date (date-filtered aggregation) ────────────────
   async getTeamMemberSplit(teamId: string, dateFrom?: string, dateTo?: string) {
+    if (!mongoose.isValidObjectId(teamId)) {
+      const err = new Error("Invalid team id") as Error & { statusCode: number };
+      err.statusCode = 400;
+      throw err;
+    }
     const teamObjId = new mongoose.Types.ObjectId(teamId);
 
-    // Build date range filter on createdAt
-    const dateMatch: Record<string, unknown> = {};
-    if (dateFrom || dateTo) {
-      const range: Record<string, Date> = {};
-      if (dateFrom) range.$gte = new Date(dateFrom + "T00:00:00.000Z");
-      if (dateTo)   range.$lte = new Date(dateTo   + "T23:59:59.999Z");
-      dateMatch.createdAt = range;
-    }
+    // Leads created in the period (Dubai days)
+    const created = gstDayRange(dateFrom, dateTo);
 
-    const ALL_STATUSES = [
-      "new", "assigned", "followup", "closed", "rejected",
-      "cnc", "booking", "partialbooking", "interested",
-      "rnr", "callback", "whatsapp", "student",
-    ] as const;
-
-    const statusSumFields = ALL_STATUSES.reduce<Record<string, unknown>>((acc, s) => {
+    // One count per status the model knows. A lead whose stored status is not one of them still counts in `total`.
+    const statusSumFields = LEAD_STATUS_VALUES.reduce<Record<string, unknown>>((acc, s) => {
       acc[s] = { $sum: { $cond: [{ $eq: ["$status", s] }, 1, 0] } };
       return acc;
     }, {});
@@ -255,7 +287,7 @@ export class TeamService {
         $match: {
           team: teamObjId,
           assignedTo: { $exists: true, $ne: null },
-          ...dateMatch,
+          ...(created && { createdAt: created }),
         },
       },
       {
@@ -297,7 +329,7 @@ export class TeamService {
           total:          1,
           revenue:        1,
           conversionRate: 1,
-          ...ALL_STATUSES.reduce<Record<string, number>>((acc, s) => { acc[s] = 1; return acc; }, {}),
+          ...LEAD_STATUS_VALUES.reduce<Record<string, number>>((acc, s) => { acc[s] = 1; return acc; }, {}),
         },
       },
     ]);

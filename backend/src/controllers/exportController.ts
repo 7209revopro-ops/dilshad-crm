@@ -2,9 +2,11 @@ import type { Request, Response, NextFunction } from "express";
 import * as XLSX from "xlsx";
 import PDFDocument from "pdfkit";
 import { ReportService } from "../services/reportService.js";
+import { LEAD_STATUS_VALUES, gstDayRange } from "../services/teamService.js";
 import { Lead } from "../models/Lead.js";
 import { Team } from "../models/Team.js";
 import { User } from "../models/User.js";
+import type { LeadStatus } from "../types/index.js";
 import mongoose from "mongoose";
 
 const reportService = new ReportService();
@@ -385,14 +387,18 @@ function statusBar(
   x: number,
   y: number,
   w: number,
+  statuses: readonly string[] = ALL_STATUSES_EX,
+  look: (s: string) => { label: string; color: string } =
+    (s) => ({ label: s.toUpperCase(), color: STATUS_COLORS_EX[s] ?? GRAY }),
 ) {
-  const sW = w / ALL_STATUSES_EX.length;
-  ALL_STATUSES_EX.forEach((s, i) => {
+  const sW = w / statuses.length;
+  statuses.forEach((s, i) => {
     const sx = x + i * sW;
     const cnt = counts[s] ?? 0;
-    doc.rect(sx, y, sW - 3, 26).fill(STATUS_COLORS_EX[s] ?? GRAY);
+    const { label, color } = look(s);
+    doc.rect(sx, y, sW - 3, 26).fill(color);
     doc.fillColor(WHITE).font("Helvetica-Bold").fontSize(6)
-       .text(s.toUpperCase(), sx + 2, y + 3, { width: sW - 4, align: "center" });
+       .text(label, sx + 2, y + 3, { width: sW - 4, align: "center" });
     doc.fontSize(9).text(String(cnt), sx + 2, y + 12, { width: sW - 4, align: "center" });
   });
   // Conversion rate
@@ -406,6 +412,27 @@ function statusBar(
 // Team PDF  GET /teams/:id/export-pdf?dateFrom=&dateTo=
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** How the team PDF shows each status: the Leads page's colours, names short enough for a table column. */
+const TEAM_PDF_STATUS: Record<LeadStatus, { short: string; color: string }> = {
+  new:              { short: "New",       color: "#3b82f6" },
+  assigned:         { short: "Assigned",  color: "#eab308" },
+  pending_response: { short: "Pending",   color: "#8b5cf6" },
+  followup:         { short: "Follow Up", color: "#f97316" },
+  closed:           { short: "Closed",    color: "#22c55e" },
+  lost:             { short: "Lost",      color: "#ef4444" },
+  not_connected:    { short: "Not Conn.", color: "#64748b" },
+  mia:              { short: "MIA",       color: "#f43f5e" },
+  repeated:         { short: "Repeated",  color: "#06b6d4" },
+  callback:         { short: "Call Back", color: "#0ea5e9" },
+  cnc:              { short: "CNC",       color: "#f59e0b" },
+};
+
+/** "other" is a stored status the lead model doesn't list — counted, so every row still adds up to its total. */
+function teamPdfStatus(s: string): { short: string; color: string } {
+  if (s === "other") return { short: "Other", color: GRAY };
+  return TEAM_PDF_STATUS[s as LeadStatus] ?? { short: s.replace(/_/g, " "), color: GRAY };
+}
+
 export const exportTeamPdf = async (
   req: Request,
   res: Response,
@@ -414,6 +441,8 @@ export const exportTeamPdf = async (
   try {
     const teamId    = req.params.id;
     const { dateFrom, dateTo } = qs(req);
+    // Dubai days, the same period the Report tab shows; a malformed date is a 400
+    const created = gstDayRange(dateFrom, dateTo);
 
     // ── Fetch team ────────────────────────────────────────────────────────────
     const team = await Team.findById(teamId)
@@ -422,20 +451,27 @@ export const exportTeamPdf = async (
       .lean();
     if (!team) { res.status(404).json({ message: "Team not found" }); return; }
 
-    const match = { team: new mongoose.Types.ObjectId(teamId), ...buildDateMatch(dateFrom, dateTo) };
+    const match = { team: new mongoose.Types.ObjectId(teamId), ...(created && { createdAt: created }) };
 
     // ── Status counts ─────────────────────────────────────────────────────────
-    const statusAgg = await Lead.aggregate([
+    const statusAgg = await Lead.aggregate<{ _id: string; count: number }>([
       { $match: match },
       { $group: { _id: "$status", count: { $sum: 1 } } },
     ]);
-    const statusCounts: Record<string, number> = {};
-    ALL_STATUSES_EX.forEach((s) => (statusCounts[s] = 0));
+    const statusCounts: Record<string, number> = { other: 0 };
+    LEAD_STATUS_VALUES.forEach((s) => (statusCounts[s] = 0));
     let teamTotal = 0;
-    for (const item of statusAgg) { statusCounts[item._id] = item.count; teamTotal += item.count; }
+    for (const item of statusAgg) {
+      statusCounts[LEAD_STATUS_VALUES.includes(item._id) ? item._id : "other"] += item.count;
+      teamTotal += item.count;
+    }
 
     // ── Member performance ────────────────────────────────────────────────────
-    type MemberRow = { name: string; total: number; totalPayments: number; closed: number; followup: number; cnc: number; booking: number; partialbooking: number; interested: number; rnr: number; callback: number; whatsapp: number; student: number; cr: string };
+    type MemberRow = { name: string; total: number; totalPayments: number; counts: Record<string, number>; other: number; cr: string };
+    const statusSums = LEAD_STATUS_VALUES.reduce<Record<string, unknown>>((acc, s) => {
+      acc[s] = { $sum: { $cond: [{ $eq: ["$status", s] }, 1, 0] } };
+      return acc;
+    }, {});
     const leaderIds = new Set(
       (team.leaders as unknown as { _id: { toString(): string } }[]).map((l) => l._id.toString()),
     );
@@ -447,34 +483,30 @@ export const exportTeamPdf = async (
     const memberRows: MemberRow[] = await Promise.all(
       allUsers.map(async (u) => {
         const uid  = u._id.toString();
-        const agg2 = await Lead.aggregate([
+        const [d] = await Lead.aggregate<Record<string, number>>([
           { $match: { ...match, assignedTo: new mongoose.Types.ObjectId(uid) } },
           { $group: { _id: null,
             total:          { $sum: 1 },
             totalPayments:  { $sum: { $sum: "$payments.amount" } },
-            closed:         { $sum: { $cond: [{ $eq: ["$status","closed"] },         1, 0] } },
-            followup:       { $sum: { $cond: [{ $eq: ["$status","followup"] },       1, 0] } },
-            cnc:            { $sum: { $cond: [{ $eq: ["$status","cnc"] },            1, 0] } },
-            booking:        { $sum: { $cond: [{ $eq: ["$status","booking"] },        1, 0] } },
-            partialbooking: { $sum: { $cond: [{ $eq: ["$status","partialbooking"] }, 1, 0] } },
-            interested:     { $sum: { $cond: [{ $eq: ["$status","interested"] },     1, 0] } },
-            rnr:            { $sum: { $cond: [{ $eq: ["$status","rnr"] },            1, 0] } },
-            callback:       { $sum: { $cond: [{ $eq: ["$status","callback"] },       1, 0] } },
-            whatsapp:       { $sum: { $cond: [{ $eq: ["$status","whatsapp"] },       1, 0] } },
-            student:        { $sum: { $cond: [{ $eq: ["$status","student"] },        1, 0] } },
+            ...statusSums,
           }},
         ]);
-        const d = agg2[0] ?? { total:0, totalPayments:0, closed:0, followup:0, cnc:0, booking:0, partialbooking:0, interested:0, rnr:0, callback:0, whatsapp:0, student:0 };
-        const cr = d.total > 0 ? ((d.closed / d.total) * 100).toFixed(1) : "0.0";
+        const total  = d?.total ?? 0;
+        const counts: Record<string, number> = {};
+        LEAD_STATUS_VALUES.forEach((s) => (counts[s] = d?.[s] ?? 0));
+        const listed = LEAD_STATUS_VALUES.reduce((sum, s) => sum + counts[s], 0);
+        const cr = total > 0 ? ((counts.closed / total) * 100).toFixed(1) : "0.0";
         const role = leaderIds.has(uid) ? " (Leader)" : "";
-        return { name: u.name + role, total:d.total, totalPayments:d.totalPayments, closed:d.closed, followup:d.followup, cnc:d.cnc, booking:d.booking, partialbooking:d.partialbooking, interested:d.interested, rnr:d.rnr, callback:d.callback, whatsapp:d.whatsapp, student:d.student, cr };
+        return { name: u.name + role, total, totalPayments: d?.totalPayments ?? 0, counts, other: total - listed, cr };
       }),
     );
     // Best performer = highest total payments collected
     memberRows.sort((a, b) => b.totalPayments - a.totalPayments);
+    const showOther = statusCounts.other > 0 || memberRows.some((r) => r.other > 0);
 
     // ── Build PDF ─────────────────────────────────────────────────────────────
-    const doc    = new PDFDocument({ margin: 40, size: "A4" });
+    // Landscape: eleven status columns do not fit across a portrait page
+    const doc    = new PDFDocument({ margin: 40, size: "A4", layout: "landscape" });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
     const finish = new Promise<void>((resolve) => doc.on("end", resolve));
@@ -498,17 +530,29 @@ export const exportTeamPdf = async (
     // Status bar
     doc.fillColor(DARK).font("Helvetica-Bold").fontSize(10).text("Lead Status Distribution", 40, y);
     y += 14;
-    y = statusBar(doc, statusCounts, teamTotal, 40, y, W);
+    const barStatuses = showOther ? [...LEAD_STATUS_VALUES, "other"] : LEAD_STATUS_VALUES;
+    y = statusBar(doc, statusCounts, teamTotal, 40, y, W, barStatuses, (s) => ({
+      label: teamPdfStatus(s).short.toUpperCase(),
+      color: teamPdfStatus(s).color,
+    }));
     y += 16;
 
     // Member table
     doc.fillColor(DARK).font("Helvetica-Bold").fontSize(10).text("Member Performance", 40, y);
     y += 12;
-    const mHeaders = ["Member", "Total", "Revenue(₹)", "Closed", "Followup", "Interested", "CNC", "Booking", "Part.Bkg", "RNR", "Callback", "WhatsApp", "Student", "Conv %"];
-    const mColW    = [100, 28, 50, 28, 36, 42, 24, 34, 36, 24, 40, 42, 36, 36];
-    y = pdfTable(doc, mHeaders, mColW, memberRows.map((r) =>
-      [r.name, r.total, r.totalPayments, r.closed, r.followup, r.interested, r.cnc, r.booking, r.partialbooking, r.rnr, r.callback, r.whatsapp, r.student, `${r.cr}%`]
-    ), 40, y);
+    const fixedW  = 120 + 34 + 56 + (showOther ? 34 : 0) + 36;    // member, total, revenue, [other], conv %
+    const statusW = Math.floor((W - fixedW) / LEAD_STATUS_VALUES.length);
+    const mHeaders = [
+      "Member", "Total", "Revenue(₹)",
+      ...LEAD_STATUS_VALUES.map((s) => teamPdfStatus(s).short),
+      ...(showOther ? ["Other"] : []), "Conv %",
+    ];
+    const mColW = [120, 34, 56, ...LEAD_STATUS_VALUES.map(() => statusW), ...(showOther ? [34] : []), 36];
+    y = pdfTable(doc, mHeaders, mColW, memberRows.map((r) => [
+      r.name, r.total, r.totalPayments,
+      ...LEAD_STATUS_VALUES.map((s) => r.counts[s]),
+      ...(showOther ? [r.other] : []), `${r.cr}%`,
+    ]), 40, y);
 
     pdfFooter(doc);
     doc.end();

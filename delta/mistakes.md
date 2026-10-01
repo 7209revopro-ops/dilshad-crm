@@ -376,3 +376,20 @@ Copy the template at the top and place it at the **top** of the correct category
 
 **Entry count**: 11
 *(Increment every time you add a mistake)*
+
+---
+
+### A report kept its own status list (2026-10-01)
+- **Category**: data
+
+**What happened**: the team Report hard-coded 13 statuses from an older version of the CRM. After the statuses changed, leads in Pending Response, Lost, Not Connected, MIA or Repeated counted in Total but in no column ("Total 8", two in the columns).
+
+**Rule — never do this again**:
+> Columns over lead statuses come from `LEAD_STATUSES` / `STATUS_META` in `lib/statusConfig.ts`. A table with a Total shows what its columns don't cover (an "Other" column), so a gap is visible instead of silent.
+
+### Report periods from the browser's calendar (2026-10-01)
+- **Category**: datetime
+
+**What happened**: "This Month" was `toGstDateISO(new Date(y, m, 1))` — local midnight on the 1st, converted to a Dubai date. East of Dubai (India) that is still the previous day in Dubai, so the month began a day early. The same applies to `getDay()` for the week.
+
+**Rule**: take today's Dubai date first (`toGstDateISO(new Date())`) and do date arithmetic on that string (`shiftDay` in the Report tab). Still built the old way: the period buttons in `components/reports/ExportPdfDialog.tsx`.

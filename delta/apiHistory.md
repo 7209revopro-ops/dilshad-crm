@@ -1394,3 +1394,8 @@ Copy the template at the top of this file and add under the correct module secti
 | `useMeetingConflicts(input)` | `["meetings","conflicts",input]` · `POST /meetings/conflicts` | debounced by the form |
 | `useCreateMeeting()` / `useUpdateMeeting()` / `useCancelMeeting()` | `POST /meetings` · `PUT /meetings/:id` · `POST /meetings/:id/cancel` | invalidate `["meetings"]`; toasts |
 **Types:** `types/meeting.ts` · **Time zone maths:** `lib/zonedTime.ts`
+
+## useTeamMemberSplit — current statuses (changed 2026-10-01)
+
+**File:** `hooks/useTeams.ts` · `GET /teams/:id/member-split?dateFrom=&dateTo=` (Dubai days)
+`TeamMemberSplitItem` now extends `Partial<Record<LeadStatus, number>>` (the 11 statuses of `lib/statusConfig.ts`) instead of the old 13 fixed keys. A count may be missing (an API that predates the status) — read it as `m[s] ?? 0`; `total` still includes those leads.

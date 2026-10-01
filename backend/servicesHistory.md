@@ -696,3 +696,13 @@ This file documents every service in `backend/src/services/`. Read this before w
 `assignedTo` and `team` filters are combined with the caller's role limit (BDE: own leads; team leader: own team) instead of
 replacing it; one outside the limit returns an empty page. Super admins and reporters are unaffected.
 
+
+## teamService — team report on the model's statuses (changed 2026-10-01)
+
+- `LEAD_STATUS_VALUES` (exported) — the lead model's `status` enum, read from the schema. The team report and the team PDF
+  count exactly these; no second list to keep in step.
+- `gstDayRange(dateFrom?, dateTo?)` (exported) — a period of "YYYY-MM-DD" Dubai days as a `createdAt` range
+  (`$gte` midnight Dubai, `$lt` the next midnight). A malformed or impossible day (2026-02-30) throws a 400.
+- `getTeamMemberSplit(teamId, dateFrom?, dateTo?)` — one count per `LEAD_STATUS_VALUES` status (was a fixed list of 13,
+  seven of which no lead can have); `total` still counts every lead, so a stored status outside the list shows as the
+  difference. Dubai days via `gstDayRange`; a malformed team id is a 400.

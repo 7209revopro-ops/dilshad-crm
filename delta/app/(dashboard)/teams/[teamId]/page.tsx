@@ -3249,24 +3249,27 @@ function ActivityRow({ item }: { item: TeamActivityItem }) {
 
 type ReportPeriod = "today" | "week" | "month" | "year" | "custom";
 
-function toISODate(d: Date) { return toGstDateISO(d); }
+/** "YYYY-MM-DD" moved by whole days — arithmetic on the date itself, no time zone involved. */
+function shiftDay(day: string, days: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
+/**
+ * The period as Dubai (GST) days whatever the viewer's own time zone; the API reads them as Dubai days too.
+ * Taken from the browser's calendar, the month began a day early for anyone east of Dubai.
+ */
 function getReportRange(p: ReportPeriod): { from: string; to: string } {
-  const now = new Date();
-  const today = toISODate(now);
+  const today = toGstDateISO(new Date());
   switch (p) {
     case "today": return { from: today, to: today };
     case "week": {
-      const mon = new Date(now);
-      mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-      return { from: toISODate(mon), to: today };
+      const weekday = new Date(`${today}T00:00:00Z`).getUTCDay(); // 0 = Sunday
+      return { from: shiftDay(today, -((weekday + 6) % 7)), to: today }; // back to Monday
     }
-    case "month": {
-      return { from: toISODate(new Date(now.getFullYear(), now.getMonth(), 1)), to: today };
-    }
-    case "year": {
-      return { from: toISODate(new Date(now.getFullYear(), 0, 1)), to: today };
-    }
+    case "month": return { from: `${today.slice(0, 8)}01`, to: today };
+    case "year":  return { from: `${today.slice(0, 5)}01-01`, to: today };
     default: return { from: "", to: "" };
   }
 }
@@ -3279,21 +3282,13 @@ const REPORT_PERIODS: { value: ReportPeriod; label: string }[] = [
   { value: "custom", label: "Custom Range" },
 ];
 
-const STATUS_COLS: { key: keyof TeamMemberSplitItem; label: string; color: string }[] = [
-  { key: "new",            label: "New",          color: "text-sky-400"    },
-  { key: "assigned",       label: "Assigned",     color: "text-blue-400"   },
-  { key: "followup",       label: "Follow-up",    color: "text-amber-400"  },
-  { key: "interested",     label: "Interested",   color: "text-violet-400" },
-  { key: "booking",        label: "Booking",      color: "text-orange-400" },
-  { key: "partialbooking", label: "Part.Book",    color: "text-orange-300" },
-  { key: "closed",         label: "Closed",       color: "text-green-400"  },
-  { key: "rnr",            label: "RNR",          color: "text-pink-400"   },
-  { key: "callback",       label: "Callback",     color: "text-cyan-400"   },
-  { key: "cnc",            label: "CNC",          color: "text-red-400"    },
-  { key: "rejected",       label: "Rejected",     color: "text-rose-500"   },
-  { key: "whatsapp",       label: "WhatsApp",     color: "text-emerald-400"},
-  { key: "student",        label: "Student",      color: "text-indigo-400" },
-];
+/** One column per lead status, with the names and colours the Leads page uses. */
+const STATUS_COLS = LEAD_STATUSES.map((key) => ({ key, label: SM[key].label, color: SM[key].text }));
+
+/** Leads in a row's total that no status column counts: a status this list doesn't know, or one the API didn't send. */
+function otherCount(m: TeamMemberSplitItem): number {
+  return Math.max(0, m.total - LEAD_STATUSES.reduce((sum, s) => sum + (m[s] ?? 0), 0));
+}
 
 function ReportTab({ teamId }: { teamId: string }) {
   const [period, setPeriod]   = useState<ReportPeriod>("month");
@@ -3312,7 +3307,9 @@ function ReportTab({ teamId }: { teamId: string }) {
   );
 
   const totalLeads  = data?.reduce((s, m) => s + m.total, 0) ?? 0;
-  const totalClosed = data?.reduce((s, m) => s + m.closed, 0) ?? 0;
+  const totalClosed = data?.reduce((s, m) => s + (m.closed ?? 0), 0) ?? 0;
+  const totalOther  = data?.reduce((s, m) => s + otherCount(m), 0) ?? 0;
+  const showOther   = totalOther > 0;
 
   return (
     <div className="space-y-4">
@@ -3418,6 +3415,14 @@ function ReportTab({ teamId }: { teamId: string }) {
                     {STATUS_COLS.map((c) => (
                       <th key={c.key} className={`pb-2.5 text-right font-medium pr-3 ${c.color}`}>{c.label}</th>
                     ))}
+                    {showOther && (
+                      <th
+                        className="pb-2.5 text-right font-medium pr-3 text-muted-foreground"
+                        title="Leads whose status has no column here"
+                      >
+                        Other
+                      </th>
+                    )}
                     <th className="pb-2.5 text-right font-medium text-muted-foreground">Conv%</th>
                   </tr>
                 </thead>
@@ -3460,7 +3465,7 @@ function ReportTab({ teamId }: { teamId: string }) {
 
                       {/* Status columns */}
                       {STATUS_COLS.map((c) => {
-                        const val = (m[c.key] as number) ?? 0;
+                        const val = m[c.key] ?? 0;
                         return (
                           <td key={c.key} className="py-3 pr-3 text-right">
                             {val > 0 ? (
@@ -3471,6 +3476,17 @@ function ReportTab({ teamId }: { teamId: string }) {
                           </td>
                         );
                       })}
+
+                      {/* Other */}
+                      {showOther && (
+                        <td className="py-3 pr-3 text-right">
+                          {otherCount(m) > 0 ? (
+                            <span className="font-semibold tabular-nums text-foreground">{otherCount(m)}</span>
+                          ) : (
+                            <span className="text-muted-foreground/40">—</span>
+                          )}
+                        </td>
+                      )}
 
                       {/* Conv% */}
                       <td className="py-3 text-right">
@@ -3493,7 +3509,7 @@ function ReportTab({ teamId }: { teamId: string }) {
                     <td className="pt-2.5 pb-1 text-xs font-semibold text-muted-foreground">Total</td>
                     <td className="pt-2.5 pb-1 pr-3 text-right font-bold text-foreground tabular-nums">{totalLeads}</td>
                     {STATUS_COLS.map((c) => {
-                      const sum = data.reduce((s, m) => s + ((m[c.key] as number) ?? 0), 0);
+                      const sum = data.reduce((s, m) => s + (m[c.key] ?? 0), 0);
                       return (
                         <td key={c.key} className="pt-2.5 pb-1 pr-3 text-right">
                           {sum > 0 ? (
@@ -3504,6 +3520,11 @@ function ReportTab({ teamId }: { teamId: string }) {
                         </td>
                       );
                     })}
+                    {showOther && (
+                      <td className="pt-2.5 pb-1 pr-3 text-right">
+                        <span className="font-semibold tabular-nums text-foreground">{totalOther}</span>
+                      </td>
+                    )}
                     <td className="pt-2.5 pb-1 text-right">
                       <span className={`font-semibold tabular-nums ${
                         totalLeads > 0 && (totalClosed / totalLeads) * 100 >= 50 ? "text-green-400"

@@ -300,3 +300,18 @@ that serve one person's data (`/users/:userId/leads`, `lead-stats`, `revenue`, `
 **Where:** `leadService.getLeads` (`narrow()`), `middleware/permissions.selfOrOverseer`. Tested 28/28 — every role's own view
 unchanged.
 
+
+---
+
+## A second copy of the status list drifts (2026-10-01)
+
+**What happened:** the lead statuses changed (Pending Response, Lost, Not Connected, MIA, Repeated came in; Interested,
+Booking, Partial Booking, RNR, Rejected, WhatsApp, Student went), but the team Report and the team PDF kept their own
+hard-coded list. A team showed "Total 8" with only 2 leads in its columns.
+
+**Rule:** count statuses from the model — `LEAD_STATUS_VALUES` in `teamService` (the schema's enum) — and keep a row's
+total reconcilable (show what no column counts as Other). Still on the old list: the Reports page's Excel/PDF export, the
+user PDF, the Sales Funnel's "qualified" step and the AI insights' closings.
+
+**Also:** report dates are Dubai days. `new Date(day + "T00:00:00.000Z")` reads them as UTC days — 4 hours off. Use
+`gstDayRange`.

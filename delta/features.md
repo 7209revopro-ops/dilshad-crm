@@ -734,3 +734,12 @@ Copy the template at the top and place it in the correct module section.
 
 **Change Log**:
 - 1.0.0 — Initial build
+
+## Team Report — every status counted (2026-10-01)
+
+**Page**: `app/(dashboard)/teams/[teamId]/page.tsx` → Report tab · **API**: `GET /teams/:id/member-split`, `GET /teams/:id/export-pdf`
+
+**What it does**: the Member Lead Split lists one column per lead status — New, Assigned, Pending Response, Follow Up, Closed, Lost, Not Connected, MIA, Repeated, Call Back, CNC — so each row adds up to its Total. An **Other** column shows any lead whose status has no column (only when there is one). The period (Today / This Week / This Month / This Year / Custom) is in Dubai days for everyone, wherever their browser is. The team PDF has the same columns.
+
+**Change Log**:
+- 1.0.0 — replaces the old 13 columns (Interested, Booking, Part.Book, RNR, Rejected, WhatsApp, Student no longer exist as statuses).

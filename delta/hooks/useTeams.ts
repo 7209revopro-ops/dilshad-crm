@@ -4,6 +4,7 @@ import { toast } from "@/lib/toast";
 import api from "@/lib/axios";
 import type { ApiResponse, PaginationMeta } from "@/types";
 import type { Lead, LeadFilters } from "@/types/lead";
+import type { LeadStatus } from "@/lib/statusConfig";
 import type {
   Team, TeamFilters, TeamMemberStat, TeamAutoAssignResult,
   TeamDashboard, TeamLog, TeamUpdateItem, TeamReminderItem, TeamSettings,
@@ -101,7 +102,11 @@ export const useTeamMemberStats = (teamId: string) => {
   });
 };
 
-export interface TeamMemberSplitItem {
+/**
+ * One member's row in the team Report: `total` leads, and a count for each lead status. A count can be missing
+ * (an API that predates the status) — `total` still includes those leads.
+ */
+export interface TeamMemberSplitItem extends Partial<Record<LeadStatus, number>> {
   userId: string;
   name: string;
   email: string;
@@ -110,19 +115,6 @@ export interface TeamMemberSplitItem {
   total: number;
   revenue: number;
   conversionRate: number;
-  new: number;
-  assigned: number;
-  followup: number;
-  closed: number;
-  rejected: number;
-  cnc: number;
-  booking: number;
-  partialbooking: number;
-  interested: number;
-  rnr: number;
-  callback: number;
-  whatsapp: number;
-  student: number;
 }
 
 export const useTeamMemberSplit = (teamId: string, dateFrom: string, dateTo: string) => {

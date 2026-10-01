@@ -8,7 +8,11 @@ mark and a redesigned login. Backend: Bun + Express + Mongoose on **port 7868** 
 Frontend: Next.js 14 in `delta/` (dev 3001, start 3007). Database: MongoDB `dilshad_crm` (connection in `backend/.env`).
 
 ## Last working item
-All four phases of `PLAN.md` are done (Phase 4 — meetings & calendars — 69/69 on a scratch database with a stand-in LMS;
+2026-10-01: the team Report tab and team PDF count every current lead status (they were on an older list, so rows didn't add
+up), with an Other column for anything else, and read periods as Dubai days; "Redistribute today" covers the newer statuses.
+36/36 API checks + period dates in 4 time zones on a scratch database; not committed yet.
+
+Before that: all four phases of `PLAN.md` are done (Phase 4 — meetings & calendars — 69/69 on a scratch database with a stand-in LMS;
 Phases 2 and 3 re-run 75/75 and 73/73; UI checked). Committed and pushed 2026-10-01. Also written, not in the repo: the Apps Script for
 the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/33 against a scratch copy; not installed).
 
@@ -26,6 +30,11 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   in-app notice and push).
 - **P1 — First super-admin password.** Change the password the first super admin was set up with.
 - **P1 — No mailbox yet.** Emails are only logged until `SMTP_*` is set in `backend/.env`.
+- **P2 — Old status list in other exports.** The Reports page's Excel/PDF export, the user PDF, the Sales Funnel's
+  "qualified" step and the AI insights still use statuses that no longer exist (Interested, Booking, RNR…); their dates are
+  read as UTC days, and the PDF dialog's period buttons use the browser's calendar. The team Report and team PDF are fixed.
+- **P2 — PDF exports (pre-existing).** Every PDF comes out with two extra pages (the footer is written below the page margin,
+  which starts a new page), and "₹" and "→" don't render in the built-in font.
 - **P2 — Committed build junk.** 956 `CallRecorder/app/build` files, a root `.DS_Store` and `delta/public/swe-worker-*.js` are
   tracked; `3cxExample` is an empty gitlink.
 - **P2 — Mentors page redirects everyone but the super admin (pre-existing).** Its menu item shows for all, but the dashboard
@@ -58,3 +67,5 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   Calendar page (day / week / month, mentors' LMS time alongside); the Delta Trading Hub sheet script shows sync status per row.
 - 2026-10-01 — Leads page "My leads" toggle for super admins and team leaders; lead lists and per-user lead endpoints keep to
   each role's view.
+- 2026-10-01 — Team Report and team PDF count the current lead statuses (+ Other), periods in Dubai days; "Redistribute
+  today" also moves Pending Response, Not Connected, MIA and Repeated leads. Needs the backend deployed for the new counts.

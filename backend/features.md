@@ -500,6 +500,8 @@ Each feature documents:
 **Change Log**:
 - Initial PDF export for teams
 - Added user-scoped PDF export
+- 2026-10-01 — team PDF: the lead model's current statuses (+ Other when one is stored that the model doesn't list),
+  landscape, the period as Dubai days, 400 on a malformed date. The user PDF is unchanged.
 
 
 ---

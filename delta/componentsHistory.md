@@ -1129,3 +1129,6 @@
 
 ### Change log — 2026-10-01 (Leads page)
 - Leads page — "All leads / My team | My leads" toggle for super admins and team leaders (shortcut for Assigned To = you, remembered per browser); team-leader detection falls back to `useMyTeam()`; "You" in the Assigned To filter and pill.
+
+### Change log — 2026-10-01 (team Report tab)
+- `teams/[teamId]/page.tsx` `ReportTab` — columns come from `LEAD_STATUSES` / `STATUS_META` (`lib/statusConfig.ts`), the same names and colours as the Leads page; an **Other** column (row total minus the listed columns) appears only when not zero; the period presets are Dubai dates (`getReportRange` builds them from `toGstDateISO(new Date())`, not the browser's calendar).

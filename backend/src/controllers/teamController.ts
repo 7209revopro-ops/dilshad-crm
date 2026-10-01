@@ -849,13 +849,18 @@ export async function redistributeToday(
 
     // Only leads ASSIGNED TODAY (GST) to absent members are redistributed —
     // their ongoing pipeline (older follow-ups etc.) stays with them for
-    // when they return.
+    // when they return. Every status still being worked moves; closed and
+    // lost leads stay. The older statuses at the end are kept for leads
+    // that still carry them.
     const absentObjIds = absentMemberIds.map((id) => new mongoose.default.Types.ObjectId(id));
     const leadsToRedistribute = await Lead.find({
       team: team._id,
       assignedTo: { $in: absentObjIds },
       assignedAt: { $gte: todayMidnightUTC, $lt: tomorrowMidnightUTC },
-      status: { $in: ["new", "assigned", "followup", "interested", "cnc", "callback", "rnr", "whatsapp", "student", "booking", "partialbooking"] },
+      status: { $in: [
+        "new", "assigned", "pending_response", "followup", "not_connected", "mia", "repeated", "callback", "cnc",
+        "interested", "rnr", "whatsapp", "student", "booking", "partialbooking",
+      ] },
     }).select("_id").lean();
 
     if (leadsToRedistribute.length === 0) {

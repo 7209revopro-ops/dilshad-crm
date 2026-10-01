@@ -686,3 +686,20 @@ Google Sheets columns map to Lead fields:
    zone. A warning in the form, never a refusal. LMS unreachable → `mentorsUnavailable`, the rest still answered.
 5. **Reminder** — every minute: scheduled, not yet reminded, `startAt − reminderMinutes ≤ now < startAt` → stamp (conditional),
    notify organizer + attendees.
+
+## Team report, team PDF and "Redistribute today" — current statuses (2026-10-01)
+
+**Files**: `src/services/teamService.ts`, `src/controllers/exportController.ts`, `src/controllers/teamController.ts`
+
+1. **Columns** — the team Report (`GET /teams/:id/member-split`) and the team PDF (`GET /teams/:id/export-pdf`) count the
+   lead model's statuses: New, Assigned, Pending Response, Follow Up, Closed, Lost, Not Connected, MIA, Repeated, Call Back,
+   CNC. Before, they counted an older list, so leads in Pending Response, Lost, Not Connected, MIA or Repeated were in the
+   total and in no column.
+2. **Other** — total minus the listed columns: a stored status the model no longer lists. The web page and the PDF show an
+   Other column only when it is not zero.
+3. **Period** — `dateFrom` / `dateTo` are Dubai calendar days (they were read as UTC days, so a period started and ended at
+   4 a.m. Dubai time). The web page builds them from the Dubai date, not the browser's.
+4. **Team PDF** — landscape A4; status bar and member table use the same statuses and the Leads page's colours.
+5. **Redistribute today** — besides new, assigned, follow-up, call back and CNC, leads in Pending Response, Not Connected,
+   MIA and Repeated assigned today to an absent member now move too; closed and lost stay. The older statuses stay in the
+   list for leads that still carry them. As before, a moved lead becomes "assigned" for its new owner.
