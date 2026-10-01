@@ -26,7 +26,8 @@ const createLeadSchema = z.object({
   email: z.string().email("Invalid email").optional().or(z.literal("")),
   phone: z.string().min(1, "Phone is required").max(20),
   hasWhatsapp: z.boolean().optional(),
-  source: z.string().max(100).optional(),
+  // Required for a lead created here; uploads and the sheet sync have their own routes
+  source: z.string({ error: "Source is required" }).trim().min(1, "Source is required").max(100),
   course: z.string().optional().nullable(),
   status: z
     .enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "mia", "repeated", "callback", "cnc"])

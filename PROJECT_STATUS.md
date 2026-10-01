@@ -8,9 +8,13 @@ mark and a redesigned login. Backend: Bun + Express + Mongoose on **port 7868** 
 Frontend: Next.js 14 in `delta/` (dev 3001, start 3007). Database: MongoDB `dilshad_crm` (connection in `backend/.env`).
 
 ## Last working item
-2026-10-01: the team Report tab and team PDF count every current lead status (they were on an older list, so rows didn't add
+2026-10-01: new leads need a source (form + `POST /leads`; email optional; edits, uploads and the sheet sync unchanged); a
+super admin can reassign any lead from the Leads list ("Assign to" next to Call and Note). 21/21 API checks + UI checks on a
+scratch database; pushed 2026-10-01 (the server check needs the backend deployed).
+
+Before that: 2026-10-01: the team Report tab and team PDF count every current lead status (they were on an older list, so rows didn't add
 up), with an Other column for anything else, and read periods as Dubai days; "Redistribute today" covers the newer statuses.
-36/36 API checks + period dates in 4 time zones on a scratch database; not committed yet.
+36/36 API checks + period dates in 4 time zones on a scratch database; pushed as 5297408.
 
 Before that: all four phases of `PLAN.md` are done (Phase 4 — meetings & calendars — 69/69 on a scratch database with a stand-in LMS;
 Phases 2 and 3 re-run 75/75 and 73/73; UI checked). Committed and pushed 2026-10-01. Also written, not in the repo: the Apps Script for
@@ -69,3 +73,4 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   each role's view.
 - 2026-10-01 — Team Report and team PDF count the current lead statuses (+ Other), periods in Dubai days; "Redistribute
   today" also moves Pending Response, Not Connected, MIA and Repeated leads. Needs the backend deployed for the new counts.
+- 2026-10-01 — New leads need a source (form + server); super admin "Assign to" button on the Leads list.

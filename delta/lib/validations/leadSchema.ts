@@ -36,8 +36,10 @@ function requireReferredBy(data: { source?: string; referredBy?: string | null }
   }
 }
 
-// Create — adds optional team + assignedTo
+// Create — source is required for a new lead (editing an older lead without one still works);
+// adds optional team + assignedTo
 export const createLeadSchema = baseLeadFields.extend({
+  source:     z.string().trim().min(1, "Source is required"),
   team:       z.string().optional().nullable(),
   assignedTo: z.string().optional().nullable(),
 }).superRefine(requireReferredBy);

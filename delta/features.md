@@ -743,3 +743,14 @@ Copy the template at the top and place it in the correct module section.
 
 **Change Log**:
 - 1.0.0 — replaces the old 13 columns (Interested, Booking, Part.Book, RNR, Rejected, WhatsApp, Student no longer exist as statuses).
+
+## Leads — Assign button & required source (2026-10-01)
+
+**Pages**: `app/(dashboard)/leads/page.tsx`, `components/leads/LeadDialog.tsx`, `components/leads/AssignLeadDialog.tsx`
+
+**What it does**: a super admin can hand any lead to any active user straight from the Leads list — an "Assign to" button beside Call and Note opens a small dialog naming the lead and its current owner. Assigning sets the lead's status to Assigned and leaves its team as it was. New leads need a source; email stays optional.
+
+**API**: existing `PATCH /leads/:id/assign`; `POST /leads` now requires `source`.
+
+**Change Log**:
+- 1.0.0 — Initial build

@@ -6,7 +6,7 @@ import {
   X, Upload, FileText, ChevronDown, ExternalLink, AlertTriangle,
   CalendarDays, Filter, Tags, ArrowRightLeft, CheckSquare, Square,
   LayoutGrid, List, Columns3, GripVertical, Phone, History,
-  ArrowUpDown, ArrowUp, ArrowDown, MessageCircle, Sheet,
+  ArrowUpDown, ArrowUp, ArrowDown, MessageCircle, Sheet, UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 import { TodayLeadsButton, SplitTodayButton } from "@/components/leads/LeadsDateFilter";
@@ -1522,8 +1522,8 @@ function LeadsPageContent() {
                                 )}
                               </div>
                             </div>
-                            {/* Actions */}
-                            <div className="flex items-center gap-0.5 shrink-0">
+                            {/* Actions — wrap three to a row so the lead's details keep their width on a phone */}
+                            <div className="flex flex-wrap items-center justify-end gap-0.5 shrink-0 max-w-[6.5rem]">
                               {lead.phone && (
                                 <ClickToCall
                                   phoneNumber={lead.phone}
@@ -1532,6 +1532,11 @@ function LeadsPageContent() {
                                 />
                               )}
                               <QuickNoteDialog leadId={lead._id} leadName={lead.name} className="h-8 w-8" />
+                              {isSuperAdmin && (
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleAssign(lead)} title="Assign to">
+                                  <UserPlus className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Link href={`/leads/${lead._id}`}>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" title="View">
                                   <ExternalLink className="h-4 w-4" />
@@ -1606,6 +1611,16 @@ function LeadsPageContent() {
                                     leadName={lead.name}
                                     className="h-8 w-8 md:opacity-0 group-hover:opacity-100 transition-opacity"
                                   />
+                                  {isSuperAdmin && (
+                                    <Button
+                                      variant="ghost" size="icon"
+                                      className="h-8 w-8 md:opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                      onClick={() => handleAssign(lead)}
+                                      title="Assign to"
+                                    >
+                                      <UserPlus className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                   <Link href={`/leads/${lead._id}`}>
                                     <Button
                                       variant="ghost" size="icon"

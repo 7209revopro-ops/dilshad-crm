@@ -393,3 +393,11 @@ Copy the template at the top and place it at the **top** of the correct category
 **What happened**: "This Month" was `toGstDateISO(new Date(y, m, 1))` — local midnight on the 1st, converted to a Dubai date. East of Dubai (India) that is still the previous day in Dubai, so the month began a day early. The same applies to `getDay()` for the week.
 
 **Rule**: take today's Dubai date first (`toGstDateISO(new Date())`) and do date arithmetic on that string (`shiftDay` in the Report tab). Still built the old way: the period buttons in `components/reports/ExportPdfDialog.tsx`.
+
+### A dialog that stays mounted keeps its state (2026-10-01)
+- **Category**: components
+
+**What happened**: `AssignLeadDialog` is rendered once on the Leads page and only opened and closed. Its Cancel button closed it without clearing the chosen user, so the next lead's dialog opened with that person already picked and Assign enabled — one click from giving the wrong lead away. (Found in review before release.)
+
+**Rule — never do this again**:
+> A dialog mounted once and reused for different records resets its own form state when it opens for a record (`useEffect` on `open` + the record id), and every way of closing it goes through the same reset.

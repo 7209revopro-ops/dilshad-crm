@@ -165,7 +165,8 @@ export function LeadDialog({ open, onOpenChange, lead, mode }: LeadDialogProps) 
     if (isEditing && lead) {
       updateLead({ id: lead._id, data: payload }, { onSuccess: () => onOpenChange(false) });
     } else {
-      createLead(payload, { onSuccess: () => onOpenChange(false) });
+      // A new lead's source has passed the form's check — it is never blank here
+      createLead({ ...payload, source: data.source }, { onSuccess: () => onOpenChange(false) });
     }
   };
 
@@ -188,7 +189,7 @@ export function LeadDialog({ open, onOpenChange, lead, mode }: LeadDialogProps) 
 
             {/* Email */}
             <div className="space-y-1.5">
-              <Label htmlFor="lead-email">Email</Label>
+              <Label htmlFor="lead-email">Email <span className="text-muted-foreground text-xs">(optional)</span></Label>
               <Input id="lead-email" type="email" placeholder="john@example.com" {...register("email")} />
               {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
@@ -220,13 +221,13 @@ export function LeadDialog({ open, onOpenChange, lead, mode }: LeadDialogProps) 
 
             {/* Source */}
             <div className="space-y-1.5">
-              <Label>Source</Label>
+              <Label>Source{isEditing ? "" : " *"}</Label>
               <Controller
                 name="source"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                    <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                    <SelectTrigger aria-invalid={!!errors.source}><SelectValue placeholder="Select source" /></SelectTrigger>
                     <SelectContent>
                       {SOURCES.map((s) => (
                         <SelectItem
@@ -241,6 +242,7 @@ export function LeadDialog({ open, onOpenChange, lead, mode }: LeadDialogProps) 
                   </Select>
                 )}
               />
+              {errors.source && <p className="text-xs text-destructive">{errors.source.message}</p>}
             </div>
 
             {/* Referral details — mandatory when source is Referral */}

@@ -703,3 +703,12 @@ Google Sheets columns map to Lead fields:
 5. **Redistribute today** — besides new, assigned, follow-up, call back and CNC, leads in Pending Response, Not Connected,
    MIA and Repeated assigned today to an absent member now move too; closed and lost stay. The older statuses stay in the
    list for leads that still carry them. As before, a moved lead becomes "assigned" for its new owner.
+
+## New lead — source required (2026-10-01)
+
+**File**: `src/controllers/leadController.ts` (`createLeadSchema`, `POST /leads`)
+
+A lead created through `POST /leads` must carry a source (trimmed, 1–100 characters; missing, null or blank → 400 "Source is
+required"). Email stays optional. Editing a lead (`PUT /leads/:id`) is unchanged, so older leads without a source still save.
+Excel uploads and the sheet sync (`POST /sheets/sync/batch`, used by the Apps Script and the Root lead router) have their own
+routes and still take rows without a source.

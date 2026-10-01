@@ -1132,3 +1132,8 @@
 
 ### Change log — 2026-10-01 (team Report tab)
 - `teams/[teamId]/page.tsx` `ReportTab` — columns come from `LEAD_STATUSES` / `STATUS_META` (`lib/statusConfig.ts`), the same names and colours as the Leads page; an **Other** column (row total minus the listed columns) appears only when not zero; the period presets are Dubai dates (`getReportRange` builds them from `toGstDateISO(new Date())`, not the browser's calendar).
+
+### Change log — 2026-10-01 (lead form & Assign)
+- `LeadDialog` — on create, Source is required ("Source *", "Source is required" under the field); Email is labelled "(optional)". Editing is unchanged.
+- `AssignLeadDialog` — rewritten for the Leads list's row button: shows who has the lead now, the current owner is disabled in the list, no "Auto Assign All Unassigned" (it assigned every unassigned lead from a one-lead dialog); the pick is cleared on every opening and on Cancel.
+- Leads page — "Assign to" (UserPlus) button next to Call and Note on each row, super admin only, in the phone cards and the desktop table (visible on keyboard focus too); the phone card's action icons wrap three to a row so the lead's details keep their width.
