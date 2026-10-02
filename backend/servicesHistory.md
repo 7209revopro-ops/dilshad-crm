@@ -712,3 +712,12 @@ replacing it; one outside the limit returns an empty page. Super admins and repo
 New 7th parameter `meeting?: { at: Date; note?: string }` — with `status === "meeting_scheduled"` it adds the meeting reminder
 (for the lead's owner, else the performer) and appends the meeting time to the history line. `getUserLeadStats` also returns
 `meeting_scheduled` and `wrong_number`.
+
+---
+
+## The sales CRM tag on every enrolment (2026-10-03)
+
+#### `StudentService.buildHandoverPayload(studentId)` — `src/services/studentService.ts`
+- Now also sends `crm: "remote"` — which sales CRM sold it ("Remote CRM"). Finance stores it on the enrolment and shows it as a tag, and passes it on to the LMS and Tetra Commission, which show the same tag.
+- Not the `source`: the Remote CRM began as a copy of Delta's and also sends `"crm"` there, and the source is part of finance's idempotency key, so it cannot change for enrolments already sent.
+- Test: `scripts/closing-fields-check.ts` / `scripts/enrolment-close-e2e.sh` check it is sent.

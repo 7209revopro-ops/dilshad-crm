@@ -158,6 +158,8 @@ let withBonusId = "";
 
   const payload = await svc.buildHandoverPayload(withBonusId) as Record<string, any>;
   check("Case 1 — finance is told the bonus, in minor units", payload?.bonus?.given === true && payload?.bonus?.amountMinor === 25_000, JSON.stringify(payload?.bonus));
+  check("Case 1 — and which sales CRM sold it: the Remote CRM, under the source it always had",
+    payload?.crm === "remote" && payload?.source === "crm", JSON.stringify({ crm: payload?.crm, source: payload?.source }));
   check("...and the balance, exactly the fee less what was paid", payload?.balanceMinor === 50_000 && payload?.course?.amountMinor - payload?.declaredPaidMinor === payload?.balanceMinor,
     `balance=${payload?.balanceMinor} fee=${payload?.course?.amountMinor} paid=${payload?.declaredPaidMinor}`);
 }

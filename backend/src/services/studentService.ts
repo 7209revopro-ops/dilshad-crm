@@ -165,6 +165,12 @@ export class StudentService {
     return {
       externalId: String(student._id),
       source: "crm",
+      // Which sales CRM sold it, shown as a tag in finance, the LMS and
+      // Tetra Commission. Not the source: this CRM began as a copy of Delta's
+      // and sends the same "crm", which is part of finance's idempotency key,
+      // so it cannot change for enrolments already sent. Keep "remote" here
+      // when code is copied across from Delta's CRM.
+      crm: "remote",
       customer: {
         name: student.name,
         email: student.email ?? "",
