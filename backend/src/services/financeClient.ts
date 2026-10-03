@@ -156,6 +156,13 @@ export interface EnrolmentStatus {
   totalMinor: number;
   amountPaidMinor: number;
   balanceMinor: number;
+  /**
+   * Once approved, what the Delta LMS made of the student — and who looks after
+   * them in Tetra Commission (code, CS, CS team). Passed on to My Enrolments as
+   * finance gives it; absent from a finance before it said.
+   */
+  lms?: { state: string; detail?: string; courses: string[] } | null;
+  commission?: { state: string; detail?: string; code?: string; cs?: string; team?: string; live?: boolean } | null;
 }
 
 /**

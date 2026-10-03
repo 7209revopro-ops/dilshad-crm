@@ -38,6 +38,28 @@ export interface InvoiceState {
   totalMinor: number;
   amountPaidMinor: number;
   balanceMinor: number;
+  /** Once approved, what the Delta LMS made of the student. Null before; absent from a finance that did not say. */
+  lms?: EnrolmentLms | null;
+  /** …and who looks after them in Tetra Commission: their code, CS and CS team. */
+  commission?: EnrolmentCommission | null;
+}
+
+/** Whether the LMS took the student — a new account or theirs — and on which courses, or why not yet. */
+export interface EnrolmentLms {
+  state: "created" | "existing" | "waiting" | "unmapped" | "failed";
+  detail?: string;
+  courses: string[];
+}
+
+/** Whether they went on to Tetra Commission, and who looks after them there (asked of it live unless `live` is false). */
+export interface EnrolmentCommission {
+  state: "sent" | "waiting" | "skipped" | "failed" | "not_sent";
+  detail?: string;
+  code?: string;
+  /** Their CS; "" while they wait in Delta Open Students. */
+  cs?: string;
+  team?: string;
+  live?: boolean;
 }
 
 export interface Enrolment extends Student {

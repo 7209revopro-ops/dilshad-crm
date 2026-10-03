@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { fmtFull } from "@/lib/currency";
 import { useMyEnrolments, useRequestInvoice, type Enrolment } from "@/hooks/useEnrolments";
+import { AfterApproval } from "@/components/students/AfterApproval";
 import type { Course } from "@/types/course";
 
 /**
@@ -257,6 +258,9 @@ function EnrolmentRow({ enrolment: e, onGenerate, generating }: {
               </p>
             </div>
           )}
+
+          {/* Once approved: the LMS account, and their CS and CS team in Tetra Commission */}
+          <AfterApproval lms={inv?.lms} commission={inv?.commission} />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
