@@ -202,6 +202,8 @@ export type CommissionRole = "sales" | "tl" | "sm";
 
 /**
  * Where a sale's commission stands.
+ *  progress  its five steps aren't all done yet (finance, LMS, CS, onboarded,
+ *            MT5 bonus) — `reason` says which it waits on
  *  counted   its lines are final: who earns what, as approved
  *  waiting   approved, but who earns it is not settled yet (a team with no
  *            leader or two, a closer in no team, no Sales Manager set) —
@@ -209,7 +211,7 @@ export type CommissionRole = "sales" | "tl" | "sm";
  *  excluded  closed under a login excluded from commission; nobody earns it
  *  reversed  finance voided the invoice; it no longer counts
  */
-export type CommissionSaleState = "counted" | "waiting" | "excluded" | "reversed";
+export type CommissionSaleState = "progress" | "counted" | "waiting" | "excluded" | "reversed";
 
 export interface ICommissionLine {
   role: CommissionRole;
@@ -234,8 +236,10 @@ export interface ICommissionSale extends Document {
   /** When it was sold — the enrolment date; `month` is its month in UAE time. */
   saleDate: Date;
   month: string;
-  approvedAt: Date;
-  /** The plan row as it was at approval — what the lines are paid from. */
+  approvedAt?: Date;
+  /** When its five steps were all done and who earns what was decided. */
+  stepsDoneAt?: Date;
+  /** The plan row as it was when decided — what the lines are paid from. */
   plan: { sales: number; tl: number; sm: number; creditUsd: number };
   state: CommissionSaleState;
   /** Why it is waiting, excluded or reversed. */

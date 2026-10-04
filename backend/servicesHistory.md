@@ -771,3 +771,16 @@ on the lead is marked done. `getUserLeadStats` also returns `meeting_done`.
 
 #### `pollFinanceOutcomes` — `src/services/financeHandoverWorker.ts`
 - Stamps `approvedAt` on the move to approved (or not_required); commission counts from it, so approvals from before it existed are never paid on
+
+---
+
+## Five steps (2026-10-04)
+
+#### `enrolmentSteps` — `src/services/enrolmentSteps.ts`
+- `stepsOf(financeStatus, handover)` → `[{ key, label, state, detail, at, by }]` — finance / lms / cs / onboarded / bonus; `allDone(steps)`; `waitingOn(steps)` → "Next step: …" / "Stopped at: …"
+
+#### `commissionService.trackSales(config, names)` — `src/services/commissionService.ts`
+- Sales closed since `COUNT_FROM` (1 Oct 2026 UAE), handed over, not decided: finance's status for each; not all done → `progress` with the step; all done → who earns what at today's plan (`stepsDoneAt`). Shared logins → excluded at once; a void → reversed; a sale counted before this rule without `stepsDoneAt` → followed again
+
+#### `StudentService.getEnrolment(id, viewer)` — `src/services/studentService.ts`
+- One enrolment with its steps and its commission as the viewer may see it; 403 for somebody else's without students:view

@@ -162,7 +162,16 @@ export interface EnrolmentStatus {
    * finance gives it; absent from a finance before it said.
    */
   lms?: { state: string; detail?: string; courses: string[] } | null;
-  commission?: { state: string; detail?: string; code?: string; cs?: string; team?: string; live?: boolean } | null;
+  commission?: {
+    state: string; detail?: string; code?: string; cs?: string; team?: string; live?: boolean;
+    /** Their welcome went (Tetra Commission onboarded them); absent when it couldn't be asked. */
+    onboarded?: { done: boolean; at?: string; by?: string };
+    /**
+     * The MT5 bonus promised at this close and its broker-admin approval: none (no bonus —
+     * nothing to approve), not_requested, pending, approved, rejected, or unknown.
+     */
+    bonus?: { state: string; amount?: number; currency?: string; at?: string; by?: string; reason?: string };
+  } | null;
 }
 
 /**

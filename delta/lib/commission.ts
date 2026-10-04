@@ -28,6 +28,7 @@ export const ROLE_LABEL: Record<CommissionRole, string> = {
 export const ROLE_SHORT: Record<CommissionRole, string> = { sales: "Sales", tl: "TL", sm: "SM" };
 
 export const STATE_LABEL: Record<CommissionSaleState, string> = {
+  progress: "In progress",
   counted: "Counted",
   waiting: "On hold",
   excluded: "Excluded",

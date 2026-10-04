@@ -56,7 +56,7 @@ export function CommissionPreview({ courseId, teamId, closerId }: CommissionPrev
               {who} {earns} {aed(data.closerTotal)} on this sale once it&apos;s settled
             </p>
             <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-400">
-              On hold after approval: {data.reason}.
+              Will wait after the steps: {data.reason}.
             </p>
           </div>
         </div>
@@ -72,7 +72,9 @@ export function CommissionPreview({ courseId, teamId, closerId }: CommissionPrev
                 {mine.map((l) => `${ROLE_LABEL[l.role]} ${aed(l.amount)}`).join(" + ")}
               </p>
             )}
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Counted once finance approves the enrolment.</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              Counted once every step is done: finance, LMS account, CS, onboarding and the MT5 bonus approval.
+            </p>
           </div>
         </div>
       )}

@@ -5,7 +5,8 @@ import { checkPermission } from "../middleware/permissions.js";
 import {
   createStudent, getStudents, getStudentById,
   getStudentByLeadId, updateStudent, deleteStudent,
-  getMyEnrolments, requestInvoice, getDailyClosings, uploadPaymentReceipt,
+  getMyEnrolments,
+  getEnrolment, requestInvoice, getDailyClosings, uploadPaymentReceipt,
 } from "../controllers/studentController.js";
 
 const router = Router();
@@ -32,6 +33,8 @@ router.get("/by-lead/:leadId", authenticate, checkPermission("students", "view")
 // Its own module, not "students" — seeing your own sales is not the same
 // grant as seeing the whole student list.
 router.get("/enrolments/mine", authenticate, checkPermission("enrolments", "view"), getMyEnrolments);
+// One enrolment, for its own page — before "/:id", which would take "enrolments" for a student id.
+router.get("/enrolments/:id", authenticate, checkPermission("enrolments", "view"), getEnrolment);
 // Before "/:id", or Express reads "closings" as a student id.
 router.get("/closings/daily", authenticate, checkPermission("closings", "view"), getDailyClosings);
 // Before "/:id", or Express reads "receipts" as a student id.

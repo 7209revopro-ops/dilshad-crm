@@ -45,7 +45,7 @@ export function EarningsTab() {
         </Select>
         {data && (
           <p className="text-xs text-muted-foreground">
-            {SCOPE_NOTE[data.scope]} · sales counted in the month they were closed, once finance approves them
+            {SCOPE_NOTE[data.scope]} · sales count in the month they were closed, once every step after the close is done
           </p>
         )}
       </div>
@@ -74,7 +74,7 @@ export function EarningsTab() {
           </div>
           <h3 className="mb-1 font-semibold text-foreground">No approved sales in {monthLabel(month)}</h3>
           <p className="max-w-sm px-4 text-sm text-muted-foreground">
-            A sale appears here once finance approves its enrolment. Pick another month, or check the plan for what each course pays.
+            A sale shows here from its close, and counts once every step is done — finance, LMS, CS, onboarding and the MT5 bonus. Pick another month, or check the plan for what each course pays.
           </p>
         </motion.div>
       ) : (
@@ -82,7 +82,7 @@ export function EarningsTab() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Stat icon={Coins} label="Commission" value={aed(data.totals.amount)} tone="primary" />
             <Stat icon={CheckCircle2} label="Sales counted" value={String(data.totals.counted)} tone="green" />
-            <Stat icon={Hourglass} label="On hold" value={String(data.totals.waiting)} tone="amber" />
+            <Stat icon={Hourglass} label="Not counted yet" value={String(data.totals.waiting + (data.totals.progress ?? 0))} tone="amber" />
             <Stat
               icon={Undo2}
               label="Reversed or excluded"
@@ -146,6 +146,7 @@ export function EarningsTab() {
 }
 
 const STATE_STYLE: Record<CommissionSaleState, { cls: string; icon: React.ElementType }> = {
+  progress: { cls: "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400", icon: Hourglass },
   counted: { cls: "border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-400", icon: CheckCircle2 },
   waiting: { cls: "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400", icon: Hourglass },
   excluded: { cls: "border-border/60 bg-muted/40 text-muted-foreground", icon: UserX },
@@ -183,7 +184,7 @@ function SaleRow({ sale: s, index }: { sale: CommissionSale; index: number }) {
           {s.state !== "counted" && s.reason && (
             <p className={cn(
               "mt-1.5 text-[11px]",
-              s.state === "waiting" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground",
+              s.state === "waiting" || s.state === "progress" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground",
             )}>
               {s.reason}
             </p>

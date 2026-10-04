@@ -622,3 +622,17 @@ Each feature documents:
 **Tests**: `scripts/commission-check.sh` — throwaway mongod, no `.env`, a stand-in for finance; rules, scoping, preview and the API's refusals (follows TL_RULE).
 
 **Change Log**: 2026-10-04 — added (the owner: commission per portal from the "Course Commission Plans" image; Sales Manager dilshad; excluded logins test (test@crm.com), super admin (superadmin@crm.com)).
+
+---
+
+## An enrolment's five steps — and commission only once they're done (2026-10-04)
+
+**Description**: After the close every enrolment shows five steps — Finance approved → LMS account → CS assigned (Tetra Commission) → Onboarded (welcome sent) → MT5 bonus approved by a broker admin (approved by itself when no bonus was promised) — green done, yellow waiting, red stopped, grey not known / not needed (a course Tetra Commission doesn't take skips 3–5). Commission counts only once all are done, for sales closed from 1 October 2026 (UAE), in the month closed; until then the sale is "progress", saying which step it waits on.
+
+**Routes**: `GET /api/v1/students/enrolments/mine` rows carry `steps`; `GET /api/v1/students/enrolments/:id` (`authenticate` → `checkPermission("enrolments", "view")`, before `/:id`) — the enrolment's own page: steps with who/when, and its commission (own lines; all for a Super Admin or the Sales Manager); the closer, or anyone with students:view.
+
+**Services**: `enrolmentSteps.stepsOf / allDone / waitingOn`; `commissionService.trackSales` (every two minutes) replaces recording at approval.
+
+**Tests**: `scripts/commission-check.sh` — the steps, one at a time; no bonus; not Forex; Tetra Commission silent; counted early under the old rule; void; finance down; the enrolment endpoint.
+
+**Change Log**: 2026-10-04 — added (the owner: "finance approved => lms created account => commission portal get cs => onboarded => mt5 bonus approved, then only they get the commission").

@@ -82,7 +82,8 @@ function HowItsPaid() {
       </p>
       <ul className="grid gap-1.5 text-xs text-muted-foreground sm:grid-cols-2">
         {RULES[TL_RULE].map((rule) => <li key={rule}>{rule}</li>)}
-        <li>Each sale keeps the amounts it was approved under. Changing them here only affects later approvals.</li>
+        <li>A sale counts once every step after the close is done — finance approved, LMS account, CS, onboarded, and the MT5 bonus approved by a broker admin (or no bonus promised).</li>
+        <li>Each sale keeps the amounts of the day it counted. Changing them here only affects sales that count later.</li>
       </ul>
     </motion.div>
   );

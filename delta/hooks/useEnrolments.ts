@@ -60,11 +60,42 @@ export interface EnrolmentCommission {
   cs?: string;
   team?: string;
   live?: boolean;
+  /** Their welcome went (Tetra Commission onboarded them); absent when it couldn't be asked. */
+  onboarded?: { done: boolean; at?: string; by?: string };
+  /** The MT5 bonus promised at the close, and its broker-admin approval ("none": no bonus, nothing to approve). */
+  bonus?: { state: "none" | "not_requested" | "pending" | "approved" | "rejected" | "unknown"; amount?: number; currency?: string; at?: string; by?: string; reason?: string };
+}
+
+/**
+ * One of an enrolment's five steps after the close — finance approved, LMS
+ * account, CS assigned, onboarded, MT5 bonus — as the server works them out.
+ * done green, waiting yellow, failed red; unknown and skipped grey.
+ */
+export interface EnrolmentStep {
+  key: "finance" | "lms" | "cs" | "onboarded" | "bonus";
+  label: string;
+  state: "done" | "waiting" | "failed" | "unknown" | "skipped";
+  detail?: string;
+  at?: string;
+  by?: string;
 }
 
 export interface Enrolment extends Student {
   handover: Handover | null;
   invoice: InvoiceState | null;
+  /** Its five steps; absent from a server from before they were shown. */
+  steps?: EnrolmentStep[];
+}
+
+/** One enrolment, for its own page: its steps, and its commission as the viewer may see it. */
+export interface EnrolmentDetail extends Enrolment {
+  commission: {
+    state: "progress" | "counted" | "waiting" | "excluded" | "reversed";
+    reason: string;
+    month: string;
+    countedAt: string | null;
+    lines: { role: "sales" | "tl" | "sm"; userName: string; amount: number; note: string }[];
+  } | null;
 }
 
 export interface EnrolmentCounts {
@@ -97,6 +128,18 @@ export const useMyEnrolments = (filters: { mine?: boolean; search?: string; stat
       return res.data;
     },
     // Approval happens in another system, on somebody else's schedule.
+    refetchInterval: 30_000,
+  });
+
+/** One enrolment, for its own page. */
+export const useEnrolment = (id: string) =>
+  useQuery({
+    queryKey: [...KEY, "one", id],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: EnrolmentDetail }>(`/students/enrolments/${id}`);
+      return res.data.data;
+    },
+    enabled: Boolean(id),
     refetchInterval: 30_000,
   });
 

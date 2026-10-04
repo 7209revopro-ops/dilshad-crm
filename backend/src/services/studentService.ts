@@ -633,10 +633,11 @@ export class StudentService {
 
     const ids = students.map((s) => String(s._id));
     const handovers = await FinanceHandover.find({ studentId: { $in: ids } })
-      .select("studentId status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt")
+      .select("studentId status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt")
       .lean();
     const byStudent = new Map(handovers.map((h) => [String(h.studentId), h]));
 
+    const { stepsOf } = await import("./enrolmentSteps.js");
     const statuses = await fetchEnrolmentStatuses(ids);
     const byExternal = new Map(statuses.map((s) => [s.externalId, s]));
 
@@ -663,6 +664,8 @@ export class StudentService {
           : null,
         // Absent rather than guessed when finance could not be reached.
         invoice: f ?? null,
+        // Its five steps — finance, LMS, CS, onboarded, MT5 bonus — green / yellow / red on the card.
+        steps: stepsOf(f ?? null, h ? { status: h.status, lastError: h.lastError, approvedAt: h.approvedAt } : null),
       };
     });
 
@@ -684,6 +687,68 @@ export class StudentService {
     };
 
     return { rows, counts, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+  }
+
+  /**
+   * One enrolment, for its own page: the student, what finance and the outbox
+   * know of it, its five steps with who did each and when, and its commission
+   * as the viewer may see it — their own lines; everyone's for a Super Admin
+   * or the Sales Manager.
+   *
+   * The closer sees their own; anyone who may view students sees any.
+   */
+  async getEnrolment(id: string, viewer: { userId: string; role?: { isSystemRole?: boolean; roleName?: string; permissions?: Record<string, { view?: boolean } | undefined> } }) {
+    const { FinanceHandover } = await import("../models/FinanceHandover.js");
+    const { CommissionSale } = await import("../models/CommissionSale.js");
+    const { fetchEnrolmentStatuses } = await import("./financeClient.js");
+    const { stepsOf } = await import("./enrolmentSteps.js");
+    const { isSuperAdmin, loadConfig } = await import("./commissionService.js");
+
+    if (!Types.ObjectId.isValid(id)) throw createError("Enrolment not found", 404);
+    const student = await Student.findById(id)
+      .populate("course", "name amount")
+      .populate("assignedTo", "name email")
+      .populate("team", "name")
+      .lean();
+    if (!student) throw createError("Enrolment not found", 404);
+    const closer = student.assignedTo && typeof student.assignedTo === "object" && "_id" in student.assignedTo
+      ? String((student.assignedTo as { _id: unknown })._id)
+      : String(student.assignedTo ?? "");
+    const all = isSuperAdmin(viewer.role as never) || viewer.role?.permissions?.students?.view === true;
+    if (closer !== viewer.userId && !all) throw createError("This enrolment isn't yours", 403);
+
+    const h = await FinanceHandover.findOne({ studentId: student._id })
+      .select("status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt")
+      .lean();
+    const [st] = await fetchEnrolmentStatuses([id]);
+    const sale = await CommissionSale.findOne({ student: student._id }).lean();
+    const config = sale ? await loadConfig() : null;
+    const everything = isSuperAdmin(viewer.role as never) || (config?.salesManager ? String(config.salesManager) === viewer.userId : false);
+
+    return {
+      ...student,
+      handover: h
+        ? {
+            status: h.status, attempts: h.attempts, lastError: h.lastError ?? "", invoiceId: h.invoiceId ?? "",
+            invoiceNumber: h.invoiceNumber ?? "", flags: h.flags ?? [], sentAt: h.sentAt ?? null,
+            approvalState: h.approvalState ?? "unknown", returnedReason: h.returnedReason ?? "", returnedAt: h.returnedAt ?? null,
+            approvedAt: h.approvedAt ?? null,
+          }
+        : null,
+      invoice: st ?? null,
+      steps: stepsOf(st ?? null, h ? { status: h.status, lastError: h.lastError, approvedAt: h.approvedAt } : null),
+      commission: sale
+        ? {
+            state: sale.state,
+            reason: sale.reason,
+            month: sale.month,
+            countedAt: sale.countedAt ?? null,
+            lines: (sale.lines ?? [])
+              .filter((l) => everything || String(l.user) === viewer.userId)
+              .map((l) => ({ role: l.role, userName: l.userName, amount: l.amount, note: l.note ?? "" })),
+          }
+        : null,
+    };
   }
 
   /**

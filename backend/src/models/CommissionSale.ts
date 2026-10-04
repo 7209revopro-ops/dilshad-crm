@@ -2,10 +2,12 @@ import mongoose, { Schema } from "mongoose";
 import type { ICommissionSale } from "../types/index.js";
 
 /**
- * One approved sale and the commission it earns.
+ * One sale and the commission it earns.
  *
- * Made once, when finance approves the enrolment, from the plan as it stands
- * then — so a plan changed in March leaves February's sales as they were paid.
+ * Followed from the close ("progress", saying which of its five steps it waits
+ * on — enrolmentSteps.ts) and decided once every step is done, from the plan as
+ * it stands then — so a plan changed in March leaves February's sales as they
+ * were paid.
  * One per student: the unique index is what makes recording it twice
  * impossible, whichever sweep gets there first.
  *
@@ -38,7 +40,10 @@ const commissionSaleSchema = new Schema<ICommissionSale>(
     teamName: { type: String, default: "" },
     saleDate: { type: Date, required: true },
     month: { type: String, required: true },
-    approvedAt: { type: Date, required: true },
+    /** When finance approved it, where this CRM saw it happen. */
+    approvedAt: { type: Date },
+    /** When its five steps were all done — and who earns what was decided. */
+    stepsDoneAt: { type: Date },
     plan: {
       sales: { type: Number, default: 0 },
       tl: { type: Number, default: 0 },
@@ -47,7 +52,7 @@ const commissionSaleSchema = new Schema<ICommissionSale>(
     },
     state: {
       type: String,
-      enum: ["counted", "waiting", "excluded", "reversed"],
+      enum: ["progress", "counted", "waiting", "excluded", "reversed"],
       required: true,
     },
     reason: { type: String, default: "" },

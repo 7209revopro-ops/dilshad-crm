@@ -1177,3 +1177,10 @@ A new close starts "Bonus given?" at yes with the course's bonus, marked "From t
 **PlanTab** (`components/commission/PlanTab.tsx`): how it's paid (per `TL_RULE`), a card per course (Super Admins edit and save each row), the Sales Manager, excluded logins, team leaders to fix, sales on hold.
 **CommissionPreview** (`components/commission/CommissionPreview.tsx`): props `courseId`, `teamId`, `closerId` — what the counsellor earns on the sale, in the closing dialog; never blocks a close.
 **Changed:** the course card shows its commission (Sales / TL / SM, MT5 credit) and links to the plan; `CreateStudentModal` shows `CommissionPreview` after the fee.
+
+---
+
+## EnrolmentSteps (added 2026-10-04, replaces AfterApproval)
+
+**File:** `components/students/EnrolmentSteps.tsx` — `EnrolmentStepsStrip({ steps })` (five pills at the foot of a My Enrolments card, details on hover, and "Next step: …" / "Every step done") and `EnrolmentStepsList({ steps })` (the enrolment page: each step with its detail, who and when). Green done, amber waiting, red stopped, grey unknown / not needed.
+**Page:** `app/(dashboard)/enrolments/[id]/page.tsx` — opened from the student's name on a card; the steps and the sale's commission.

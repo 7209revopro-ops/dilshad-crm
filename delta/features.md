@@ -796,3 +796,11 @@ and the browser's push setting is left alone.
 - **Close**: the enrolment dialog shows what the counsellor earns on the sale, once finance approves it
 - **Backend**: `/api/v1/commission/*`
 - **Why**: the owner's commission plan per course, per CRM, with what each person earned
+
+---
+
+## An enrolment's five steps (2026-10-04)
+
+- **My Enrolments**: every card ends with Finance approved → LMS account → CS assigned → Onboarded → MT5 bonus, green / yellow / red, and what it waits on
+- **Enrolment page**: `/enrolments/[id]` — the steps with who did each and when, and what the sale earns
+- **Commission**: a sale counts once every step is done; until then it's "In progress" with its next step

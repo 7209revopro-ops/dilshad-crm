@@ -72,6 +72,21 @@ export const getMyEnrolments = async (req: AuthenticatedRequest, res: Response, 
 };
 
 /**
+ * One enrolment, for its own page: its five steps with who did each and when,
+ * and its commission as the viewer may see it.
+ *
+ * GET /api/v1/students/enrolments/:id
+ */
+export const getEnrolment = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return sendError(res, "Not authenticated", 401);
+    const enrolment = await svc.getEnrolment(req.params.id, { userId, role: req.user?.role as never });
+    sendSuccess(res, "Enrolment fetched", enrolment);
+  } catch (err) { next(err); }
+};
+
+/**
  * The closing book, a day at a time.
  *
  * GET /api/students/closings/daily?dateFrom=&dateTo=&team=&user=&mine=true

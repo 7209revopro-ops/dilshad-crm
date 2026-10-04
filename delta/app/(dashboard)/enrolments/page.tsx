@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { fmtFull } from "@/lib/currency";
 import { useMyEnrolments, useRequestInvoice, type Enrolment } from "@/hooks/useEnrolments";
-import { AfterApproval } from "@/components/students/AfterApproval";
+import { EnrolmentStepsStrip } from "@/components/students/EnrolmentSteps";
 import type { Course } from "@/types/course";
 
 /**
@@ -216,7 +216,8 @@ function EnrolmentRow({ enrolment: e, onGenerate, generating }: {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-sm">{e.name}</span>
+            {/* Its own page: the five steps, with who did each and when */}
+            <Link href={`/enrolments/${e._id}`} className="font-semibold text-sm hover:text-primary hover:underline">{e.name}</Link>
             <span className="text-[10px] text-muted-foreground">{e.enrollmentNumber}</span>
             <ApprovalBadge enrolment={e} />
           </div>
@@ -259,8 +260,6 @@ function EnrolmentRow({ enrolment: e, onGenerate, generating }: {
             </div>
           )}
 
-          {/* Once approved: the LMS account, and their CS and CS team in Tetra Commission */}
-          <AfterApproval lms={inv?.lms} commission={inv?.commission} />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -298,6 +297,9 @@ function EnrolmentRow({ enrolment: e, onGenerate, generating }: {
           )}
         </div>
       </div>
+
+      {/* Finance approved → LMS account → CS → onboarded → MT5 bonus: commission counts once all are green */}
+      <EnrolmentStepsStrip steps={e.steps} />
     </motion.div>
   );
 }

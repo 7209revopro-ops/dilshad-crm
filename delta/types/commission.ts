@@ -9,7 +9,8 @@ export interface CoursePlan {
 
 export type CommissionRole = "sales" | "tl" | "sm";
 
-export type CommissionSaleState = "counted" | "waiting" | "excluded" | "reversed";
+/** progress: its five steps (finance, LMS, CS, onboarded, MT5 bonus) aren't all done yet. */
+export type CommissionSaleState = "progress" | "counted" | "waiting" | "excluded" | "reversed";
 
 export interface CommissionPerson {
   _id: string;
@@ -90,7 +91,7 @@ export interface CommissionEarnings {
   tlRule?: "zero_if_sm" | "always" | "never";
   people: { _id: string; name: string; sales: Tally; tl: Tally; sm: Tally; total: number }[];
   sales: CommissionSale[];
-  totals: { amount: number; counted: number; waiting: number; excluded: number; reversed: number };
+  totals: { amount: number; counted: number; waiting: number; excluded: number; reversed: number; progress?: number };
 }
 
 export interface CommissionPreview {
