@@ -13,8 +13,9 @@ database; pushed 2026-10-04. Saving it on the live site needs the API deployed.
 
 Before that: 2026-10-04: courses map to a finance product and **several LMS courses**, like Draw's (Courses → Map; the handover sends
 them all; bundles go unmapped in finance so both open). 27/27 API checks + UI on a scratch database; pushed 2026-10-04.
-Then the owner runs `root/outputs/remote-crm-courses/remote-crm-courses.ts --write --expect 6` (after the API deploy):
-Draw's 4 active courses created mapped, LMS set on Delta Wave Theory and Market Breakout Theory.
+The owner ran `root/outputs/remote-crm-courses/remote-crm-courses.ts --write --expect 6` on 2026-10-04: Draw's 4 active
+courses created mapped, LMS set on Delta Wave Theory and Market Breakout Theory (6 courses, all mapped; the undo record is in
+`root/backups/remote-crm-courses/`).
 
 Before that: 2026-10-01: new statuses **Wrong Number** and **Meeting Scheduled** — the latter asks for the meeting time and gives the
 lead's owner a reminder then; 33/33 API checks, the reminder firing end to end, and UI checks on a scratch database;
@@ -37,7 +38,7 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   rotate the credentials the owner knows about, and give Remote CRM its own database user and its own `SHEETS_API_KEY`
   (`openssl rand -hex 32`).
 - **P0 — Deploy the backend.** Besides the four phases, it now carries an access fix (2026-10-01) that only takes effect once the
-  API server runs it.
+  API server runs it. Until then, a Course 2 (MBT + DWT) sale opens MBT only (the old code sends one LMS course).
 - **P1 — Backend not deployed with the four phases.** The web app (Vercel, auto-deploys from `main`) has the new pages; the API
   server still runs the older code, so they can't load until it is updated (pull, `bun install`, restart).
 - **P1 — Timed split loses its log and notice (pre-existing).** `splitScheduler` passes `"system"` as the performer; the daily split
@@ -90,6 +91,6 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   today" also moves Pending Response, Not Connected, MIA and Repeated leads. Needs the backend deployed for the new counts.
 - 2026-10-01 — New leads need a source (form + server); super admin "Assign to" button on the Leads list.
 - 2026-10-01 — Statuses Wrong Number and Meeting Scheduled (meeting time → reminder for the lead's owner); Tailwind scans `lib/`.
-- 2026-10-04 — Courses map to a finance product and several LMS courses (like Draw); a script (run by the owner) copies Draw's
-  courses in.
+- 2026-10-04 — Courses map to a finance product and several LMS courses (like Draw); Draw's 4 active courses copied in by
+  script (run by the owner).
 - 2026-10-04 — Status Meeting Done (closes the lead's open meeting reminder).
