@@ -730,3 +730,16 @@ routes and still take rows without a source.
    `… to "meeting_scheduled" — meeting on 3 Oct 2026 at 16:00 (Dubai)`. Moving a meeting = editing its reminder.
 4. **Reports** count Meeting Scheduled with Follow-up ("in follow-up" / `followup` groups); the overview, user/team rankings,
    timeline, team Report and team PDF list both statuses. Redistribute today leaves Meeting Scheduled with its owner.
+
+## Courses → finance product + several LMS courses (2026-10-04)
+
+**Files**: `models/Course.ts`, `services/courseService.ts`, `controllers/courseController.ts`, `routes/courseRoutes.ts`,
+`services/lmsClient.ts`, `services/studentService.ts` — the same as Draw's (draw crm 3acfa10).
+
+1. A course has `lmsCourseSlugs` — every LMS course a student gets for it, in order (a bundle like "MBT + DWT" has two);
+   `lmsCourseSlug` stays the first, for anything that reads one.
+2. Each enrolment handed to finance carries them. At approval finance opens, per invoice line, the **product's own LMS
+   courses when it has any**, else the courses the CRM sent for that line. So a bundle billed against the plain MBT product
+   opens MBT only — bundles are left with no finance product (as Draw's are) until finance has a product that opens both.
+3. The Map dialog warns when a finance product is chosen for a course with more than one LMS course (it can't read the
+   product's own LMS list — finance's catalogue endpoint returns name, sku, price and type only).

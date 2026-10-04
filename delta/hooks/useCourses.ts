@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 import api from "@/lib/axios";
 import type { ApiResponse } from "@/types";
-import type { Course, CourseFilters } from "@/types/course";
+import type { Course, CourseFilters, LmsCourse } from "@/types/course";
 
 const COURSES_KEY = ["courses"] as const;
 
@@ -115,12 +115,41 @@ export interface FinanceItem {
  * Returns an empty list when the integration is switched off, so the screen can
  * say so plainly instead of showing an error.
  */
-export const useFinanceItems = () =>
+export const useFinanceItems = (enabled = true) =>
   useQuery({
     queryKey: ["finance-items"],
     queryFn: async () => {
       const response = await api.get<ApiResponse<FinanceItem[]>>("/courses/finance-items");
       return response.data.data ?? [];
     },
+    enabled,
     staleTime: 5 * 60_000,
   });
+
+/** The LMS's published courses, for mapping a course onto the one(s) it opens. */
+export const useLmsCourses = (enabled = true) =>
+  useQuery({
+    queryKey: ["lms-courses"],
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<LmsCourse[]>>("/courses/lms-courses");
+      return response.data.data ?? [];
+    },
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+
+/** Save where a course maps: its finance product ("" to unmap) and its LMS courses, in order ([] to unmap). */
+export const useMapCourse = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, financeItemId, lmsCourseSlugs }: { id: string; financeItemId: string; lmsCourseSlugs: string[] }) => {
+      const response = await api.put<ApiResponse<Course>>(`/courses/${id}`, { financeItemId, lmsCourseSlugs });
+      return response.data.data!;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: COURSES_KEY });
+      toast.success("Mapping saved");
+    },
+    onError: (error: unknown) => toast.error(errMsg(error, "Failed to save the mapping")),
+  });
+};

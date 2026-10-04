@@ -8,6 +8,18 @@ const courseService = new CourseService();
 
 // ─── Validation Schemas ───────────────────────────────────────────────────────
 
+/**
+ * Every LMS course a course opens, in order ([] unmaps it) — two for a bundle.
+ * Slugs as the LMS writes them: lowercase letters, digits and hyphens.
+ */
+const lmsCourseSlugsSchema = z
+  .array(z.string().trim().regex(/^[a-z0-9][a-z0-9-]{0,199}$/, "Not an LMS course slug"))
+  .max(10, "At most 10 LMS courses")
+  .optional();
+
+/** The finance catalogue item it bills against: a 24-character id, or "" to unmap. */
+const financeItemIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Not a finance item id").or(z.literal("")).optional();
+
 const createCourseSchema = z.object({
   name: z.string().min(1, "Course name is required").max(150),
   description: z.string().max(1000).optional(),
@@ -15,6 +27,8 @@ const createCourseSchema = z.object({
   /** The SAC code this course is billed under, for GST invoices. */
   hsnSac: z.string().max(20).optional(),
   status: z.enum(["active", "inactive"]).optional(),
+  financeItemId: financeItemIdSchema,
+  lmsCourseSlugs: lmsCourseSlugsSchema,
 });
 
 const updateCourseSchema = z.object({
@@ -25,7 +39,8 @@ const updateCourseSchema = z.object({
    * than on a route of its own because it is a property of the course, and a
    * second endpoint would be a second thing to keep permissioned.
    */
-  financeItemId: z.string().regex(/^[a-f\d]{24}$/i).or(z.literal("")).optional(),
+  financeItemId: financeItemIdSchema,
+  lmsCourseSlugs: lmsCourseSlugsSchema,
   name: z.string().min(1).max(150).optional(),
   description: z.string().max(1000).optional().nullable(),
   amount: z.number().min(0).optional(),
@@ -142,6 +157,24 @@ export const getFinanceItems = async (
       return;
     }
     sendSuccess(res, "Finance catalogue retrieved", await listFinanceItems());
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * The LMS's published courses, for mapping a course onto the one(s) it opens.
+ * Read live from the LMS's public course list, so what is offered is what
+ * exists there now.
+ */
+export const getLmsCourses = async (
+  _req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { listLmsCourses } = await import("../services/lmsClient.js");
+    sendSuccess(res, "LMS courses retrieved", await listLmsCourses());
   } catch (err) {
     next(err);
   }

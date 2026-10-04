@@ -169,8 +169,10 @@ export interface ICourse extends Document {
   financeItemId?: string | null;
   /** The SAC code this course is billed under, for GST invoices. */
   hsnSac?: string;
-  /** Which course this is in the LMS. Blank means not mapped. */
+  /** Which course this is in the LMS — the first of `lmsCourseSlugs`. Blank means not mapped. */
   lmsCourseSlug?: string;
+  /** Every LMS course it opens, in order (a bundle opens more than one). */
+  lmsCourseSlugs?: string[];
   status: "active" | "inactive";
   createdAt: Date;
   updatedAt: Date;

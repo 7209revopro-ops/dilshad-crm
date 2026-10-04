@@ -1145,3 +1145,7 @@
 - Profile and user pages — "Meeting Scheduled" and "Wrong Number" stat cards.
 - `lib/animations.ts` — `overlayVariants`, `modalVariants`.
 - `tailwind.config.ts` — scans `lib/` too.
+
+### Change log — 2026-10-04 (course mapping, like Draw)
+- `MapCourseDialog` (new, `components/courses/`) replaces `MapToFinanceDialog`: finance product + LMS course(s) ticked in order (numbered when more than one; "Opens: A + B"), same-name suggestions offered, never applied; an amber warning when a product is chosen for a course with two or more LMS courses (finance would open the product's own courses instead).
+- Courses page — each card shows "Mapped / Not mapped to finance" and "LMS: N course(s) / LMS not mapped"; both chips and the link button open the dialog.

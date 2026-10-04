@@ -1,6 +1,6 @@
 # PROJECT STATUS — Remote CRM
 
-_Last updated: 2026-10-01_
+_Last updated: 2026-10-04_
 
 ## Project summary
 Remote CRM (repo `7209revopro-ops/dilshad-crm`) is a copy of the Delta sales CRM, renamed, with a purple theme, the Delta "d"
@@ -8,7 +8,12 @@ mark and a redesigned login. Backend: Bun + Express + Mongoose on **port 7868** 
 Frontend: Next.js 14 in `delta/` (dev 3001, start 3007). Database: MongoDB `dilshad_crm` (connection in `backend/.env`).
 
 ## Last working item
-2026-10-01: new statuses **Wrong Number** and **Meeting Scheduled** — the latter asks for the meeting time and gives the
+2026-10-04: courses map to a finance product and **several LMS courses**, like Draw's (Courses → Map; the handover sends
+them all; bundles go unmapped in finance so both open). 27/27 API checks + UI on a scratch database; pushed 2026-10-04.
+Then the owner runs `root/outputs/remote-crm-courses/remote-crm-courses.ts --write --expect 6` (after the API deploy):
+Draw's 4 active courses created mapped, LMS set on Delta Wave Theory and Market Breakout Theory.
+
+Before that: 2026-10-01: new statuses **Wrong Number** and **Meeting Scheduled** — the latter asks for the meeting time and gives the
 lead's owner a reminder then; 33/33 API checks, the reminder firing end to end, and UI checks on a scratch database;
 pushed 2026-10-01. Until the API is deployed, the new statuses fail to save on the live web app.
 
@@ -64,7 +69,7 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   schedulers on — set `RUN_SCHEDULERS=false`, or run with `bun --no-env-file` and `DOTENV_CONFIG_PATH=<missing file>` on a scratch DB.
 - The backend's `bun test` suite calls the running API — don't point it at a live one.
 
-## Health check (2026-10-01)
+## Health check (2026-10-04)
 - Backend `tsc`: only the 3 pre-existing errors. Frontend `tsc`: clean.
 
 ## Change log
@@ -82,3 +87,5 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   today" also moves Pending Response, Not Connected, MIA and Repeated leads. Needs the backend deployed for the new counts.
 - 2026-10-01 — New leads need a source (form + server); super admin "Assign to" button on the Leads list.
 - 2026-10-01 — Statuses Wrong Number and Meeting Scheduled (meeting time → reminder for the lead's owner); Tailwind scans `lib/`.
+- 2026-10-04 — Courses map to a finance product and several LMS courses (like Draw); a script (run by the owner) copies Draw's
+  courses in.

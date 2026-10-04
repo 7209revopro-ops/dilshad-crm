@@ -8,7 +8,7 @@ import {
   TrendingUp, Package, Loader2, Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MapToFinanceDialog } from "@/components/courses/MapToFinanceDialog";
+import { MapCourseDialog } from "@/components/courses/MapCourseDialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import { useCourses } from "@/hooks/useCourses";
 import { CourseDialog } from "@/components/courses/CourseDialog";
 import { DeleteCourseDialog } from "@/components/courses/DeleteCourseDialog";
 import type { Course } from "@/types/course";
+import { lmsCoursesOf } from "@/types/course";
 import { useCurrencyStore } from "@/lib/store/currencyStore";
 import { fmtCurrency } from "@/lib/currency";
 
@@ -59,6 +60,7 @@ interface CourseCardProps {
 }
 
 function CourseCard({ course, onEdit, onDelete, onMap, index }: CourseCardProps) {
+  const lmsCount = lmsCoursesOf(course).length;
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -102,20 +104,34 @@ function CourseCard({ course, onEdit, onDelete, onMap, index }: CourseCardProps)
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">Course fee</p>
 
-          {/* Whether an enrolment for this course lands on a real catalogue
-              item in finance or on a typed line. Shown rather than hidden in a
+          {/* Where it goes when sold: the finance product it bills against, and
+              the LMS course(s) the student gets. Shown rather than hidden in a
               dialog: an unmapped course is the thing worth noticing. */}
           <button
             type="button"
             onClick={() => onMap(course)}
-            className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
-              course.financeItemId
-                ? "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
-                : "border-border text-muted-foreground hover:bg-muted"
-            }`}
+            className="mt-2 flex flex-wrap gap-1.5 text-left"
+            title="Map to finance and the LMS"
           >
-            <Link2 className="h-3 w-3" />
-            {course.financeItemId ? "Mapped to finance" : "Not mapped to finance"}
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                course.financeItemId
+                  ? "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <Link2 className="h-3 w-3" />
+              {course.financeItemId ? "Mapped to finance" : "Not mapped to finance"}
+            </span>
+            <span
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                lmsCount
+                  ? "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {lmsCount ? `LMS: ${lmsCount} course${lmsCount === 1 ? "" : "s"}` : "LMS not mapped"}
+            </span>
           </button>
         </CardContent>
 
@@ -143,7 +159,7 @@ function CourseCard({ course, onEdit, onDelete, onMap, index }: CourseCardProps)
               size="icon"
               variant="ghost"
               className="h-7 w-7 text-muted-foreground hover:text-primary"
-              title="Map to a finance catalogue item"
+              title="Map to finance and the LMS"
               onClick={() => onMap(course)}
             >
               <Link2 className="h-3.5 w-3.5" />
@@ -442,7 +458,7 @@ function CoursesPageContent() {
         course={deleteCourse}
       />
 
-      <MapToFinanceDialog
+      <MapCourseDialog
         course={mappingCourse}
         open={Boolean(mappingCourse)}
         onClose={() => setMappingCourse(null)}

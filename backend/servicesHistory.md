@@ -721,3 +721,13 @@ New 7th parameter `meeting?: { at: Date; note?: string }` — with `status === "
 - Now also sends `crm: "remote"` — which sales CRM sold it ("Remote CRM"). Finance stores it on the enrolment and shows it as a tag, and passes it on to the LMS and Tetra Commission, which show the same tag.
 - Not the `source`: the Remote CRM began as a copy of Delta's and also sends `"crm"` there, and the source is part of finance's idempotency key, so it cannot change for enrolments already sent.
 - Test: `scripts/closing-fields-check.ts` / `scripts/enrolment-close-e2e.sh` check it is sent.
+
+## Courses → several LMS courses (changed 2026-10-04)
+
+- `courseService.createCourse` / `updateCourse` — take `financeItemId` ("" or null unmaps) and `lmsCourseSlugs` (trimmed, no
+  repeats, in order; [] unmaps) through `mappingFields()`; the first slug is also stored as `lmsCourseSlug`. A side the caller
+  did not mention is left as it is.
+- `lmsClient.listLmsCourses()` — the LMS's public course list (`GET /api/v1/courses?per_page=100`, no secret), from
+  `LMS_API_URL` or, unset, the Delta LMS's public address; `{ slug, title }` sorted by title; a 502 when it can't be read.
+- `studentService.buildHandoverPayload` — `course.lmsCourseSlugs` (all) and `course.lmsCourseSlug` (the first); a course
+  mapped the old way (one slug) sends that one.

@@ -161,6 +161,10 @@ export class StudentService {
 
     const course = student.course ? await Course.findById(student.course).lean() : null;
     const rep = student.assignedTo ? await User.findById(student.assignedTo).select("name email").lean() : null;
+    // Every LMS course it opens — the list where it was mapped as one (two for a
+    // bundle), the single slug from before otherwise.
+    const listed = (course?.lmsCourseSlugs ?? []).map((s) => s.trim()).filter(Boolean);
+    const lms = listed.length ? listed : course?.lmsCourseSlug?.trim() ? [course.lmsCourseSlug.trim()] : [];
 
     return {
       externalId: String(student._id),
@@ -181,9 +185,10 @@ export class StudentService {
         ...(course?.financeItemId ? { itemId: course.financeItemId } : {}),
         // The code this course is billed under, where somebody has set one.
         ...(course?.hsnSac?.trim() ? { hsnSac: course.hsnSac.trim() } : {}),
-        // Which course this is in the LMS, for finance to fall back on when
-        // the item it bills against has no mapping of its own.
-        ...(course?.lmsCourseSlug?.trim() ? { lmsCourseSlug: course.lmsCourseSlug.trim() } : {}),
+        // Which course(s) this is in the LMS, for finance to fall back on when
+        // the item it bills against has no LMS courses of its own — a bundle
+        // with no product opens all of them.
+        ...(lms.length ? { lmsCourseSlug: lms[0], lmsCourseSlugs: lms } : {}),
         // Minor units: finance counts in fils and paise, the CRM in whole
         // currency. Getting this wrong bills a client a hundredfold.
         amountMinor: Math.round((student.totalFee ?? 0) * 100),

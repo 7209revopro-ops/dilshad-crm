@@ -1403,3 +1403,13 @@ Copy the template at the top of this file and add under the correct module secti
 ## useUpdateLeadStatus — meeting (changed 2026-10-01)
 
 **File:** `hooks/useLeads.ts` · `PATCH /leads/:id/status` — also sends `meetingAt` (ISO) and `meetingNote`; `meetingAt` is required by the server for `meeting_scheduled`, which then creates the meeting reminder. `useBulkUpdateLeadStatus` never sends `meeting_scheduled` (the server refuses it in bulk).
+
+## Course mapping hooks (changed 2026-10-04)
+
+**File:** `hooks/useCourses.ts`
+| Hook | Key / endpoint | Notes |
+|------|----------------|-------|
+| `useFinanceItems(enabled = true)` | `["finance-items"]` · `GET /courses/finance-items` | now takes `enabled` (the dialog loads it only when open) |
+| `useLmsCourses(enabled = true)` | `["lms-courses"]` · `GET /courses/lms-courses` | `{ slug, title }[]`; 502 when the LMS can't be read |
+| `useMapCourse()` | `PUT /courses/:id` `{ financeItemId, lmsCourseSlugs }` | invalidates `["courses"]`; "Mapping saved" |
+**Types:** `types/course.ts` — `Course.lmsCourseSlug(s)`, `LmsCourse`, `lmsCoursesOf(course)`.

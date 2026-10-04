@@ -9,6 +9,7 @@ import {
   updateCourse,
   deleteCourse,
   getFinanceItems,
+  getLmsCourses,
 } from "../controllers/courseController.js";
 
 const router = Router();
@@ -21,6 +22,9 @@ router.get("/all", getAllCourses);
 // The finance catalogue, for the mapping screen. Behind the same permission as
 // editing a course, since that is what it is used to do.
 router.get("/finance-items", checkPermission("leads", "edit"), getFinanceItems);
+// The LMS's courses, for the same screen. Static, so before "/:id" — which
+// would otherwise take "lms-courses" for a course id.
+router.get("/lms-courses", checkPermission("leads", "edit"), getLmsCourses);
 
 // Paginated list
 router.get("/", getCourses);

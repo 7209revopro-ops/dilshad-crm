@@ -363,6 +363,10 @@ Each feature documents:
 
 **Change Log**:
 - Initial implementation
+- 2026-10-04 — Courses map to a finance product and **several LMS courses** (like Draw's): `GET /api/v1/courses/lms-courses`
+  (`authenticate`, `checkPermission("leads","edit")`, before `/:id`) lists the LMS's published courses; `POST` / `PUT
+  /api/v1/courses(/:id)` take `financeItemId` ("" unmaps) and `lmsCourseSlugs` (≤ 10, in order, [] unmaps; the first is kept
+  as `lmsCourseSlug`). The finance handover sends `lmsCourseSlug` + `lmsCourseSlugs`.
 
 ---
 

@@ -43,6 +43,14 @@ const courseSchema = new Schema<ICourse>(
      * is not a conflict.
      */
     lmsCourseSlug: { type: String, default: "", trim: true },
+    /**
+     * Every LMS course it opens, in order — two for a bundle like "MBT + DWT",
+     * which is one course to sell and two to study. `lmsCourseSlug` is the
+     * first of these, for anything that reads a single course. Set on the
+     * Courses page ("Map") and sent with every enrolment, so finance opens
+     * them all when the product it bills against has no LMS courses of its own.
+     */
+    lmsCourseSlugs: { type: [String], default: [] },
 
     /**
      * The SAC code this course is sold under.
