@@ -1430,3 +1430,19 @@ Copy the template at the top of this file and add under the correct module secti
 | `useUpdateCourse()` (existing) | `PUT /api/v1/courses/:id` | Same |
 
 **Types:** `types/course.ts` — `Course.bonusAmount?` (missing on a course from before = none).
+
+---
+
+## Commission hooks (added 2026-10-04)
+
+**File:** `hooks/useCommission.ts`
+
+| Hook | Query key | Endpoint | Notes |
+|------|-----------|----------|-------|
+| `useCommissionPlan()` | `["commission", "plan"]` | `GET /api/v1/commission/plan` | Courses with their plan rows, Sales Manager, excluded logins, teams, sales on hold (Super Admins) |
+| `useCommissionEarnings(month)` | `["commission", "earnings", month]` | `GET /api/v1/commission/earnings?month=` | Scoped by the server: own / team / all |
+| `useCommissionPreview({ course, team, closer })` | `["commission", "preview", …]` | `GET /api/v1/commission/preview` | For the closing dialog; off without a course |
+| `useUpdateCoursePlan()` | invalidates `["commission"]`, `["courses"]` | `PUT /api/v1/commission/plan/:courseId` | Super Admin |
+| `useUpdateCommissionSettings()` | invalidates `["commission"]` | `PUT /api/v1/commission/settings` | Super Admin |
+
+**Types:** `types/commission.ts`; `Course.commission` in `types/course.ts`. **Helpers:** `lib/commission.ts` (AED/USD formatting, UAE months, `TL_RULE` — must match the backend's).

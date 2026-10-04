@@ -756,3 +756,18 @@ on the lead is marked done. `getUserLeadStats` also returns `meeting_done`.
 #### `LeadService` — `src/services/leadService.ts`
 - The lead reads (`buildPopulatedQuery`, `getLeads`) populate `bonusAmount` on the lead's course, so the close starts from it
 - Test: `scripts/course-bonus-e2e.sh`.
+
+---
+
+## Commission (2026-10-04)
+
+#### `commissionService` — `src/services/commissionService.ts`
+- `TL_RULE` — how this CRM pays a team's leader ("zero_if_sm" Sales CRM, "always" Remote, "never" Draw); the one line that differs between the three CRMs
+- `resolveSale({ closer, saleTeam, plan }, config)` — who earns what under the rules; writes nothing
+- `recordApprovedSales` / `settlePendingSales` / `reverseVoidedSales` — one sale per approval (insert-only, unique per student), held sales looked at again, voided invoices reversed (last 120 days, every 10 minutes)
+- `sweepCommission()` — the three, run by the finance worker every minute inside `RUN_SCHEDULERS`; never throws
+- `CommissionService.getPlan(viewer)` / `updateCoursePlan` / `updateSettings` / `getEarnings(viewer, month)` / `preview({ course, team, closer })`
+- Test: `scripts/commission-check.sh`.
+
+#### `pollFinanceOutcomes` — `src/services/financeHandoverWorker.ts`
+- Stamps `approvedAt` on the move to approved (or not_required); commission counts from it, so approvals from before it existed are never paid on

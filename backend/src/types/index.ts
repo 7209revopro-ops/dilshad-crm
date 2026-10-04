@@ -179,7 +179,81 @@ export interface ICourse extends Document {
   lmsCourseSlug?: string;
   /** Every LMS course it opens, in order (a bundle opens more than one). */
   lmsCourseSlugs?: string[];
+  /** What selling it earns (AED per approved sale) — set on the Commission plan. */
+  commission?: ICourseCommission;
   status: "active" | "inactive";
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ─── Commission ───────────────────────────────────────────────────────────────
+/** One course's row of the commission plan: AED per approved sale, by role. */
+export interface ICourseCommission {
+  sales: number;
+  tl: number;
+  sm: number;
+  /** The MT5 credit (USD) the course comes with — shown beside the plan, earns nobody anything. */
+  creditUsd: number;
+  updatedAt?: Date;
+  updatedBy?: Types.ObjectId;
+}
+
+export type CommissionRole = "sales" | "tl" | "sm";
+
+/**
+ * Where a sale's commission stands.
+ *  counted   its lines are final: who earns what, as approved
+ *  waiting   approved, but who earns it is not settled yet (a team with no
+ *            leader or two, a closer in no team, no Sales Manager set) —
+ *            settled by itself once that is fixed
+ *  excluded  closed under a login excluded from commission; nobody earns it
+ *  reversed  finance voided the invoice; it no longer counts
+ */
+export type CommissionSaleState = "counted" | "waiting" | "excluded" | "reversed";
+
+export interface ICommissionLine {
+  role: CommissionRole;
+  user: Types.ObjectId;
+  userName: string;
+  amount: number;
+  note?: string;
+}
+
+export interface ICommissionSale extends Document {
+  _id: Types.ObjectId;
+  student: Types.ObjectId;
+  studentName: string;
+  enrollmentNumber?: string;
+  invoiceNumber?: string;
+  course: Types.ObjectId | null;
+  courseName: string;
+  closer: Types.ObjectId | null;
+  closerName: string;
+  team: Types.ObjectId | null;
+  teamName: string;
+  /** When it was sold — the enrolment date; `month` is its month in UAE time. */
+  saleDate: Date;
+  month: string;
+  approvedAt: Date;
+  /** The plan row as it was at approval — what the lines are paid from. */
+  plan: { sales: number; tl: number; sm: number; creditUsd: number };
+  state: CommissionSaleState;
+  /** Why it is waiting, excluded or reversed. */
+  reason: string;
+  lines: ICommissionLine[];
+  countedAt?: Date;
+  reversedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ICommissionSettings extends Document {
+  key: string;
+  /** The one Sales Manager: earns the SM amount on every sale. */
+  salesManager: Types.ObjectId | null;
+  /** Shared logins whose sales earn nobody commission. */
+  excludedUsers: Types.ObjectId[];
+  updatedBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -610,3 +610,9 @@ Reporter, a role with `users.view`, or a leader of a team that person is in; eve
 admin (401 when ended, expired, mismatched, or the admin is no longer an active super admin), sets `req.user.impersonatedBy`, and
 refuses anything but GET/HEAD/OPTIONS with 403 "View only…". `authenticateViewAsExit` is the same without that refusal — only the
 stop route uses it. Ordinary tokens take exactly the old path.
+
+---
+
+## Commission routes (2026-10-04)
+
+Not a permission module: `authenticate` only, like Mentors — a module would start every role but Super Admin with no access to their own pay. The service narrows what each person sees (own / team / all). Changing the plan or its settings is `requireSuperAdmin` (in `commissionController`): `role.isSystemRole && roleName === "Super Admin"`, else 403.

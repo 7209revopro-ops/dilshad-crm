@@ -21,6 +21,7 @@ import settingsRoutes from "./settingsRoutes.js";
 import inactiveLeadRoutes from "./inactiveLeadRoutes.js";
 import activityRoutes from "./activityRoutes.js";
 import meetingRoutes from "./meetingRoutes.js";
+import commissionRoutes from "./commissionRoutes.js";
 
 const router = Router();
 
@@ -44,6 +45,8 @@ router.use("/calls",         callRoutes);
 router.use("/sheet-sources", sheetSourceRoutes);
 // The mentor calendar this CRM reads from the Delta LMS — see mentorRoutes.
 router.use("/mentors", mentorRoutes);
+// Sales commission: the plan per course, and what each approved sale earns.
+router.use("/commission", commissionRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/settings", settingsRoutes);
 // The super admin's Inactive leads page — see inactiveLeadRoutes.

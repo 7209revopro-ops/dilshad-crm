@@ -65,6 +65,19 @@ const financeHandoverSchema = new Schema(
     returnedNotifiedAt: { type: Date },
     /** When finance was last asked. Keeps the poll off rows just looked at. */
     checkedAt: { type: Date },
+
+    /*
+     * When this CRM saw finance approve it, and when its commission was
+     * recorded.
+     *
+     * `approvedAt` is stamped on the move to approved (or not_required) and is
+     * what commission counts from: enrolments approved before commission
+     * existed have none, so they are never paid on retroactively.
+     * `commissionAt` marks the sale recorded, so the sweep looks at each
+     * approval once.
+     */
+    approvedAt: { type: Date },
+    commissionAt: { type: Date },
   },
   { timestamps: true },
 );

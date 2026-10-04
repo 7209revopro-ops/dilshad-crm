@@ -1,3 +1,5 @@
+import type { CoursePlan } from "@/types/commission";
+
 export interface Course {
   /** The Delta Finance catalogue item this course is, once mapped. */
   financeItemId?: string | null;
@@ -13,6 +15,8 @@ export interface Course {
   bonusAmount?: number;
   /** The SAC code this course is billed under, for GST invoices. */
   hsnSac?: string;
+  /** What selling it earns (AED per approved sale) — set on the Commission plan. */
+  commission?: CoursePlan;
   status: "active" | "inactive";
   createdAt: string;
   updatedAt: string;

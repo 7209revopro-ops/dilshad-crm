@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen, Plus, Search, X, Edit2, Trash2,
   DollarSign, ChevronLeft, ChevronRight, BookMarked,
-  TrendingUp, Package, Loader2, Link2,
+  TrendingUp, Package, Loader2, Link2, Coins,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MapCourseDialog } from "@/components/courses/MapCourseDialog";
@@ -22,6 +22,8 @@ import { DeleteCourseDialog } from "@/components/courses/DeleteCourseDialog";
 import type { Course } from "@/types/course";
 import { lmsCoursesOf } from "@/types/course";
 import { useCurrencyStore } from "@/lib/store/currencyStore";
+import Link from "next/link";
+import { TL_PAID, usd } from "@/lib/commission";
 import { fmtCurrency } from "@/lib/currency";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -139,6 +141,10 @@ function CourseCard({ course, onEdit, onDelete, onMap, index }: CourseCardProps)
               {lmsCount ? `LMS: ${lmsCount} course${lmsCount === 1 ? "" : "s"}` : "LMS not mapped"}
             </span>
           </button>
+
+          {/* What selling it pays, from the Commission plan — where it is
+              set, by a Super Admin. A course with no plan earns nothing. */}
+          <CourseCommission course={course} />
         </CardContent>
 
         <CardFooter className="pt-3 border-t border-border/50 flex items-center justify-between gap-2">
@@ -182,6 +188,41 @@ function CourseCard({ course, onEdit, onDelete, onMap, index }: CourseCardProps)
         </CardFooter>
       </Card>
     </motion.div>
+  );
+}
+
+// ─── Commission strip ─────────────────────────────────────────────────────────
+
+function CourseCommission({ course }: { course: Course }) {
+  const c = course.commission;
+  const paid = c ? c.sales + (TL_PAID ? c.tl : 0) + c.sm : 0;
+  return (
+    <Link
+      href="/commission"
+      className="mt-3 block rounded-lg border border-border/50 bg-muted/20 px-2.5 py-2 transition-colors hover:border-primary/30"
+      title="Open the commission plan"
+    >
+      <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <Coins className="h-3 w-3" /> Commission{paid > 0 ? " · AED" : ""}
+      </p>
+      {paid > 0 && c ? (
+        <div className={`mt-1 grid gap-1 text-center ${TL_PAID ? "grid-cols-3" : "grid-cols-2"}`}>
+          {([["Sales", c.sales], ...(TL_PAID ? [["TL", c.tl] as const] : []), ["SM", c.sm]] as const).map(([label, value]) => (
+            <div key={label}>
+              <p className="whitespace-nowrap text-xs font-semibold tabular-nums text-foreground">
+                {value.toLocaleString("en-AE")}
+              </p>
+              <p className="text-[10px] text-muted-foreground">{label}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-0.5 text-[11px] text-muted-foreground">No commission set</p>
+      )}
+      {c?.creditUsd ? (
+        <p className="mt-1 text-[10px] text-muted-foreground">Comes with {usd(c.creditUsd)} MT5 credit</p>
+      ) : null}
+    </Link>
   );
 }
 

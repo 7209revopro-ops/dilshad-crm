@@ -16,6 +16,7 @@ import { fmtFull } from "@/lib/currency";
 import { useCreateStudent, useUpdateStudent, uploadReceipt } from "@/hooks/useStudents";
 import { useAllCourses } from "@/hooks/useCourses";
 import { useAddPayment } from "@/hooks/usePayments";
+import { CommissionPreview } from "@/components/commission/CommissionPreview";
 import type { Lead } from "@/types/lead";
 import type { Course } from "@/types/course";
 import type { FeeStatus, Student, StoredReceipt } from "@/types/student";
@@ -267,6 +268,13 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
       : lead.assignedTo
     : null;
 
+  // Whose sale it is, for the commission it earns: the enrolment's own team
+  // and counsellor once it has them, the lead's before.
+  const idOf = (v: unknown) =>
+    v ? (typeof v === "object" ? (v as { _id: string })._id : String(v)) : null;
+  const saleTeamId = idOf(existingStudent?.team) ?? idOf(lead.team);
+  const closerId = idOf(existingStudent?.assignedTo) ?? idOf(lead.assignedTo);
+
   return (
     <AnimatePresence>
       {open && (
@@ -468,6 +476,9 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                   </div>
                 </div>
               </motion.div>
+
+              {/* What this sale earns the counsellor, by the commission plan. */}
+              <CommissionPreview courseId={pickedCourse?._id} teamId={saleTeamId} closerId={closerId} />
 
               {/* Editable fields */}
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="space-y-3">

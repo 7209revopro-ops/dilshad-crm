@@ -69,6 +69,25 @@ const courseSchema = new Schema<ICourse>(
      * produces a valid invoice.
      */
     hsnSac: { type: String, default: "", trim: true },
+
+    /**
+     * What selling this course earns, in AED per approved sale: the closer
+     * (Sales Staff), the leader of their team (TL) and the Sales Manager (SM).
+     * `creditUsd` is the MT5 credit the course comes with, shown beside it.
+     *
+     * Set on the Commission page's plan by a Super Admin, never through the
+     * course form — the course form is open to whoever edits courses, and what
+     * people are paid is not theirs to set. A sale keeps the amounts it was
+     * approved under, so changing them here never rewrites a past month.
+     */
+    commission: {
+      sales: { type: Number, min: 0, default: 0 },
+      tl: { type: Number, min: 0, default: 0 },
+      sm: { type: Number, min: 0, default: 0 },
+      creditUsd: { type: Number, min: 0, default: 0 },
+      updatedAt: { type: Date },
+      updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    },
     status: {
       type: String,
       enum: ["active", "inactive"],

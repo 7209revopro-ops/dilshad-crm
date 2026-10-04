@@ -28,6 +28,7 @@ import {
   TimerOff,
   Activity,
   CalendarClock,
+  Coins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/lib/store/uiStore";
@@ -63,6 +64,10 @@ export const navItems: { href: string; label: string; icon: React.ElementType; p
   { href: "/users",     label: "Users",              icon: Users,           permModule: "users"     },
   { href: "/closings", label: "Daily Closings",     icon: CalendarCheck,   permModule: "closings"  },
   { href: "/enrolments",label: "My Enrolments",      icon: Receipt,         permModule: "enrolments" },
+  /* No permModule — everyone sees their own pay; the server narrows each
+     person to their own, their team's, or everyone's. Only a Super Admin
+     changes the plan, and that is checked on the server too. */
+  { href: "/commission",label: "Commission",         icon: Coins,           permModule: null        },
   /* No permModule — booking an hour with a mentor is work the people doing
      the work do, not something to gate behind a module first. Same rule the
      Root portal already holds for this same screen. */

@@ -1,6 +1,8 @@
 import { FinanceHandover } from "../models/FinanceHandover.js";
 import { Student } from "../models/Student.js";
 import { financeConfigured, sendEnrolment, fetchEnrolmentStatuses } from "./financeClient.js";
+import { sweepCommission } from "./commissionService.js";
+import { env } from "../config/env.js";
 
 /**
  * Delivers queued enrolments to Delta Finance.
@@ -131,6 +133,11 @@ export async function pollFinanceOutcomes(): Promise<void> {
     row.set("returnedReason", st.returnedReason ?? "");
     if (st.invoiceNumber) row.set("invoiceNumber", st.invoiceNumber);
 
+    // The moment it was approved, for commission. Rows already approved never
+    // come back to this poll, so only approvals seen from now on get one.
+    const settled = st.approval === "approved" || st.approval === "not_required";
+    if (settled && !row.get("approvedAt")) row.set("approvedAt", new Date());
+
     /*
      * A new send-back. Stamped only on the transition, so that correcting an
      * enrolment and having it sent back a second time is a second event with
@@ -225,8 +232,12 @@ export function startFinanceHandoverWorker(): void {
   // Not on the first tick: give the process a moment to finish starting.
   setInterval(() => {
     void drainNow();
-    void pollFinanceOutcomes().catch((err) =>
-      console.error("[finance] outcome sweep failed", err),
-    );
+    // Commission after the outcomes, so an approval seen this minute is
+    // recorded this minute rather than the next. Inside the RUN_SCHEDULERS
+    // gate, unlike the handover: a local copy pointed at real data must not
+    // write people's pay with code that is not deployed.
+    void pollFinanceOutcomes()
+      .catch((err) => console.error("[finance] outcome sweep failed", err))
+      .then(() => (env.RUN_SCHEDULERS ? sweepCommission() : undefined));
   }, INTERVAL_MS);
 }
