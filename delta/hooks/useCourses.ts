@@ -57,7 +57,7 @@ export const useCourse = (id: string) => {
 export const useCreateCourse = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name: string; description?: string; amount: number; status?: string }) => {
+    mutationFn: async (data: { name: string; description?: string; amount: number; bonusAmount?: number; status?: string }) => {
       const response = await api.post<ApiResponse<Course>>("/courses", data);
       return response.data.data!;
     },
@@ -72,7 +72,7 @@ export const useCreateCourse = () => {
 export const useUpdateCourse = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<{ name: string; description: string; amount: number; status: string; financeItemId: string }> }) => {
+    mutationFn: async ({ id, data }: { id: string; data: Partial<{ name: string; description: string; amount: number; bonusAmount: number; status: string; financeItemId: string }> }) => {
       const response = await api.put<ApiResponse<Course>>(`/courses/${id}`, data);
       return response.data.data!;
     },

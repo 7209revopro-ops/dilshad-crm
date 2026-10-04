@@ -594,3 +594,17 @@ Each feature documents:
 
 **Change Log**:
 - 1.0.0 — Initial build. No screen lists past sessions yet (they are in the `impersonations` collection).
+
+---
+
+## 23. A course's bonus (2026-10-04)
+
+**Description**: Each course can carry the bonus a client gets with it (`bonusAmount`, in the course's currency; 0 for none), set when the course is created or edited on the Courses page. A new close starts from it — "Bonus given?" answered yes with the course's bonus — and the seller can change it, or say no, for a sale that differs. An enrolment being edited keeps what it has. The same in all three sales CRMs (Delta, Remote, Draw).
+
+**Routes**: `POST /api/v1/courses` and `PUT /api/v1/courses/:id` accept `bonusAmount` (a number ≥ 0); every course read returns it, and the lead reads (`GET /api/v1/leads`, `GET /api/v1/leads/:id`) now populate it on the lead's course.
+
+**Model**: `Course.bonusAmount: number` (default 0; a course from before reads as none).
+
+**Tests**: `scripts/course-bonus-e2e.sh` — throwaway mongod, no `.env`; the four cases.
+
+**Change Log**: 2026-10-04 — added (the owner: "bonus adding option in the course create and edit").

@@ -770,3 +770,9 @@ Team PDF: "Mtg Set" / "Mtg Done" columns, member-table headers at 6pt so fourtee
 5. A target deactivated mid-session answers 401 while viewing (the app goes back to the admin) instead of the usual 403.
 6. **The app** keeps the admin's own tokens aside (`crm-own-auth`) and returns to them on Back, at zero, on any 401, and on Logout
    (which ends the session and records the sign-out under the admin).
+
+---
+
+## A course's bonus — where a close starts (2026-10-04)
+
+A course says what bonus comes with it (`Course.bonusAmount`, the course's currency, 0 for none), set on the Courses page. It is a starting point, never a rule: a new close answers "Bonus given?" yes with the course's bonus, and the seller changes the amount or says no for a sale that differs. Choosing another course moves it along until the seller answers it themselves; an enrolment being edited is never changed by it. What is stored and sent to finance is still the close's own `hasBonus` / `bonusAmount` — outside the fee and the balance, as before. End-to-end test: `backend/scripts/course-bonus-e2e.sh`.

@@ -133,13 +133,24 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
    * promised. Beside the money, never in it: the balance above is the fee less
    * what was paid, whatever the bonus. An enrolment from before this was asked
    * starts unanswered, and can be answered here.
+   *
+   * A new close starts from the bonus its course comes with (set on the
+   * Courses page): yes, with that amount, until the seller answers otherwise.
+   * An enrolment being edited keeps what it has.
    */
+  const courseBonus = editing ? 0 : knownCourse?.bonusAmount ?? 0;
   const [bonusChoice, setBonusChoice] = useState<"" | "yes" | "no">(
-    existingStudent?.hasBonus === true ? "yes" : existingStudent?.hasBonus === false ? "no" : "",
+    existingStudent?.hasBonus === true ? "yes"
+    : existingStudent?.hasBonus === false ? "no"
+    : courseBonus > 0 ? "yes" : "",
   );
   const [bonusInput, setBonusInput] = useState(
-    existingStudent?.hasBonus ? String(existingStudent.bonusAmount || "") : "",
+    existingStudent?.hasBonus ? String(existingStudent.bonusAmount || "")
+    : courseBonus > 0 ? String(courseBonus) : "",
   );
+  const [bonusTouched, setBonusTouched] = useState(false);
+  /** The bonus shown is the course's own, not one the seller set. */
+  const bonusFromCourse = !editing && !bonusTouched && bonusChoice === "yes" && (pickedCourse?.bonusAmount ?? 0) > 0;
   const bonusAmount = Math.max(0, Number(bonusInput) || 0);
   const bonusAmountMissing = bonusChoice === "yes" && !(bonusAmount > 0);
   /** Only what was answered is sent: unanswered stays unanswered, not "no". */
@@ -410,7 +421,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                         <button
                           key={choice}
                           type="button"
-                          onClick={() => setBonusChoice(choice)}
+                          onClick={() => { setBonusChoice(choice); setBonusTouched(true); }}
                           className={cn(
                             "h-8 rounded-md border px-3 text-xs font-medium transition-colors",
                             bonusChoice === choice
@@ -431,7 +442,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                           >
                             <Input
                               type="number" min="0" step="0.01" value={bonusInput}
-                              onChange={(e) => setBonusInput(e.target.value)}
+                              onChange={(e) => { setBonusInput(e.target.value); setBonusTouched(true); }}
                               placeholder="Bonus amount" className="h-8 text-xs"
                               aria-label="Bonus amount"
                             />
@@ -439,6 +450,9 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                         )}
                       </AnimatePresence>
                     </div>
+                    {bonusFromCourse && (
+                      <p className="text-[10px] text-primary">From the course — change it if this sale differs.</p>
+                    )}
                     {/* Where the answer goes. After the close an edit stays in
                         the CRM: finance only takes a changed enrolment when it
                         has sent it back to be corrected. */}
@@ -475,6 +489,12 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                         // rather than leaving the old number under a new name.
                         const c = courses.find((x) => x._id === v);
                         if (c?.amount) setFeeInput(String(c.amount));
+                        // So does the bonus it comes with, until the seller has answered it.
+                        if (!editing && !bonusTouched) {
+                          const bonus = c?.bonusAmount ?? 0;
+                          setBonusChoice(bonus > 0 ? "yes" : "");
+                          setBonusInput(bonus > 0 ? String(bonus) : "");
+                        }
                       }}
                       disabled={coursesLoading}
                     >

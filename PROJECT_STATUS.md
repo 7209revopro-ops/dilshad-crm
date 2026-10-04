@@ -103,3 +103,5 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   script (run by the owner).
 - 2026-10-04 — Status Meeting Done (closes the lead's open meeting reminder).
 - 2026-10-04 — View as (impersonation) for super admins: 30 minutes, view only, each session on record.
+- 2026-10-04 — A course's bonus: set on the Courses page (Add / Edit), and a new close starts from it (`Course.bonusAmount`);
+  the same in Delta and Draw. Saving it on the live site needs the API deployed.

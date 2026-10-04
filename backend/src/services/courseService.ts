@@ -36,7 +36,7 @@ function mappingFields(mapping: CourseMapping): Record<string, unknown> {
 
 export class CourseService {
   // ── Create ──────────────────────────────────────────────────────────────────
-  async createCourse(data: { name: string; description?: string; amount: number; status?: string } & CourseMapping) {
+  async createCourse(data: { name: string; description?: string; amount: number; bonusAmount?: number; status?: string } & CourseMapping) {
     const { financeItemId, lmsCourseSlugs, ...rest } = data;
     const course = await Course.create({ ...rest, ...mappingFields({ financeItemId, lmsCourseSlugs }) });
     return course;
@@ -89,6 +89,7 @@ export class CourseService {
       name: string;
       description: string;
       amount: number;
+      bonusAmount: number;
       status: string;
     }> & CourseMapping,
   ) {

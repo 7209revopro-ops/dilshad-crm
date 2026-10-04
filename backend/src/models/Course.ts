@@ -20,6 +20,12 @@ const courseSchema = new Schema<ICourse>(
       required: [true, "Course amount is required"],
       min: [0, "Amount cannot be negative"],
     },
+    /**
+     * The bonus a client gets with this course, in the same currency as the
+     * amount; 0 when it comes with none. A new close starts from it — the
+     * seller still answers, and can change it for a sale that differs.
+     */
+    bonusAmount: { type: Number, min: [0, "Bonus cannot be negative"], default: 0 },
 
     /*
      * The catalogue item this course is in Delta Finance.

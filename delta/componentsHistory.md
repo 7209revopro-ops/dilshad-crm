@@ -1159,3 +1159,11 @@
 - `lib/impersonation.ts` (new) — `getViewAs`, `canViewAs`, `beginViewAs`, `endViewAs`, `leaveViewAsForSignOut`; localStorage `crm-view-as`, `crm-own-auth`.
 - Users list (row actions) and user page (next to Export PDF) — "View as" for super admins (`canViewAs`).
 - `lib/axios.ts` — a 401 while viewing goes back to the admin's account, not /login. `useLogout` ends the session and records the sign-out under the admin; `useActivityHeartbeat` sends nothing while viewing; `usePushNotification` won't subscribe or unsubscribe while viewing (a toast says so) and the bell's push prompt stays hidden.
+
+## CourseDialog (changed 2026-10-04)
+
+A Bonus field (the course's currency, 0 for none) beside the Amount on Add and Edit, with "A new close starts from it". The course card shows "· $X bonus" beside the fee.
+
+## CreateStudentModal (changed 2026-10-04)
+
+A new close starts "Bonus given?" at yes with the course's bonus, marked "From the course — change it if this sale differs"; choosing another course moves it until the seller answers or types an amount (`bonusTouched`). Editing an enrolment never takes it.

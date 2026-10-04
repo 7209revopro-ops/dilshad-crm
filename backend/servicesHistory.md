@@ -745,3 +745,14 @@ on the lead is marked done. `getUserLeadStats` also returns `meeting_done`.
 - `stop(sessionId)` — sets `endedAt` while still open; ending one already over is fine.
 - `checkImpersonation(decoded)` (`middleware/auth.ts`) — the session open, unexpired and matching; the admin active and a super
   admin; gives `req.user.impersonatedBy = { id, name, email, sessionId }`, or the refusal message.
+
+---
+
+## A course's bonus (2026-10-04)
+
+#### `CourseService.createCourse(data)` / `updateCourse(id, data)` — `src/services/courseService.ts`
+- Also take `bonusAmount` (validated in `courseController`: a number ≥ 0); stored on the course, 0 when not given
+
+#### `LeadService` — `src/services/leadService.ts`
+- The lead reads (`buildPopulatedQuery`, `getLeads`) populate `bonusAmount` on the lead's course, so the close starts from it
+- Test: `scripts/course-bonus-e2e.sh`.

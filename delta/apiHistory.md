@@ -1417,3 +1417,16 @@ Copy the template at the top of this file and add under the correct module secti
 ## useImpersonate — View as (added 2026-10-04)
 
 **File:** `hooks/useUsers.ts` · `POST /users/:id/impersonate` → `{ accessToken, expiresAt, user }` → `beginViewAs` (keeps the admin's tokens aside, signs in with the pass, reloads to /dashboard); errors toast the server's message. Ending: `endViewAs()` in `lib/impersonation.ts` (keepalive `POST /auth/impersonation/stop`, restores the admin, reloads to /users). No query key — the reloads clear the cache.
+
+---
+
+## A course's bonus (added 2026-10-04)
+
+**File:** `hooks/useCourses.ts`
+
+| Hook | Endpoint | Notes |
+|------|----------|-------|
+| `useCreateCourse()` (existing) | `POST /api/v1/courses` | Body may carry `bonusAmount` (≥ 0) |
+| `useUpdateCourse()` (existing) | `PUT /api/v1/courses/:id` | Same |
+
+**Types:** `types/course.ts` — `Course.bonusAmount?` (missing on a course from before = none).

@@ -20,10 +20,14 @@ const lmsCourseSlugsSchema = z
 /** The finance catalogue item it bills against: a 24-character id, or "" to unmap. */
 const financeItemIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Not a finance item id").or(z.literal("")).optional();
 
+/** The bonus a client gets with the course, in its amount's currency; 0 for none. */
+const bonusAmountSchema = z.number().min(0, "Bonus cannot be negative").optional();
+
 const createCourseSchema = z.object({
   name: z.string().min(1, "Course name is required").max(150),
   description: z.string().max(1000).optional(),
   amount: z.number().min(0, "Amount cannot be negative"),
+  bonusAmount: bonusAmountSchema,
   /** The SAC code this course is billed under, for GST invoices. */
   hsnSac: z.string().max(20).optional(),
   status: z.enum(["active", "inactive"]).optional(),
@@ -44,6 +48,7 @@ const updateCourseSchema = z.object({
   name: z.string().min(1).max(150).optional(),
   description: z.string().max(1000).optional().nullable(),
   amount: z.number().min(0).optional(),
+  bonusAmount: bonusAmountSchema,
   hsnSac: z.string().max(20).optional(),
   status: z.enum(["active", "inactive"]).optional(),
 });

@@ -169,6 +169,8 @@ export interface ICourse extends Document {
   name: string;
   description?: string;
   amount: number;
+  /** The bonus a client gets with it, in the amount's currency; 0 for none. A new close starts from it. */
+  bonusAmount?: number;
   /** The catalogue item this course is in Delta Finance, once mapped. */
   financeItemId?: string | null;
   /** The SAC code this course is billed under, for GST invoices. */

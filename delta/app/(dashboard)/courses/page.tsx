@@ -102,7 +102,13 @@ function CourseCard({ course, onEdit, onDelete, onMap, index }: CourseCardProps)
           <div className="flex items-center gap-1 text-lg font-bold text-foreground">
             {formatAmount(course.amount)}
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">Course fee</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Course fee
+            {/* The bonus that comes with it — what a new close starts from. */}
+            {(course.bonusAmount ?? 0) > 0 && (
+              <> · <span className="font-medium text-primary">{formatAmount(course.bonusAmount ?? 0)} bonus</span></>
+            )}
+          </p>
 
           {/* Where it goes when sold: the finance product it bills against, and
               the LMS course(s) the student gets. Shown rather than hidden in a

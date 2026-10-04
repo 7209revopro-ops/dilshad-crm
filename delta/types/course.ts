@@ -9,6 +9,8 @@ export interface Course {
   name: string;
   description?: string;
   amount: number;
+  /** The bonus a client gets with it, in the amount's currency; 0 (or missing, on one from before) for none. */
+  bonusAmount?: number;
   /** The SAC code this course is billed under, for GST invoices. */
   hsnSac?: string;
   status: "active" | "inactive";

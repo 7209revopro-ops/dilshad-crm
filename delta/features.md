@@ -778,3 +778,11 @@ and the browser's push setting is left alone.
 
 **Change Log**:
 - 1.0.0 — Initial build
+
+## A course's bonus (2026-10-04)
+
+- **Page**: `app/(dashboard)/courses/page.tsx` — the card says "Course fee · $500 bonus" when a course has one
+- **Dialog**: `components/courses/CourseDialog.tsx` — a Bonus field on Add and Edit (0 for none)
+- **Close**: `components/students/CreateStudentModal.tsx` — a new close starts "Bonus given?" at yes with the course's bonus ("From the course — change it if this sale differs"); choosing another course moves it until the seller answers it
+- **Backend**: `POST` / `PUT /api/v1/courses` with `bonusAmount`
+- **Why**: what a course comes with is set once, where the course is, rather than typed at every close
