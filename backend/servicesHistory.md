@@ -736,3 +736,12 @@ New 7th parameter `meeting?: { at: Date; note?: string }` — with `status === "
 
 `updateLeadStatus` and `bulkUpdateStatus`: with `status === "meeting_done"`, every open reminder titled "Meeting scheduled"
 on the lead is marked done. `getUserLeadStats` also returns `meeting_done`.
+
+## impersonationService — View as (added 2026-10-04)
+
+- `start(req, admin, targetId)` — checks the target (404 / 400 / 403 / 409), records the session (`Impersonation`: admin + email,
+  target + email, start, expiry = start + 30 min, IP, device) and signs the pass for that same second
+  (`signImpersonationToken(payload, iat)`); returns `{ accessToken, expiresAt, user }` (user as on sign-in: role + permissions).
+- `stop(sessionId)` — sets `endedAt` while still open; ending one already over is fine.
+- `checkImpersonation(decoded)` (`middleware/auth.ts`) — the session open, unexpired and matching; the admin active and a super
+  admin; gives `req.user.impersonatedBy = { id, name, email, sessionId }`, or the refusal message.

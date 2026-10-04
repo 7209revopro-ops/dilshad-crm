@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import api from "@/lib/axios";
 import { useAuthStore } from "@/lib/store/authStore";
+import { getViewAs } from "@/lib/impersonation";
 
 const BEAT_MS = 60_000;
 /** "Used the app": any of these in the last minute. A tab left open counts for nothing. */
@@ -18,6 +19,8 @@ export function useActivityHeartbeat() {
 
   useEffect(() => {
     if (!accessToken || typeof window === "undefined") return;
+    // A super admin viewing as someone must not count as that person's activity.
+    if (getViewAs()) return;
     let lastUse = Date.now(); // opening the app is using it
     let lastSent = 0;
 

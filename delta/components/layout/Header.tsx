@@ -20,6 +20,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { navItems } from "@/components/layout/Sidebar";
 import { CommandPalette } from "@/components/shared/CommandPalette";
+import { ImpersonationBanner } from "@/components/shared/ImpersonationBanner";
 
 export function Header() {
   const { user } = useAuthStore();
@@ -51,6 +52,9 @@ export function Header() {
       : "Dashboard");
 
   return (
+    <>
+    {/* While a super admin views the CRM as someone else — above the bar, outside the scrolling page. */}
+    <ImpersonationBanner />
     <header className="flex rounded-2xl scale-[.99] h-16 shrink-0 items-center justify-between border-b border-border/10  backdrop-blur-sm px-4 md:px-5">
       {/* ── Left: toggles + breadcrumb ── */}
       <div className="flex items-center gap-2">
@@ -135,5 +139,6 @@ export function Header() {
 
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
     </header>
+    </>
   );
 }

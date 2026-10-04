@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Plus, Search, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, X, ExternalLink } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, X, ExternalLink, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +11,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserDialog } from "@/components/users/UserDialog";
 import { DeleteUserDialog } from "@/components/users/DeleteUserDialog";
-import { useUsers } from "@/hooks/useUsers";
+import { useUsers, useImpersonate } from "@/hooks/useUsers";
 import { useRolesSimple } from "@/hooks/useRoles";
 import { useTeams } from "@/hooks/useTeams";
 import { useAuthStore } from "@/lib/store/authStore";
+import { canViewAs } from "@/lib/impersonation";
 import { formatDate, getInitials } from "@/lib/utils";
 import type { User } from "@/types";
 import Link from "next/link";
@@ -25,7 +26,8 @@ type SortOrder = "asc" | "desc";
 function UsersPageContent() {
   const sp = useSearchParams();
   const router = useRouter();
-  const { hasPermission } = useAuthStore();
+  const { hasPermission, user: me } = useAuthStore();
+  const impersonate = useImpersonate();
   const [search, setSearch] = useState(() => sp.get("q") ?? "");
   const [page, setPage] = useState(() => Number(sp.get("page") ?? "1"));
   const [status, setStatus] = useState<string>(() => sp.get("status") ?? "all");
@@ -324,6 +326,23 @@ function UsersPageContent() {
                                   <ExternalLink className="h-4 w-4" />
                                 </Button>
                               </Link>
+                              {canViewAs(me, user) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 md:opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-amber-600 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-400"
+                                  title={`View as ${user.name} — 30 minutes, view only`}
+                                  aria-label={`View as ${user.name}`}
+                                  disabled={impersonate.isPending}
+                                  onClick={() => impersonate.mutate(user._id)}
+                                >
+                                  {impersonate.isPending && impersonate.variables === user._id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Eye className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
                               {canEdit && (
                                 <Button
                                   variant="ghost"

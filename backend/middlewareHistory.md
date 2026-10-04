@@ -599,3 +599,14 @@ No module permission: booking time with colleagues is everyday work, like the me
 **`selfOrOverseer(param = "userId")`** (new, `middleware/permissions.ts`) — passes for the person themselves, a Super Admin or
 Reporter, a role with `users.view`, or a leader of a team that person is in; everyone else 403.
 
+### View as (2026-10-04)
+
+| Method | Route | Chain |
+|--------|-------|-------|
+| POST | `/api/v1/users/:id/impersonate` | `authenticate` → `requireSuperAdmin` → `startImpersonation` |
+| POST | `/api/v1/auth/impersonation/stop` | `authenticateViewAsExit` → `stopImpersonation` (400 with an ordinary sign-in) |
+
+`authenticate` also takes a "View as" pass (a token carrying `impersonation: { id, by }`): it checks the session record and the
+admin (401 when ended, expired, mismatched, or the admin is no longer an active super admin), sets `req.user.impersonatedBy`, and
+refuses anything but GET/HEAD/OPTIONS with 403 "View only…". `authenticateViewAsExit` is the same without that refusal — only the
+stop route uses it. Ordinary tokens take exactly the old path.

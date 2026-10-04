@@ -1413,3 +1413,7 @@ Copy the template at the top of this file and add under the correct module secti
 | `useLmsCourses(enabled = true)` | `["lms-courses"]` · `GET /courses/lms-courses` | `{ slug, title }[]`; 502 when the LMS can't be read |
 | `useMapCourse()` | `PUT /courses/:id` `{ financeItemId, lmsCourseSlugs }` | invalidates `["courses"]`; "Mapping saved" |
 **Types:** `types/course.ts` — `Course.lmsCourseSlug(s)`, `LmsCourse`, `lmsCoursesOf(course)`.
+
+## useImpersonate — View as (added 2026-10-04)
+
+**File:** `hooks/useUsers.ts` · `POST /users/:id/impersonate` → `{ accessToken, expiresAt, user }` → `beginViewAs` (keeps the admin's tokens aside, signs in with the pass, reloads to /dashboard); errors toast the server's message. Ending: `endViewAs()` in `lib/impersonation.ts` (keepalive `POST /auth/impersonation/stop`, restores the admin, reloads to /users). No query key — the reloads clear the cache.

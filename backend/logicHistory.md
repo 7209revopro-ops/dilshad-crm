@@ -751,3 +751,22 @@ routes and still take rows without a source.
 is reminded of a meeting that has happened; other reminders are left alone. Reports count it with follow-up / in progress
 (next to `meeting_scheduled`); Redistribute today leaves it with its owner; an old-leads upload's "meeting done" maps to it.
 Team PDF: "Mtg Set" / "Mtg Done" columns, member-table headers at 6pt so fourteen status columns stay on one line.
+
+## View as (impersonation) (2026-10-04)
+
+**Files**: `models/Impersonation.ts`, `services/impersonationService.ts`, `controllers/impersonationController.ts`, `middleware/auth.ts`,
+`utils/jwt.ts`, `routes/userRoutes.ts`, `routes/authRoutes.ts` — like the Root portal's "View as", with its gaps closed.
+
+1. **Who**: a super admin, for an active user who is neither themselves nor a super admin (404 unknown / 400 self / 403 super
+   admin / 409 deactivated).
+2. **The pass**: an access token for the target (`userId`, `email`, `roleId` — so their permissions) plus `impersonation: { id, by }`,
+   30 minutes (`IMPERSONATION_TTL_SECONDS`), signed with `JWT_SECRET`. No refresh token, and a refresh can't take it (other secret).
+3. **The session** is an `Impersonation` record made before the pass. `authenticate` accepts the pass only while the record is open
+   (`endedAt` null) and unexpired, names the same target and admin, and the admin is still active and still a super admin —
+   otherwise 401. `POST /auth/impersonation/stop` sets `endedAt`, so "Back to my account" ends the pass at once.
+4. **View only**: with a pass, `authenticate` refuses every method but GET/HEAD/OPTIONS with 403 "View only…" (leads, notes, status,
+   calls, notifications read/clear, push subscribe, heartbeat, logout, password, a nested View as) — bar the stop route
+   (`authenticateViewAsExit`). So nothing is done, logged or counted in the person's name.
+5. A target deactivated mid-session answers 401 while viewing (the app goes back to the admin) instead of the usual 403.
+6. **The app** keeps the admin's own tokens aside (`crm-own-auth`) and returns to them on Back, at zero, on any 401, and on Logout
+   (which ends the session and records the sign-out under the admin).

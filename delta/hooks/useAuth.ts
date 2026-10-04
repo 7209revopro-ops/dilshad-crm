@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "@/lib/toast";
 import api from "@/lib/axios";
 import { useAuthStore } from "@/lib/store/authStore";
+import { leaveViewAsForSignOut } from "@/lib/impersonation";
 import type { LoginFormValues } from "@/lib/validations/authSchema";
 import type { ApiResponse, LoginResponse } from "@/types";
 
@@ -41,9 +42,12 @@ export const useLogout = () => {
   const queryClient = useQueryClient();
 
   return () => {
+    // Signing out while viewing as someone ends that session, and the sign-out
+    // below is recorded under the admin (their own token), not the person viewed.
+    const ownToken = leaveViewAsForSignOut();
     // Put the sign-out on record while the token is still here. keepalive lets it
     // finish even as the page moves on; if it fails, signing out still happens.
-    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const token = ownToken ?? (typeof window !== "undefined" ? localStorage.getItem("accessToken") : null);
     if (token) {
       void fetch("/api/v1/auth/logout", {
         method: "POST",

@@ -1153,3 +1153,9 @@
 ### Change log — 2026-10-04 (Meeting Done)
 - `lib/statusConfig.ts` — `meeting_done` (indigo), after Meeting Scheduled: every status menu, filter, Kanban column, team Report column and badge picks it up. No dialog — it is set straight away.
 - Profile and user pages — a "Meeting Done" stat card.
+
+### Change log — 2026-10-04 (View as)
+- `ImpersonationBanner` (new, `components/shared/`) — the amber bar while viewing as someone: name, email (wider screens), "View only", m:ss left, "Back to my account"; goes back on its own at zero. Rendered by `Header` above the header bar, outside the scrolling page.
+- `lib/impersonation.ts` (new) — `getViewAs`, `canViewAs`, `beginViewAs`, `endViewAs`, `leaveViewAsForSignOut`; localStorage `crm-view-as`, `crm-own-auth`.
+- Users list (row actions) and user page (next to Export PDF) — "View as" for super admins (`canViewAs`).
+- `lib/axios.ts` — a 401 while viewing goes back to the admin's account, not /login. `useLogout` ends the session and records the sign-out under the admin; `useActivityHeartbeat` sends nothing while viewing; `usePushNotification` won't subscribe or unsubscribe while viewing (a toast says so) and the bell's push prompt stays hidden.

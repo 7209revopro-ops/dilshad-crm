@@ -765,3 +765,16 @@ Copy the template at the top and place it in the correct module section.
 
 **Change Log**:
 - 1.0.0 — Initial build
+
+## View as (2026-10-04)
+
+**What it does**: A super admin opens the CRM as one of their people — "View as" (eye icon) on a Users row or the user's page, for
+any active user who is not a super admin. For 30 minutes the CRM is exactly theirs (pages, leads, permissions), read only, under an
+amber bar: "Viewing as … · View only · 29:12 left · Back to my account". Back, the time running out or any sign-in error returns to
+the admin's own account (Users page); Logout ends it and signs the admin out. Not counted as the person's activity (no heartbeat),
+and the browser's push setting is left alone.
+
+**API**: `POST /users/:id/impersonate`, `POST /auth/impersonation/stop`.
+
+**Change Log**:
+- 1.0.0 — Initial build

@@ -8,7 +8,7 @@ import {
   FileText, Users, Clock, CheckCircle2, XCircle,
   TrendingUp, Search, Mail, Phone, Shield, Calendar,
   Activity, StickyNote, ExternalLink, PhoneMissed, CalendarClock, CalendarCheck, PhoneOff,
-  BookMarked, Sparkles, Star, Filter, X as XIcon,
+  BookMarked, Sparkles, Star, Filter, X as XIcon, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useUser } from "@/hooks/useUsers";
+import { useUser, useImpersonate } from "@/hooks/useUsers";
+import { useAuthStore } from "@/lib/store/authStore";
+import { canViewAs } from "@/lib/impersonation";
 import { useUserLeads, useUserLeadStats } from "@/hooks/useLeads";
 import { RevenueCard } from "@/components/leads/RevenueCard";
 import { formatDate, getInitials } from "@/lib/utils";
@@ -103,6 +105,8 @@ export default function UserDetailPage() {
   }
 
   const { data: user, isLoading: userLoading } = useUser(userId);
+  const me = useAuthStore((s) => s.user);
+  const impersonate = useImpersonate();
   const { data: statsData, isLoading: statsLoading } = useUserLeadStats(userId);
   const {
     data: leadsData,
@@ -352,6 +356,21 @@ export default function UserDetailPage() {
                   entityId={userId}
                   entityName={user.name}
                 />
+                {canViewAs(me, user) && (
+                  <motion.div whileTap={{ scale: 0.97 }}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 border-amber-500/40 text-amber-700 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-300"
+                      title={`View as ${user.name} — 30 minutes, view only`}
+                      disabled={impersonate.isPending}
+                      onClick={() => impersonate.mutate(user._id)}
+                    >
+                      {impersonate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                      View as
+                    </Button>
+                  </motion.div>
+                )}
               </div>
             </div>
 

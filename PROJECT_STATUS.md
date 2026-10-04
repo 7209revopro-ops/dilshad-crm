@@ -8,7 +8,13 @@ mark and a redesigned login. Backend: Bun + Express + Mongoose on **port 7868** 
 Frontend: Next.js 14 in `delta/` (dev 3001, start 3007). Database: MongoDB `dilshad_crm` (connection in `backend/.env`).
 
 ## Last working item
-2026-10-04: new status **Meeting Done** (plain; closes the lead's open meeting reminder); 24/24 API checks + UI on a scratch
+2026-10-04: **View as** — a super admin opens the CRM as any active user who isn't a super admin, for 30 minutes, view only (the
+server refuses every change; nothing counts as their activity), under an amber bar with "Back to my account"; each session is
+recorded and ending it ends the pass. 41/41 API checks + UI (list and user page, view-only toast, Back, a session ended on the
+server, the countdown, Logout while viewing, phone width) on a scratch database; pushed 2026-10-04. Needs the API deployed
+(until then the View as button shows an error).
+
+Before that: 2026-10-04: new status **Meeting Done** (plain; closes the lead's open meeting reminder); 24/24 API checks + UI on a scratch
 database; pushed 2026-10-04. Saving it on the live site needs the API deployed.
 
 Before that: 2026-10-04: courses map to a finance product and **several LMS courses**, like Draw's (Courses → Map; the handover sends
@@ -64,6 +70,8 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   (15 min) and a refresh token for 7 days. Server-side revocation would need a token blocklist.
 - **P2 — IPs behind a proxy.** The sign-in history reads the first `X-Forwarded-For` hop; make sure the production proxy sets it
   (and strips any the client sends), or every sign-in shows the proxy's address.
+- **P2 — A bad refresh token answers 500 (pre-existing).** `POST /auth/refresh-token` with an invalid or foreign token is refused
+  with 500, not 401 (the JWT error has no status); the app signs out either way.
 - **P2 — Connection string in the start-up log (pre-existing).** `connectDB` prints the database URI when it connects; remove that line.
 - **P2 — Pre-existing:** React hydration error from `DesktopSidebar` on every dashboard page; the dashboard "Unassigned Leads"
   count gets 400 (`assignedTo=unassigned`); 3 TypeScript errors in `User.ts`, `authService.ts`, `reportService.ts`.
@@ -94,3 +102,4 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
 - 2026-10-04 — Courses map to a finance product and several LMS courses (like Draw); Draw's 4 active courses copied in by
   script (run by the owner).
 - 2026-10-04 — Status Meeting Done (closes the lead's open meeting reminder).
+- 2026-10-04 — View as (impersonation) for super admins: 30 minutes, view only, each session on record.

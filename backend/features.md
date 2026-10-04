@@ -581,3 +581,16 @@ Each feature documents:
 
 **Change Log**:
 - 1.0.0 — Initial build. Mentors are invited by email; their LMS diary is not booked (that stays on the Mentors page).
+
+## 22. View as — a super admin sees the CRM as someone else (2026-10-04)
+
+**Description**: A super admin opens the CRM as any active user who is not a super admin, for 30 minutes, read only: every page answers exactly as it does for that person, every change is refused ("View only…"), and nothing counts as their activity (no heartbeat, sign-in or sign-out in their name). "Back to my account", the time running out, or the session ending on the server takes the admin back to their own account.
+
+**Routes**: see middlewareHistory.md → "View as (2026-10-04)".
+
+**Service Methods**: `impersonationService.start / stop`; `checkImpersonation` in `middleware/auth.ts`; `utils/jwt.signImpersonationToken`.
+
+**Models Used**: `Impersonation` (new — the session: admin, target, IP, device, start, expiry, end; kept a year); `User`, `Role`.
+
+**Change Log**:
+- 1.0.0 — Initial build. No screen lists past sessions yet (they are in the `impersonations` collection).

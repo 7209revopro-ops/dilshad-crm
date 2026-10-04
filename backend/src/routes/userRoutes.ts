@@ -10,8 +10,9 @@ import {
   deleteUser,
 } from "../controllers/userController.js";
 import { exportUserPdf } from "../controllers/exportController.js";
+import { startImpersonation } from "../controllers/impersonationController.js";
 import { authenticate } from "../middleware/auth.js";
-import { checkPermission, selfOrOverseer } from "../middleware/permissions.js";
+import { checkPermission, requireSuperAdmin, selfOrOverseer } from "../middleware/permissions.js";
 
 const router = Router();
 
@@ -35,5 +36,7 @@ router.put("/:id",     checkPermission("users", "edit"),   updateUser);
 router.delete("/:id",  checkPermission("users", "delete"), deleteUser);
 // Someone's performance PDF: their own, or someone who may see them — see selfOrOverseer.
 router.get("/:id/export-pdf", selfOrOverseer("id"), exportUserPdf);
+// "View as": the super admin sees the CRM as this user, read only, for 30 minutes.
+router.post("/:id/impersonate", requireSuperAdmin, startImpersonation);
 
 export default router;

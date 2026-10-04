@@ -1,4 +1,5 @@
 import axios from "axios";
+import { endViewAs, getViewAs } from "@/lib/impersonation";
 
 const API_URL = "/api/v1";
 
@@ -58,6 +59,13 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // A "View as" pass that has ended, run out or lost its admin has no refresh
+    // token: back to the admin's own account rather than the login page.
+    if (error.response?.status === 401 && getViewAs() && !isAuthAnswer(originalRequest?.url)) {
+      endViewAs({ tellServer: false });
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthAnswer(originalRequest?.url)) {
       if (isRefreshing) {

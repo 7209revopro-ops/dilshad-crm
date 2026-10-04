@@ -16,6 +16,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getSocket } from "@/lib/socket";
 import { useAuthStore } from "@/lib/store/authStore";
+import { getViewAs } from "@/lib/impersonation";
 import { usePushNotification } from "@/hooks/usePushNotification";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { toast } from "@/lib/toast";
@@ -274,7 +275,8 @@ export function NotificationBell() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const dismissed = sessionStorage.getItem("push-banner-dismissed");
-    if (!dismissed && permission === "default" && !isSubscribed) {
+    // Not while a super admin views as someone: this browser's push is the admin's.
+    if (!dismissed && permission === "default" && !isSubscribed && !getViewAs()) {
       const timer = setTimeout(() => setShowPermissionBanner(true), 3000);
       return () => clearTimeout(timer);
     }

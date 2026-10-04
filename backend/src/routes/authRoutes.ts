@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { login, refreshToken, getProfile, changePassword, ssoLogin, logout } from "../controllers/authController.js";
-import { authenticate } from "../middleware/auth.js";
+import { stopImpersonation } from "../controllers/impersonationController.js";
+import { authenticate, authenticateViewAsExit } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -13,5 +14,7 @@ router.post("/sso-login", ssoLogin); // Root ERP SSO
 router.get("/profile", authenticate, getProfile);
 router.put("/change-password", authenticate, changePassword);
 router.post("/logout", authenticate, logout);
+// "Back to my account" from View as — the one write a view-as pass may make.
+router.post("/impersonation/stop", authenticateViewAsExit, stopImpersonation);
 
 export default router;

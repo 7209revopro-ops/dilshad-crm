@@ -2,6 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "@/lib/axios";
+import { toast } from "@/lib/toast";
+import { getViewAs } from "@/lib/impersonation";
+
+/**
+ * This browser's push subscription belongs to whoever signed in on it — while
+ * a super admin views as someone, changing it would hand the admin's
+ * notifications to that person (or cut them off), so it is left alone.
+ */
+function pushLockedWhileViewingAs(): boolean {
+  if (!getViewAs()) return false;
+  toast.info("Push notifications can't be changed while viewing as someone");
+  return true;
+}
 
 // urlBase64ToUint8Array — converts VAPID public key to the format required by the browser
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -51,6 +64,7 @@ export function usePushNotification(): UsePushNotificationReturn {
   // ── Request permission + subscribe ────────────────────────────────────────
   const requestPermission = useCallback(async () => {
     if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
+    if (pushLockedWhileViewingAs()) return;
 
     setIsLoading(true);
     try {
@@ -94,6 +108,7 @@ export function usePushNotification(): UsePushNotificationReturn {
 
   // ── Unsubscribe ───────────────────────────────────────────────────────────
   const unsubscribe = useCallback(async () => {
+    if (pushLockedWhileViewingAs()) return;
     setIsLoading(true);
     try {
       const reg = swRef.current;

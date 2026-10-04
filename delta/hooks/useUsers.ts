@@ -2,6 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 import api from "@/lib/axios";
+import { beginViewAs, type ViewAsStart } from "@/lib/impersonation";
 import type { ApiResponse, User } from "@/types";
 import type { CreateUserFormValues, UpdateUserFormValues } from "@/lib/validations/userSchema";
 
@@ -63,6 +64,25 @@ export const useUpdateUser = () => {
       const msg =
         (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         "Failed to update user";
+      toast.error(msg);
+    },
+  });
+};
+
+/** "View as": the super admin signs in as this user for 30 minutes, read only (the page reloads). */
+export const useImpersonate = () => {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.post<ApiResponse<ViewAsStart>>(`/users/${id}/impersonate`);
+      return response.data.data!;
+    },
+    onSuccess: (data) => {
+      if (!beginViewAs(data)) toast.error("Sign in again, then try View as — your own sign-in couldn't be kept aside");
+    },
+    onError: (error: unknown) => {
+      const msg =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Could not open the CRM as them";
       toast.error(msg);
     },
   });
