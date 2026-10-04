@@ -7,7 +7,7 @@ import {
   ArrowLeft, Loader2, ChevronLeft, ChevronRight,
   FileText, Users, Clock, CheckCircle2, XCircle,
   TrendingUp, Search, Mail, Phone, Shield, Calendar,
-  Activity, StickyNote, ExternalLink, PhoneMissed, CalendarClock, PhoneOff,
+  Activity, StickyNote, ExternalLink, PhoneMissed, CalendarClock, CalendarCheck, PhoneOff,
   BookMarked, Sparkles, Star, Filter, X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -211,6 +211,16 @@ export default function UserDetailPage() {
       border: "border-teal-500/20",
       activeRing: "ring-teal-400/40",
       filterKey: "meeting_scheduled",
+    },
+    {
+      title: "Meeting Done",
+      value: stats?.meeting_done ?? 0,
+      icon: CalendarCheck,
+      color: "text-indigo-400",
+      bg: "bg-indigo-500/10",
+      border: "border-indigo-500/20",
+      activeRing: "ring-indigo-400/40",
+      filterKey: "meeting_done",
     },
     {
       title: "Pending Response",

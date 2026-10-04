@@ -193,7 +193,7 @@ const leadSchema = new Schema<ILead>(
     status: {
       type: String,
       // meeting_scheduled is set only through PATCH /leads/:id/status, which needs the meeting time and sets its reminder
-      enum: ["new", "assigned", "pending_response", "followup", "meeting_scheduled", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"],
+      enum: ["new", "assigned", "pending_response", "followup", "meeting_scheduled", "meeting_done", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"],
       default: "new",
     },
     lostReason: {

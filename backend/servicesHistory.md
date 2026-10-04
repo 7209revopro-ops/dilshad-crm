@@ -731,3 +731,8 @@ New 7th parameter `meeting?: { at: Date; note?: string }` — with `status === "
   `LMS_API_URL` or, unset, the Delta LMS's public address; `{ slug, title }` sorted by title; a 502 when it can't be read.
 - `studentService.buildHandoverPayload` — `course.lmsCourseSlugs` (all) and `course.lmsCourseSlug` (the first); a course
   mapped the old way (one slug) sends that one.
+
+## leadService — Meeting Done (changed 2026-10-04)
+
+`updateLeadStatus` and `bulkUpdateStatus`: with `status === "meeting_done"`, every open reminder titled "Meeting scheduled"
+on the lead is marked done. `getUserLeadStats` also returns `meeting_done`.

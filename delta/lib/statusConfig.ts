@@ -1,5 +1,5 @@
 export const LEAD_STATUSES = [
-  "new", "assigned", "pending_response", "followup", "meeting_scheduled",
+  "new", "assigned", "pending_response", "followup", "meeting_scheduled", "meeting_done",
   "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc",
 ] as const;
 
@@ -79,6 +79,18 @@ export const STATUS_META: Record<LeadStatus, StatusMeta> = {
     border:     "border-teal-500/25",
     dropZone:   "border-teal-500/50 bg-teal-500/5",
     badge:      "bg-teal-500/15 text-teal-400 border-teal-500/30",
+  },
+  meeting_done: {
+    label: "Meeting Done",
+    color:      "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
+    dot:        "bg-indigo-400",
+    bar:        "bg-indigo-500",
+    text:       "text-indigo-400",
+    chartColor: "#6366f1",
+    header:     "bg-indigo-500/15 text-indigo-400",
+    border:     "border-indigo-500/25",
+    dropZone:   "border-indigo-500/50 bg-indigo-500/5",
+    badge:      "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
   },
   closed: {
     label: "Closed",

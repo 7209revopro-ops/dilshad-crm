@@ -1149,3 +1149,7 @@
 ### Change log — 2026-10-04 (course mapping, like Draw)
 - `MapCourseDialog` (new, `components/courses/`) replaces `MapToFinanceDialog`: finance product + LMS course(s) ticked in order (numbered when more than one; "Opens: A + B"), same-name suggestions offered, never applied; an amber warning when a product is chosen for a course with two or more LMS courses (finance would open the product's own courses instead).
 - Courses page — each card shows "Mapped / Not mapped to finance" and "LMS: N course(s) / LMS not mapped"; both chips and the link button open the dialog.
+
+### Change log — 2026-10-04 (Meeting Done)
+- `lib/statusConfig.ts` — `meeting_done` (indigo), after Meeting Scheduled: every status menu, filter, Kanban column, team Report column and badge picks it up. No dialog — it is set straight away.
+- Profile and user pages — a "Meeting Done" stat card.

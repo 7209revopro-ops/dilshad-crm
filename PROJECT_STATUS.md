@@ -8,7 +8,10 @@ mark and a redesigned login. Backend: Bun + Express + Mongoose on **port 7868** 
 Frontend: Next.js 14 in `delta/` (dev 3001, start 3007). Database: MongoDB `dilshad_crm` (connection in `backend/.env`).
 
 ## Last working item
-2026-10-04: courses map to a finance product and **several LMS courses**, like Draw's (Courses → Map; the handover sends
+2026-10-04: new status **Meeting Done** (plain; closes the lead's open meeting reminder); 24/24 API checks + UI on a scratch
+database; pushed 2026-10-04. Saving it on the live site needs the API deployed.
+
+Before that: 2026-10-04: courses map to a finance product and **several LMS courses**, like Draw's (Courses → Map; the handover sends
 them all; bundles go unmapped in finance so both open). 27/27 API checks + UI on a scratch database; pushed 2026-10-04.
 Then the owner runs `root/outputs/remote-crm-courses/remote-crm-courses.ts --write --expect 6` (after the API deploy):
 Draw's 4 active courses created mapped, LMS set on Delta Wave Theory and Market Breakout Theory.
@@ -48,7 +51,7 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   read as UTC days, and the PDF dialog's period buttons use the browser's calendar. The team Report and team PDF are fixed.
 - **P2 — Team dashboard, Members tab and team bulk status on the old status list (pre-existing).** `teamService`
   counts Booking, RNR, WhatsApp… for the team dashboard, member stats and rankings, and the team page's bulk "Change Status"
-  offers them; Pending Response, Not Connected, Lost, MIA, Repeated and the two new statuses show 0 there.
+  offers them; Pending Response, Not Connected, Lost, MIA, Repeated, Wrong Number and the meeting statuses show 0 there.
 - **P2 — PDF exports (pre-existing).** Every PDF comes out with two extra pages (the footer is written below the page margin,
   which starts a new page), and "₹" and "→" don't render in the built-in font.
 - **P2 — Committed build junk.** 956 `CallRecorder/app/build` files, a root `.DS_Store` and `delta/public/swe-worker-*.js` are
@@ -89,3 +92,4 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
 - 2026-10-01 — Statuses Wrong Number and Meeting Scheduled (meeting time → reminder for the lead's owner); Tailwind scans `lib/`.
 - 2026-10-04 — Courses map to a finance product and several LMS courses (like Draw); a script (run by the owner) copies Draw's
   courses in.
+- 2026-10-04 — Status Meeting Done (closes the lead's open meeting reminder).

@@ -179,7 +179,7 @@ export interface ICourse extends Document {
 }
 
 // ─── Lead ──────────────────────────────────────────────────────────────────────
-export type LeadStatus = "new" | "assigned" | "pending_response" | "followup" | "meeting_scheduled" | "closed" | "lost" | "not_connected" | "wrong_number" | "mia" | "repeated" | "callback" | "cnc";
+export type LeadStatus = "new" | "assigned" | "pending_response" | "followup" | "meeting_scheduled" | "meeting_done" | "closed" | "lost" | "not_connected" | "wrong_number" | "mia" | "repeated" | "callback" | "cnc";
 
 export type InitialLeadResponse = "very_interested" | "not_interested" | "let_me_think";
 export type PrimaryConcern      = "risk" | "price" | "time" | "trust" | "exact_concern";
@@ -352,6 +352,7 @@ export interface LeadStats {
   pending_response: number;
   followup: number;
   meeting_scheduled: number;
+  meeting_done: number;
   closed: number;
   lost: number;
   not_connected: number;

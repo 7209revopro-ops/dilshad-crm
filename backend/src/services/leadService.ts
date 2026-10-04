@@ -816,6 +816,14 @@ export class LeadService {
       })} (Dubai)`;
     }
 
+    // ── Meeting done: its meeting reminder is closed, so it doesn't ring for a
+    // meeting that has already happened (one fired already is closed too).
+    if (status === "meeting_done") {
+      for (const r of lead.reminders as unknown as Array<{ title?: string; isDone?: boolean }>) {
+        if (r.title === "Meeting scheduled" && !r.isDone) r.isDone = true;
+      }
+    }
+
     if (status === "lost") {
       (lead as unknown as Record<string, unknown>).lostReason = lostReason ?? null;
       (lead as unknown as Record<string, unknown>).lostNotes  = lostNotes  ?? null;
@@ -1083,6 +1091,7 @@ export class LeadService {
       "not_connected",
       "meeting_scheduled",
       "wrong_number",
+      "meeting_done",
     ];
     const [total, ...statusCounts] = await Promise.all([
       Lead.countDocuments({ assignedTo: userId }),
@@ -1107,6 +1116,7 @@ export class LeadService {
       not_connected: statusCounts[10],
       meeting_scheduled: statusCounts[11],
       wrong_number: statusCounts[12],
+      meeting_done: statusCounts[13],
     };
   }
 
@@ -1423,6 +1433,12 @@ export class LeadService {
         if (status === "lost") {
           (lead as unknown as Record<string, unknown>).lostReason = lostReason ?? null;
           (lead as unknown as Record<string, unknown>).lostNotes  = lostNotes  ?? null;
+        }
+        // Meeting done: its meeting reminder is closed, as for a single change
+        if (status === "meeting_done") {
+          for (const r of lead.reminders as unknown as Array<{ title?: string; isDone?: boolean }>) {
+            if (r.title === "Meeting scheduled" && !r.isDone) r.isDone = true;
+          }
         }
         addLog(
           lead as never,

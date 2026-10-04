@@ -31,7 +31,7 @@ const createLeadSchema = z.object({
   course: z.string().optional().nullable(),
   status: z
     // Not meeting_scheduled: that needs a meeting time, so only PATCH /leads/:id/status sets it
-    .enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"])
+    .enum(["new", "assigned", "pending_response", "followup", "meeting_done", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"])
     .optional(),
   team: z.string().optional().nullable(),
   assignedTo: z.string().optional(),
@@ -60,7 +60,7 @@ const updateLeadSchema = z.object({
   course: z.string().optional().nullable(),
   status: z
     // Not meeting_scheduled: that needs a meeting time, so only PATCH /leads/:id/status sets it
-    .enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"])
+    .enum(["new", "assigned", "pending_response", "followup", "meeting_done", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"])
     .optional(),
   assignedTo: z.string().optional().nullable(),
   initialLeadResponse: z.string().optional().nullable(),
@@ -85,7 +85,7 @@ const LOST_REASONS = ["price_too_high", "not_interested", "competitor", "unrespo
 const MEETING_PAST_GRACE_MS = 5 * 60_000;
 
 const updateStatusSchema = z.object({
-  status: z.enum(["new", "assigned", "pending_response", "followup", "meeting_scheduled", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"]),
+  status: z.enum(["new", "assigned", "pending_response", "followup", "meeting_scheduled", "meeting_done", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"]),
   lostReason: z.enum(LOST_REASONS).optional(),
   lostNotes:  z.string().max(500).optional(),
   // Mandatory when status → followup (details + when it happened)
@@ -252,6 +252,7 @@ function mapLegacyStatus(raw: string): string {
   if (v.includes("follow"))                                      return "followup";
   if (v.includes("not connect") || v === "not_connected")        return "not_connected";
   if (v.includes("wrong"))                                       return "wrong_number";
+  if (v.includes("meeting") && v.includes("done"))               return "meeting_done";
   if (v === "closed" || v === "close")                           return "closed";
   if (v === "lost")                                              return "lost";
   if (v === "repeated" || v === "repeat")                        return "repeated";
@@ -1156,7 +1157,7 @@ export const bulkUpdateLeadStatus = async (
     const parsed = bulkLeadIdsSchema
       .extend({
         // Not meeting_scheduled: each lead needs its own meeting time
-        status:     z.enum(["new", "assigned", "pending_response", "followup", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"]),
+        status:     z.enum(["new", "assigned", "pending_response", "followup", "meeting_done", "closed", "lost", "not_connected", "wrong_number", "mia", "repeated", "callback", "cnc"]),
         lostReason: z.enum(LOST_REASONS).optional(),
         lostNotes:  z.string().max(500).optional(),
         followUpNote:   z.string().max(2000).optional(),

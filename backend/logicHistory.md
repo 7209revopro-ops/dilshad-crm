@@ -743,3 +743,11 @@ routes and still take rows without a source.
    opens MBT only — bundles are left with no finance product (as Draw's are) until finance has a product that opens both.
 3. The Map dialog warns when a finance product is chosen for a course with more than one LMS course (it can't read the
    product's own LMS list — finance's catalogue endpoint returns name, sku, price and type only).
+
+## Status: Meeting Done (2026-10-04)
+
+`meeting_done` — a plain status after Meeting Scheduled, settable everywhere (single, bulk, lead edit, create). Marking it
+(single or bulk) closes the lead's open "Meeting scheduled" reminders (`isDone: true`, also one that already rang), so nobody
+is reminded of a meeting that has happened; other reminders are left alone. Reports count it with follow-up / in progress
+(next to `meeting_scheduled`); Redistribute today leaves it with its owner; an old-leads upload's "meeting done" maps to it.
+Team PDF: "Mtg Set" / "Mtg Done" columns, member-table headers at 6pt so fourteen status columns stay on one line.

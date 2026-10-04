@@ -9,7 +9,7 @@ import {
   TrendingUp, Search, Mail, Phone, Shield, Calendar,
   Activity, StickyNote, ExternalLink, PhoneMissed,
   BookMarked, Sparkles, Star, Filter, X as XIcon,
-  LayoutGrid, List, ChevronDown, MessageCircle, CalendarClock, PhoneOff,
+  LayoutGrid, List, ChevronDown, MessageCircle, CalendarClock, CalendarCheck, PhoneOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -200,6 +200,7 @@ export default function ProfilePage() {
     { title: "Pending Response", value: stats?.pending_response ?? 0, icon: Sparkles,    color: "text-violet-400", bg: "bg-violet-500/10", border: "border-violet-500/20", activeRing: "ring-violet-400/40", filterKey: "pending_response" },
     { title: "Follow Up",        value: stats?.followup         ?? 0, icon: Clock,       color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20", activeRing: "ring-orange-400/40", filterKey: "followup"         },
     { title: "Meeting Scheduled", value: stats?.meeting_scheduled ?? 0, icon: CalendarClock, color: "text-teal-400", bg: "bg-teal-500/10", border: "border-teal-500/20", activeRing: "ring-teal-400/40", filterKey: "meeting_scheduled" },
+    { title: "Meeting Done",     value: stats?.meeting_done     ?? 0, icon: CalendarCheck, color: "text-indigo-400", bg: "bg-indigo-500/10", border: "border-indigo-500/20", activeRing: "ring-indigo-400/40", filterKey: "meeting_done" },
     { title: "Closed",           value: stats?.closed           ?? 0, icon: CheckCircle2,color: "text-green-400",  bg: "bg-green-500/10",  border: "border-green-500/20",  activeRing: "ring-green-400/40",  filterKey: "closed"           },
     { title: "Lost",             value: stats?.lost             ?? 0, icon: XCircle,     color: "text-red-400",    bg: "bg-red-500/10",    border: "border-red-500/20",    activeRing: "ring-red-400/40",    filterKey: "lost"             },
     { title: "Not Connected",    value: stats?.not_connected    ?? 0, icon: PhoneMissed, color: "text-neutral-400",  bg: "bg-neutral-500/10",  border: "border-neutral-500/20",  activeRing: "ring-neutral-400/40",  filterKey: "not_connected"    },

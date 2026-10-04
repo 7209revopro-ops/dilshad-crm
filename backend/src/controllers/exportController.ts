@@ -420,7 +420,8 @@ const TEAM_PDF_STATUS: Record<LeadStatus, { short: string; color: string }> = {
   assigned:         { short: "Assigned",  color: "#eab308" },
   pending_response: { short: "Pending",   color: "#8b5cf6" },
   followup:         { short: "Follow Up", color: "#f97316" },
-  meeting_scheduled:{ short: "Meeting",   color: "#14b8a6" },
+  meeting_scheduled:{ short: "Mtg Set",   color: "#14b8a6" },
+  meeting_done:     { short: "Mtg Done",  color: "#6366f1" },
   closed:           { short: "Closed",    color: "#22c55e" },
   lost:             { short: "Lost",      color: "#ef4444" },
   not_connected:    { short: "Not Conn.", color: "#64748b" },
@@ -544,7 +545,7 @@ export const exportTeamPdf = async (
     // Member table
     doc.fillColor(DARK).font("Helvetica-Bold").fontSize(10).text("Member Performance", 40, y);
     y += 12;
-    // Thirteen status columns: 6.5pt headers fit a ~39pt column ("Follow Up", "Not Conn." ≈ 31pt)
+    // Fourteen status columns: 6pt headers fit a ~36pt column ("Follow Up", "Not Conn." ≈ 29pt), Other column or not
     const fixedW  = 110 + 30 + 48 + (showOther ? 30 : 0) + 34;    // member, total, revenue, [other], conv %
     const statusW = Math.floor((W - fixedW) / LEAD_STATUS_VALUES.length);
     const mHeaders = [
@@ -557,7 +558,7 @@ export const exportTeamPdf = async (
       r.name, r.total, r.totalPayments,
       ...LEAD_STATUS_VALUES.map((s) => r.counts[s]),
       ...(showOther ? [r.other] : []), `${r.cr}%`,
-    ]), 40, y, 20, 6.5);
+    ]), 40, y, 20, 6);
 
     pdfFooter(doc);
     doc.end();

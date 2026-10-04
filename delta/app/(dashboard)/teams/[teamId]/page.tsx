@@ -165,6 +165,7 @@ interface TeamDashboardData {
     pending_response: number;
     followup: number;
     meeting_scheduled?: number;
+    meeting_done?: number;
     closed: number;
     lost: number;
     not_connected: number;
