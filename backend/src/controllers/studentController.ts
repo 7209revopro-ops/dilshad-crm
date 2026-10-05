@@ -161,3 +161,34 @@ export const requestInvoice = async (req: Request, res: Response, next: NextFunc
     sendSuccess(res, result.message, { queued: true });
   } catch (err) { next(err); }
 };
+
+/**
+ * What the correction form starts from: the enrolment, whether finance has it
+ * sent back and why, the money the lead holds of its own, and — for whoever
+ * may move a sale — the counsellors and teams.
+ *
+ * GET /api/v1/students/:id/correction
+ */
+export const getCorrection = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return sendError(res, "Not authenticated", 401);
+    const data = await svc.getCorrection(req.params.id, { userId, role: req.user?.role });
+    sendSuccess(res, "Correction fetched", data);
+  } catch (err) { next(err); }
+};
+
+/**
+ * Correct an enrolment finance sent back — everything the close took — and
+ * send it to finance again, in one step.
+ *
+ * PUT /api/v1/students/:id/correction
+ */
+export const correctEnrolment = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return sendError(res, "Not authenticated", 401);
+    const result = await svc.correctEnrolment(req.params.id, req.body ?? {}, { userId, role: req.user?.role });
+    sendSuccess(res, result.message, result.student);
+  } catch (err) { next(err); }
+};

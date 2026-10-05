@@ -1,15 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { AlertTriangle, ArrowLeft, Coins, GraduationCap, ListChecks } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Coins, GraduationCap, ListChecks, Loader2, Pencil, Send, Undo2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { fmtFull } from "@/lib/currency";
 import { aed, ROLE_LABEL, STATE_LABEL, monthLabel } from "@/lib/commission";
-import { useEnrolment, type EnrolmentDetail } from "@/hooks/useEnrolments";
+import { useAuthStore } from "@/lib/store/authStore";
+import { useEnrolment, useRequestInvoice, sendBackState, uaeTime, type EnrolmentDetail } from "@/hooks/useEnrolments";
 import { EnrolmentStepsList } from "@/components/students/EnrolmentSteps";
+import { CorrectEnrolmentDialog } from "@/components/students/CorrectEnrolmentDialog";
 import type { Course } from "@/types/course";
 
 /**
@@ -61,6 +65,13 @@ function Header({ e }: { e: EnrolmentDetail }) {
   const course = e.course && typeof e.course === "object" ? (e.course as Course) : null;
   const closer = e.assignedTo && typeof e.assignedTo === "object" ? (e.assignedTo as { name?: string }).name : null;
   const invoice = e.invoice?.invoiceNumber || e.handover?.invoiceNumber;
+  const { sentBack, resending, sentAgain, reason } = sendBackState(e);
+  const h = e.handover;
+  // Correcting and sending again are for whoever may act on enrolments; the server decides whose.
+  const { hasPermission } = useAuthStore();
+  const mayAct = hasPermission("enrolments", "edit");
+  const resend = useRequestInvoice();
+  const [correcting, setCorrecting] = useState(false);
   return (
     <section className="rounded-xl border border-border/50 bg-card p-5">
       <div className="flex items-start gap-3">
@@ -76,6 +87,35 @@ function Header({ e }: { e: EnrolmentDetail }) {
           </p>
         </div>
       </div>
+
+      {/* Sent back: why, and the two ways on — correct it, or send it again as it stands. */}
+      {sentBack && (
+        <div className="mt-4 flex flex-wrap items-start justify-between gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5">
+          <p className="flex min-w-0 items-start gap-1.5 text-xs text-red-700 dark:text-red-300">
+            <Undo2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Sent back{reason ? `: ${reason}` : " — no reason was given"}
+          </p>
+          {mayAct && (
+            <div className="flex shrink-0 gap-2">
+              <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={() => setCorrecting(true)}>
+                <Pencil className="h-3 w-3" /> Correct it
+              </Button>
+              <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={() => resend.mutate(e._id)} disabled={resend.isPending}>
+                {resend.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />} Send again
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+      {(resending || sentAgain) && h?.resentAt && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-sky-600 dark:text-sky-400">
+          {resending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          Sent again {uaeTime(h.resentAt)}
+          {(h.resends ?? 0) > 1 ? ` · ${h.resends} times` : ""}
+          {resending ? " — on its way to finance" : e.invoice?.approval === "pending" ? " — waiting for approval" : ""}
+        </p>
+      )}
+      {correcting && <CorrectEnrolmentDialog studentId={e._id} open onClose={() => setCorrecting(false)} />}
     </section>
   );
 }

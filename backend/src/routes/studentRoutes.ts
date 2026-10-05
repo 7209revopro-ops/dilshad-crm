@@ -1,12 +1,12 @@
 import { Router } from "express";
 import multer from "multer";
 import { authenticate } from "../middleware/auth.js";
-import { checkPermission } from "../middleware/permissions.js";
+import { checkAnyPermission, checkPermission } from "../middleware/permissions.js";
 import {
   createStudent, getStudents, getStudentById,
   getStudentByLeadId, updateStudent, deleteStudent,
   getMyEnrolments,
-  getEnrolment, requestInvoice, getDailyClosings, uploadPaymentReceipt,
+  getEnrolment, requestInvoice, getCorrection, correctEnrolment, getDailyClosings, uploadPaymentReceipt,
 } from "../controllers/studentController.js";
 
 const router = Router();
@@ -37,11 +37,12 @@ router.get("/enrolments/mine", authenticate, checkPermission("enrolments", "view
 router.get("/enrolments/:id", authenticate, checkPermission("enrolments", "view"), getEnrolment);
 // Before "/:id", or Express reads "closings" as a student id.
 router.get("/closings/daily", authenticate, checkPermission("closings", "view"), getDailyClosings);
-// Before "/:id", or Express reads "receipts" as a student id.
+// Before "/:id", or Express reads "receipts" as a student id. Taken at a close,
+// and at the correction of one finance sent back.
 router.post(
   "/receipts/:leadId",
   authenticate,
-  checkPermission("students", "create"),
+  checkAnyPermission(["students", "create"], ["enrolments", "edit"]),
   receiptUpload.single("file"),
   uploadPaymentReceipt,
 );
@@ -50,6 +51,9 @@ router.post(
 // asked for by hand when it never ran or did not get through. Reached only
 // from the enrolments screen, so it is gated the same way that screen is.
 router.post("/:id/invoice", authenticate, checkPermission("enrolments", "edit"), requestInvoice);
+// Correct an enrolment finance sent back, and send it again — from the same screen.
+router.get("/:id/correction", authenticate, checkPermission("enrolments", "edit"), getCorrection);
+router.put("/:id/correction", authenticate, checkPermission("enrolments", "edit"), correctEnrolment);
 
 router.get("/",    authenticate, checkPermission("students", "view"),   getStudents);
 router.post("/",   authenticate, checkPermission("students", "create"), createStudent);

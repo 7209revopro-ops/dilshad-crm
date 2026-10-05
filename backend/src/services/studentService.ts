@@ -4,13 +4,14 @@ import {
   CLOSE_CURRENCIES,
   ENROLMENT_LANGUAGES,
   ENROLMENT_PAYMENT_METHODS,
+  PAYMENT_METHOD_LABELS,
   type CloseCurrency,
   type EnrolmentLanguage,
   type EnrolmentPaymentMethod,
 } from "../types/index.js";
 import { Student } from "../models/Student.js";
 import { Lead } from "../models/Lead.js";
-import type { IStudent, IStudentPayment } from "../types/index.js";
+import type { IRole, IStudent, IStudentPayment } from "../types/index.js";
 
 function createError(msg: string, status: number) {
   return Object.assign(new Error(msg), { statusCode: status });
@@ -113,6 +114,43 @@ function assertNotOverFee(totalFee: number, paidAmount: number): void {
 function isBonusAmount(v: unknown): boolean {
   const n = Number(v);
   return v !== null && v !== "" && Number.isFinite(n) && n > 0;
+}
+
+/** The shape finance accepts for the client's email — it refuses an enrolment without one. */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * A payment on the lead that the close recorded — "Collected at enrolment —
+ * <course> · <method>" — as opposed to one the lead held of its own. Only the
+ * close's are replaced when the enrolment is corrected.
+ */
+const fromTheClose = (note?: string | null) => /^Collected at enrolment\b/.test(note ?? "");
+
+/** " · INR 50,000 at 1 INR = 0.044 AED" for a payment in another currency, as the close writes it on the lead; "" for AED. */
+function foreignNote(p: IStudentPayment): string {
+  if (!p.currency || p.currency === BASE_CURRENCY || !p.amountInCurrency || !p.exchangeRate) return "";
+  const paid = p.amountInCurrency.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  const rate = Number(p.exchangeRate.toPrecision(6)).toLocaleString("en-US", { maximumFractionDigits: 10 });
+  return ` · ${p.currency} ${paid} at 1 ${p.currency} = ${rate} ${BASE_CURRENCY}`;
+}
+
+/** Everything a close took, sent again as a correction once finance has sent the enrolment back. */
+export interface EnrolmentCorrection {
+  name?: string;
+  phone?: string;
+  email?: string;
+  course?: string | null;
+  team?: string | null;
+  assignedTo?: string | null;
+  enrollmentDate?: string;
+  feeStatus?: string;
+  totalFee?: number | string;
+  paidAmount?: number | string;
+  notes?: string;
+  language?: string;
+  payments?: unknown;
+  hasBonus?: boolean;
+  bonusAmount?: number | string;
 }
 
 // Auto-generate enrollment number: STU-0001, STU-0002, ...
@@ -772,7 +810,7 @@ export class StudentService {
 
     const ids = students.map((s) => String(s._id));
     const handovers = await FinanceHandover.find({ studentId: { $in: ids } })
-      .select("studentId status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt")
+      .select("studentId status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt resentAt resends")
       .lean();
     const byStudent = new Map(handovers.map((h) => [String(h.studentId), h]));
 
@@ -799,12 +837,15 @@ export class StudentService {
               approvalState: h.approvalState ?? "unknown",
               returnedReason: h.returnedReason ?? "",
               returnedAt: h.returnedAt ?? null,
+              // Sent again after a send-back: when last, and how many times.
+              resentAt: h.resentAt ?? null,
+              resends: h.resends ?? 0,
             }
           : null,
         // Absent rather than guessed when finance could not be reached.
         invoice: f ?? null,
         // Its five steps — finance, LMS, CS, onboarded, MT5 bonus — green / yellow / red on the card.
-        steps: stepsOf(f ?? null, h ? { status: h.status, lastError: h.lastError, approvedAt: h.approvedAt } : null),
+        steps: stepsOf(f ?? null, h ? { status: h.status, lastError: h.lastError, approvedAt: h.approvedAt, resentAt: h.resentAt } : null),
       };
     });
 
@@ -819,7 +860,9 @@ export class StudentService {
       onThisPage: rows.length,
       approved: rows.filter((r) => r.invoice?.approval === "approved").length,
       pending: rows.filter((r) => r.invoice?.approval === "pending").length,
-      returned: rows.filter((r) => (r.invoice?.approval ?? r.handover?.approvalState) === "returned").length,
+      // Not one already on its way back: finance still says "returned" until it arrives.
+      returned: rows.filter((r) => (r.invoice?.approval ?? r.handover?.approvalState) === "returned"
+        && !(r.handover?.status === "pending" && r.handover.resentAt)).length,
       notInvoiced: rows.filter((r) => !r.invoice).length,
       failed: rows.filter((r) => r.handover?.status === "failed").length,
       flagged: rows.filter((r) => (r.handover?.flags?.length ?? 0) > 0).length,
@@ -857,7 +900,7 @@ export class StudentService {
     if (closer !== viewer.userId && !all) throw createError("This enrolment isn't yours", 403);
 
     const h = await FinanceHandover.findOne({ studentId: student._id })
-      .select("status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt")
+      .select("status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt resentAt resends")
       .lean();
     const [st] = await fetchEnrolmentStatuses([id]);
     const sale = await CommissionSale.findOne({ student: student._id }).lean();
@@ -871,11 +914,11 @@ export class StudentService {
             status: h.status, attempts: h.attempts, lastError: h.lastError ?? "", invoiceId: h.invoiceId ?? "",
             invoiceNumber: h.invoiceNumber ?? "", flags: h.flags ?? [], sentAt: h.sentAt ?? null,
             approvalState: h.approvalState ?? "unknown", returnedReason: h.returnedReason ?? "", returnedAt: h.returnedAt ?? null,
-            approvedAt: h.approvedAt ?? null,
+            approvedAt: h.approvedAt ?? null, resentAt: h.resentAt ?? null, resends: h.resends ?? 0,
           }
         : null,
       invoice: st ?? null,
-      steps: stepsOf(st ?? null, h ? { status: h.status, lastError: h.lastError, approvedAt: h.approvedAt } : null),
+      steps: stepsOf(st ?? null, h ? { status: h.status, lastError: h.lastError, approvedAt: h.approvedAt, resentAt: h.resentAt } : null),
       commission: sale
         ? {
             state: sale.state,
@@ -926,31 +969,11 @@ export class StudentService {
      * it rather than raising a second one, so this corrects the invoice the
      * approver already has, keeping its number.
      */
-    if (existing?.status === "sent" && existing.approvalState !== "returned") {
-      return { queued: false, message: `Already invoiced as ${existing.invoiceNumber ?? "an invoice"}` };
-    }
-
-    if (existing?.status === "sent" && existing.approvalState === "returned") {
-      const payload = await this.buildHandoverPayload(studentId);
-      if (!payload) return { queued: false, message: "Enrolment not found" };
-      await FinanceHandover.updateOne(
-        { studentId },
-        {
-          $set: {
-            payload,
-            status: "pending",
-            nextAttemptAt: new Date(),
-            attempts: 0,
-            lastError: "",
-            // Pending again the moment it leaves, so the screen stops offering
-            // "send again" for something already on its way back.
-            approvalState: "pending",
-            returnedReason: "",
-          },
-          // Cleared, so a second send-back is told about a second time.
-          $unset: { returnedNotifiedAt: "", returnedAt: "" },
-        },
-      );
+    if (existing?.status === "sent") {
+      if (!(await this.sendBackOf(studentId, existing)).sentBack) {
+        return { queued: false, message: `Already invoiced as ${existing.invoiceNumber ?? "an invoice"}` };
+      }
+      if (!(await this.resendCorrected(studentId))) return { queued: false, message: "Enrolment not found" };
       return { queued: true, message: "Correction sent to finance" };
     }
 
@@ -964,6 +987,281 @@ export class StudentService {
 
     await this.queueFinanceHandover(String(student._id), String(student.leadId ?? ""));
     return { queued: true, message: "Queued for finance" };
+  }
+
+  /**
+   * Whether finance has this delivered enrolment sent back, and why — by what
+   * the outbox last heard, or else by asking finance now: it may have been
+   * sent back in the minute before the outbox next asks, and the screens, which
+   * ask finance live, already offer the correction.
+   */
+  private async sendBackOf(
+    studentId: string,
+    h: { status?: string; approvalState?: string; returnedReason?: string } | null,
+  ): Promise<{ sentBack: boolean; reason: string }> {
+    if (h?.status !== "sent") return { sentBack: false, reason: "" };
+    if (h.approvalState === "returned") return { sentBack: true, reason: h.returnedReason ?? "" };
+    // Decided already: an approved enrolment is not sent back, so finance isn't asked.
+    if (h.approvalState === "approved" || h.approvalState === "not_required") return { sentBack: false, reason: "" };
+    const { fetchEnrolmentStatuses } = await import("./financeClient.js");
+    const [st] = await fetchEnrolmentStatuses([studentId]);
+    return st?.approval === "returned" ? { sentBack: true, reason: st.returnedReason ?? "" } : { sentBack: false, reason: "" };
+  }
+
+  /**
+   * Send a sent-back enrolment to finance again, as it stands now.
+   *
+   * With a *fresh* payload, which is the whole point: the queue row holds a
+   * snapshot of the sale as it was, and resending that would deliver the very
+   * figures somebody has just been asked to fix. The snapshot is right for a
+   * retry after a timeout and wrong for a resubmission.
+   *
+   * Finance recognises the same externalId on a returned invoice and updates
+   * it rather than raising a second one, so this corrects the invoice the
+   * approver already has, keeping its number. False when the student has gone.
+   */
+  private async resendCorrected(studentId: string): Promise<boolean> {
+    const { FinanceHandover } = await import("../models/FinanceHandover.js");
+    const payload = await this.buildHandoverPayload(studentId);
+    if (!payload) return false;
+    await FinanceHandover.updateOne(
+      { studentId },
+      {
+        $set: {
+          payload,
+          status: "pending",
+          nextAttemptAt: new Date(),
+          attempts: 0,
+          lastError: "",
+          // Pending again the moment it leaves, so the screen stops offering
+          // "send again" for something already on its way back.
+          approvalState: "pending",
+          returnedReason: "",
+          // So the screens can say it was sent again, and when.
+          resentAt: new Date(),
+        },
+        $inc: { resends: 1 },
+        // Cleared, so a second send-back is told about a second time.
+        $unset: { returnedNotifiedAt: "", returnedAt: "" },
+      },
+    );
+    // Out now, in the background; the worker's timer retries whatever this cannot send.
+    const { kickFinanceHandover } = await import("./financeHandoverWorker.js");
+    kickFinanceHandover();
+    return true;
+  }
+
+  // ── Correcting what finance sent back ────────────────────────────────────────
+
+  /**
+   * The enrolment, if this viewer may correct it: the closer their own; anyone
+   * who may edit students — or a super admin — any, and only they may move a
+   * sale to another counsellor or team (`mayMove`).
+   */
+  private async correctable(id: string, viewer: { userId: string; role?: IRole | null }) {
+    const { isSuperAdmin } = await import("./commissionService.js");
+    if (!Types.ObjectId.isValid(id)) throw createError("Enrolment not found", 404);
+    const student = await Student.findById(id);
+    if (!student) throw createError("Enrolment not found", 404);
+    const mayMove = isSuperAdmin(viewer.role) || viewer.role?.permissions?.students?.edit === true;
+    if (String(student.assignedTo ?? "") !== viewer.userId && !mayMove) {
+      throw createError("This enrolment isn't yours to correct", 403);
+    }
+    return { student, mayMove };
+  }
+
+  /** What the lead holds of its own, in fils: every payment on it but the ones the close recorded. */
+  private async ownOnLead(leadId: unknown): Promise<number> {
+    const lead = await Lead.findById(leadId).select("payments").lean();
+    return (lead?.payments ?? []).filter((p) => !fromTheClose(p.note)).reduce((s, p) => s + minor(p.amount), 0);
+  }
+
+  /**
+   * What the correction form starts from: the enrolment as it stands, whether
+   * finance has it sent back and why, the money the lead holds of its own — a
+   * payment of its own on the form, at that figure, as at the close — and, for
+   * whoever may move a sale, the counsellors and teams it may move to.
+   */
+  async getCorrection(id: string, viewer: { userId: string; role?: IRole | null }) {
+    const { FinanceHandover } = await import("../models/FinanceHandover.js");
+    const { student, mayMove } = await this.correctable(id, viewer);
+    const h = await FinanceHandover.findOne({ studentId: student._id }).lean();
+    const { sentBack, reason } = await this.sendBackOf(id, h);
+    let options = {};
+    if (mayMove) {
+      const { Team } = await import("../models/Team.js");
+      const { User } = await import("../models/User.js");
+      const [counsellors, teams] = await Promise.all([
+        User.find({ status: "active" }).select("name").sort({ name: 1 }).lean(),
+        Team.find({ status: "active" }).select("name").sort({ name: 1 }).lean(),
+      ]);
+      options = { counsellors, teams };
+    }
+    return {
+      sentBack,
+      returnedReason: reason,
+      invoiceNumber: h?.invoiceNumber ?? "",
+      // What became of it otherwise: sent again, and when; approved or waiting.
+      approvalState: h?.approvalState ?? "unknown",
+      resentAt: h?.resentAt ?? null,
+      resends: h?.resends ?? 0,
+      mayMove,
+      ownOnLead: (await this.ownOnLead(student.leadId)) / 100,
+      ...options,
+      student: await this.populateStudent(id),
+    };
+  }
+
+  /**
+   * Correct an enrolment finance sent back, and send it again — one step (the
+   * user, 2026-10-05: "if send it back we can edit the course and amount, all
+   * details"). Everything the close took can change: the client's name, phone
+   * and email, the course, the date, the fee, each payment with its receipt,
+   * the language, the bonus and the notes — and, for whoever may edit
+   * students, who closed it and for which team. It is checked as a close is,
+   * and then goes to finance as the correction of the invoice it sent back:
+   * the same invoice, the same number.
+   *
+   * Only while finance has it sent back. An enrolment waiting for approval, or
+   * approved, is not rewritten from here.
+   *
+   * The closer corrects their own; anyone who may edit students, any.
+   */
+  async correctEnrolment(
+    id: string,
+    data: EnrolmentCorrection,
+    viewer: { userId: string; role?: IRole | null },
+  ): Promise<{ student: unknown; message: string }> {
+    const { FinanceHandover } = await import("../models/FinanceHandover.js");
+    const { Course } = await import("../models/Course.js");
+    const { Team } = await import("../models/Team.js");
+    const { User } = await import("../models/User.js");
+
+    const { student, mayMove } = await this.correctable(id, viewer);
+
+    const h = await FinanceHandover.findOne({ studentId: student._id }).lean();
+    if (!(await this.sendBackOf(id, h)).sentBack) {
+      throw createError(
+        "Finance hasn't sent this enrolment back, so there is nothing to correct. A change once it is approved goes through finance.",
+        409,
+      );
+    }
+
+    // Asked for all at once and refused as one list, as the close does.
+    const name = String(data.name ?? "").trim();
+    const phone = String(data.phone ?? "").trim();
+    const email = String(data.email ?? "").trim().toLowerCase();
+    const enrolledOn = data.enrollmentDate ? new Date(data.enrollmentDate) : null;
+    const totalFee = data.totalFee === "" || data.totalFee === null ? NaN : Number(data.totalFee);
+    const paidAmount = Number(data.paidAmount ?? NaN);
+    const missing: string[] = [];
+    if (!name) missing.push("the client's name");
+    if (!phone) missing.push("the client's phone");
+    if (!EMAIL_RE.test(email)) missing.push("the client's email");
+    if (typeof data.course !== "string" || !Types.ObjectId.isValid(data.course)) missing.push("a course");
+    if (!enrolledOn || Number.isNaN(enrolledOn.getTime())) missing.push("the enrolment date");
+    if (!Number.isFinite(totalFee) || totalFee < 0) missing.push("the fee");
+    if (!Number.isFinite(paidAmount) || paidAmount < 0) missing.push("what was paid");
+    if (!ENROLMENT_LANGUAGES.includes(data.language as EnrolmentLanguage)) missing.push("language");
+    if (typeof data.hasBonus !== "boolean") missing.push("whether a bonus was given");
+    else if (data.hasBonus && !isBonusAmount(data.bonusAmount)) missing.push("the bonus amount");
+    if (missing.length) throw createError(`A correction needs ${missing.join(", ")}.`, 422);
+
+    const course = await Course.findById(data.course).select("name").lean();
+    if (!course) throw createError("That course no longer exists — choose another.", 422);
+
+    // Who closed it, and for which team: kept unless somebody who may edit
+    // students moves it.
+    const idOrNull = (v: unknown) => (typeof v === "string" && v ? v : null);
+    const team = data.team === undefined ? String(student.team ?? "") || null : idOrNull(data.team);
+    const closer = data.assignedTo === undefined ? String(student.assignedTo ?? "") || null : idOrNull(data.assignedTo);
+    if ((team ?? "") !== String(student.team ?? "") || (closer ?? "") !== String(student.assignedTo ?? "")) {
+      if (!mayMove) throw createError("Only someone who may edit students can move a sale to another counsellor or team.", 403);
+      if (team && (!Types.ObjectId.isValid(team) || !(await Team.exists({ _id: team })))) {
+        throw createError("That team no longer exists — choose another.", 422);
+      }
+      if (closer && (!Types.ObjectId.isValid(closer) || !(await User.exists({ _id: closer })))) {
+        throw createError("That counsellor no longer exists — choose another.", 422);
+      }
+    }
+
+    const payments = checkedPayments(data.payments, paidAmount, enrolledOn!);
+    if (!payments) throw createError("A correction needs its payments, each with its method, amount and receipt.", 422);
+    assertNotOverFee(totalFee, paidAmount);
+
+    /*
+     * The money the lead held of its own — every payment on it but the ones the
+     * close recorded — is a payment of its own here, as at the close, and at
+     * what it comes to now: the close's own payments on the lead are about to
+     * be replaced by these, and the two must not count the same money twice
+     * or lose any.
+     */
+    const own = await this.ownOnLead(student.leadId);
+    const ownRows = payments.filter((p) => p.collectedBefore);
+    if (ownRows.length > 1) throw createError("Only one payment can be the money already on the lead.", 422);
+    if (own > 0 && !ownRows.length) {
+      throw createError(
+        `This lead already holds ${money(own / 100)} of its own — it stays as a payment of its own, with its method and receipt.`,
+        422,
+      );
+    }
+    if (ownRows.length && minor(ownRows[0]!.amount) !== own) {
+      throw createError(
+        `The lead's own payments come to ${money(own / 100)} now, not ${money(ownRows[0]!.amount)} — they changed while this was open. Close the correction and open it again.`,
+        409,
+      );
+    }
+
+    student.set({
+      name,
+      phone,
+      email,
+      course: course._id,
+      team,
+      assignedTo: closer,
+      enrollmentDate: enrolledOn,
+      totalFee,
+      paidAmount,
+      pendingAmount: Math.max(0, totalFee - paidAmount),
+      feeStatus: this.computeFeeStatus(totalFee, paidAmount, data.feeStatus),
+      ...(typeof data.notes === "string" ? { notes: data.notes } : {}),
+      language: data.language,
+      // The first payment's, for whatever reads only one; every one below.
+      paymentMethod: payments[0]!.method,
+      paymentReceipt: payments[0]!.receipt,
+      payments,
+      hasBonus: data.hasBonus,
+      bonusAmount: data.hasBonus ? Number(data.bonusAmount) : 0,
+    });
+    await student.save();
+
+    /*
+     * The lead's payment list follows: what the close recorded there is
+     * replaced by the payments as corrected, so the lead and the enrolment
+     * keep counting the same money — the lead's own payments are left as they
+     * are. Not worth failing the correction over; it says so instead.
+     */
+    let leadNote = "";
+    try {
+      const lead = await Lead.findById(student.leadId).select("payments").lean();
+      if (lead) {
+        const kept = (lead.payments ?? []).filter((p) => !fromTheClose(p.note));
+        const taken = payments.filter((p) => !p.collectedBefore).map((p) => ({
+          // In AED; one paid in another currency says what was handed over, as the close's note does.
+          amount: p.amount,
+          note: `Collected at enrolment — ${course.name} · ${PAYMENT_METHOD_LABELS[p.method] ?? p.method}${foreignNote(p)}`,
+          paidAt: p.paidAt,
+          addedBy: new Types.ObjectId(viewer.userId),
+        }));
+        await Lead.updateOne({ _id: lead._id }, { $set: { payments: [...kept, ...taken] } });
+      }
+    } catch (err) {
+      console.error(`[enrolments] could not bring the lead's payments in line with corrected enrolment ${id}`, err);
+      leadNote = " The lead's own payment list could not be updated — check it on the lead.";
+    }
+
+    await this.resendCorrected(id);
+    return { student: await this.populateStudent(id), message: `Corrected and sent to finance.${leadNote}` };
   }
 
 }

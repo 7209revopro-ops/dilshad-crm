@@ -689,3 +689,32 @@ socket.io connection for the website side).
 
 **Change Log**:
 - 1.0.0 — Initial build, ported from the Sales CRM.
+
+## Correcting a sent-back enrolment, and "sent again" (2026-10-05)
+
+**Description**: As in the Sales CRM. When finance sends an enrolment back, everything the close took can be corrected —
+the client's name, phone and email, the course, the date, the fee, each payment with its receipt (one paid in another
+currency with what was handed over and its rate, checked against the AED as at the close), the language, the bonus and
+the notes; whoever may edit students can also move it to another counsellor or team — and saving sends it to finance
+again in the same step, as the same invoice with the same number (the user: "if send it back we can edit the course and
+amount also, all details"). Only while finance has it sent back. The closer corrects their own; anyone who may edit
+students, or a super admin, any.
+
+The money the lead holds of its own stays a payment of its own, at what it comes to now; the close's "Collected at
+enrolment" payments on the lead are replaced by the corrected ones (a foreign one's note says what was handed over).
+
+Sent again — corrected, or with "Send again" — is recorded on the outbox row (`resentAt`, `resends`) and shown: "Sent
+again 5 Oct, 3:42 pm — on its way to finance", then "— waiting for accounts to approve it" (the user: "if send again
+show that also"). "Send again" goes out at once.
+
+**Routes** (`authenticate`, `enrolments:edit`): `GET /api/v1/students/:id/correction`, `PUT /api/v1/students/:id/correction`
+(`{ name, phone, email, course, team?, assignedTo?, enrollmentDate, feeStatus, totalFee, paidAmount, notes, language,
+payments[] (each may carry currency, amountInCurrency, exchangeRate), hasBonus, bonusAmount }`).
+`POST /students/receipts/:leadId` also takes `enrolments:edit`.
+
+**Service Methods**: `StudentService.getCorrection`, `correctEnrolment`, `sendBackOf`, `resendCorrected`;
+`enrolmentSteps.stepsOf` (sent again); `middleware/permissions.checkAnyPermission`.
+
+**Models Used**: `FinanceHandover.resentAt` / `resends` (new), `Student`, `Lead.payments`, `Course`, `Team`, `User`.
+
+**Tests**: `scripts/enrolment-correction-check.sh` — 65 checks against a stand-in finance, a payment in INR among them.

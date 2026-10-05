@@ -63,6 +63,14 @@ const financeHandoverSchema = new Schema(
     returnedReason: { type: String, default: "" },
     returnedAt: { type: Date },
     returnedNotifiedAt: { type: Date },
+    /*
+     * When it was last sent again after a send-back — corrected, or resent as
+     * it stood — and how many times (the user, 2026-10-05: "if send again show
+     * that also"), so the screens say it went rather than leaving the
+     * counsellor to wonder whether it did.
+     */
+    resentAt: { type: Date },
+    resends: { type: Number, default: 0 },
     /** When finance was last asked. Keeps the poll off rows just looked at. */
     checkedAt: { type: Date },
 

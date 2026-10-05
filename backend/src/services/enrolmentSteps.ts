@@ -36,6 +36,15 @@ export interface HandoverLike {
   status?: string;
   lastError?: string | null;
   approvedAt?: Date | string | null;
+  /** When it was last sent again after a send-back. */
+  resentAt?: Date | string | null;
+}
+
+/** "5 Oct, 3:42 pm", in the UAE, where the sales are made — put together from parts, which read the same on every runtime. */
+const UAE_TIME = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dubai", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true });
+function dubai(v: Date | string): string {
+  const p = Object.fromEntries(UAE_TIME.formatToParts(new Date(v)).map((x) => [x.type, x.value]));
+  return `${p.day} ${p.month}, ${p.hour}:${p.minute} ${String(p.dayPeriod ?? "").toLowerCase()}`.trim();
 }
 
 const LABEL: Record<StepKey, string> = {
@@ -58,9 +67,14 @@ const money = (amount?: number, currency?: string) =>
   amount ? (currency === "USD" || !currency ? `$${amount.toLocaleString("en-US")}` : `${currency} ${amount.toLocaleString("en-US")}`) : "";
 
 export function stepsOf(st: EnrolmentStatus | null | undefined, h?: HandoverLike | null): EnrolmentStep[] {
-  // 1 — finance
+  // 1 — finance. Sent again after a send-back says so, and when (the user, 2026-10-05).
+  const resent = h?.resentAt ? `Sent again ${dubai(h.resentAt)}` : "";
+  // On its way back to finance — which says "returned" until it arrives.
+  const resending = h?.status === "pending" && Boolean(resent);
   let finance: EnrolmentStep;
-  if (!st) {
+  if (resending) {
+    finance = step("finance", "waiting", { detail: `${resent} — on its way to finance`, at: iso(h?.resentAt) });
+  } else if (!st) {
     finance = h?.status === "failed"
       ? step("finance", "failed", { detail: `Couldn't be sent to finance${h.lastError ? ` — ${h.lastError}` : ""}` })
       : h?.status === "sent"
@@ -71,9 +85,14 @@ export function stepsOf(st: EnrolmentStatus | null | undefined, h?: HandoverLike
   } else if (st.approval === "approved" || st.approval === "not_required") {
     finance = step("finance", "done", { detail: st.invoiceNumber ? `Invoice ${st.invoiceNumber}` : undefined, at: iso(h?.approvedAt) });
   } else if (st.approval === "returned") {
-    finance = step("finance", "failed", { detail: `Sent back${st.returnedReason ? `: ${st.returnedReason}` : ""} — correct it and send it again` });
+    finance = h?.status === "failed" && resent
+      ? step("finance", "failed", { detail: `${resent}, but finance didn't take it${h.lastError ? ` — ${h.lastError}` : ""}` })
+      : step("finance", "failed", { detail: `Sent back${st.returnedReason ? `: ${st.returnedReason}` : ""} — correct it and send it again` });
   } else {
-    finance = step("finance", "waiting", { detail: "Waiting for accounts to approve it" });
+    finance = step("finance", "waiting", {
+      detail: resent ? `${resent} — waiting for accounts to approve it` : "Waiting for accounts to approve it",
+      at: iso(h?.resentAt),
+    });
   }
   const approved = finance.state === "done";
 
