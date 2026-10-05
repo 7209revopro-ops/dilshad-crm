@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   GraduationCap, X, User2, Phone, Mail, BookOpen,
-  Calendar, DollarSign, StickyNote, CheckCircle2, Paperclip, Upload, Gift,
+  Calendar, DollarSign, StickyNote, CheckCircle2, Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,16 +13,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { fmtFull } from "@/lib/currency";
-import { useCreateStudent, useUpdateStudent, uploadReceipt } from "@/hooks/useStudents";
+import { useCreateStudent, useUpdateStudent } from "@/hooks/useStudents";
 import { useAllCourses } from "@/hooks/useCourses";
 import { useAddPayment } from "@/hooks/usePayments";
 import { CommissionPreview } from "@/components/commission/CommissionPreview";
+import { PaymentRowsEditor, missingInRows, newPaymentRow, rowAmount, type PaymentRow } from "@/components/students/PaymentRowsEditor";
 import type { Lead } from "@/types/lead";
 import type { Course } from "@/types/course";
-import type { FeeStatus, Student, StoredReceipt } from "@/types/student";
+import type { EnrolmentPaymentMethod, FeeStatus, Student, StoredReceipt } from "@/types/student";
 import {
   ENROLMENT_LANGUAGES,
-  ENROLMENT_PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
 } from "@/types/student";
 
@@ -79,10 +79,25 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
 
   /** What was collected before today, from the payments already on the lead. */
   const alreadyPaid = (lead.payments ?? []).reduce((s, p) => s + p.amount, 0);
+  /*
+   * A new close takes each payment as a row — method, amount and receipt, a
+   * client may pay part in cash and part by card (PaymentRowsEditor) — with
+   * what the lead already holds as the first, at the amount it had when this
+   * opened: the payments this close then adds to the lead must not count
+   * twice. Editing an enrolment keeps the one "collected now" figure.
+   */
+  const [paymentRows, setPaymentRows] = useState<PaymentRow[]>(() =>
+    alreadyPaid > 0 ? [newPaymentRow({ collectedBefore: true, amountInput: String(alreadyPaid) })] : [newPaymentRow()],
+  );
   const [paidNowInput, setPaidNowInput] = useState("");
-  const paidNow = Math.max(0, Number(paidNowInput) || 0);
-  const paidAmount = alreadyPaid + paidNow;
+  const paidNow = editing
+    ? Math.max(0, Number(paidNowInput) || 0)
+    : paymentRows.filter((r) => !r.collectedBefore).reduce((s, r) => s + rowAmount(r), 0);
+  const paidAmount = editing ? alreadyPaid + paidNow : paymentRows.reduce((s, r) => s + rowAmount(r), 0);
   const pending = Math.max(0, totalFee - paidAmount);
+  /** Collected more than the fee — refused here and by the server (the user, 2026-10-05: "block"). */
+  const overFee = Math.round(paidAmount * 100) > Math.round(totalFee * 100);
+  const uploading = paymentRows.some((r) => r.uploading);
 
   const computedFeeStatus: FeeStatus =
     totalFee <= 0 || paidAmount <= 0 ? "pending"
@@ -119,12 +134,6 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
    * not be blocked on filling in what nobody was asked for at the time.
    */
   const [language, setLanguage] = useState<string>(existingStudent?.language ?? "");
-  const [paymentMethod, setPaymentMethod] = useState<string>(existingStudent?.paymentMethod ?? "");
-  const [receipt, setReceipt] = useState<StoredReceipt | null>(
-    (existingStudent?.paymentReceipt as StoredReceipt | undefined) ?? null,
-  );
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
 
   /*
    * Whether a bonus was given, and how much.
@@ -163,23 +172,10 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
     ? [bonusAmountMissing && "the bonus amount"].filter(Boolean) as string[]
     : [
         !language && "language",
-        !paymentMethod && "payment method",
-        !receipt && "payment receipt",
+        ...missingInRows(paymentRows),
         !bonusChoice && "whether a bonus was given",
         bonusAmountMissing && "the bonus amount",
       ].filter(Boolean) as string[];
-
-  async function handleReceipt(file: File) {
-    setUploadError("");
-    setUploading(true);
-    try {
-      setReceipt(await uploadReceipt(lead._id, file));
-    } catch (e) {
-      setUploadError(e instanceof Error ? e.message : "Could not upload that file");
-    } finally {
-      setUploading(false);
-    }
-  }
 
   function toIST(iso?: string | null) {
     if (!iso) return null;
@@ -202,12 +198,25 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
      * worth stopping for, whereas one recorded against an enrolment that then
      * failed can be finished by hand.
      */
-    if (paidNow > 0) {
+    if (editing && paidNow > 0) {
       await addPayment.mutateAsync({
         amount: paidNow,
         note: `Collected at enrolment${pickedCourse ? ` — ${pickedCourse.name}` : ""}`,
         paidAt: new Date(enrollmentDate).toISOString(),
       });
+    }
+    // Each payment taken now, one by one, saying how it was paid. One that an
+    // attempt already recorded before failing is not recorded again.
+    if (!editing) {
+      for (const row of paymentRows) {
+        if (row.collectedBefore || row.addedToLead) continue;
+        await addPayment.mutateAsync({
+          amount: rowAmount(row),
+          note: `Collected at enrolment${pickedCourse ? ` — ${pickedCourse.name}` : ""} · ${PAYMENT_METHOD_LABELS[row.method as EnrolmentPaymentMethod] ?? row.method}`,
+          paidAt: new Date(enrollmentDate).toISOString(),
+        });
+        setPaymentRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, addedToLead: true } : r)));
+      }
     }
 
     if (editing && existingStudent) {
@@ -255,8 +264,16 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
       paidAmount,
       notes: notes || undefined,
       language,
-      paymentMethod,
-      paymentReceipt: receipt,
+      // The first payment's, for whatever reads only one; every one below.
+      paymentMethod: paymentRows[0]?.method,
+      paymentReceipt: paymentRows[0]?.receipt,
+      payments: paymentRows.map((r) => ({
+        method: r.method,
+        amount: rowAmount(r),
+        receipt: r.receipt as StoredReceipt,
+        paidAt: new Date(enrollmentDate).toISOString(),
+        ...(r.collectedBefore ? { collectedBefore: true } : {}),
+      })),
       ...bonusFields,
     });
     onCreated();
@@ -380,7 +397,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                   <p className="text-[10px] text-muted-foreground">
                     Balance = total fee − paid. A bonus is never part of it.
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={cn("grid gap-2", editing ? "grid-cols-2" : "grid-cols-1")}>
                     <div className="space-y-1">
                       <p className="text-[11px] text-muted-foreground">Total fee</p>
                       <Input
@@ -389,23 +406,31 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                         placeholder="0" className="h-8 text-xs"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-[11px] text-muted-foreground">
-                        Collected now{alreadyPaid > 0 ? ` · ${fmtFull(alreadyPaid)} already` : ""}
-                      </p>
-                      <Input
-                        type="number" min="0" step="0.01" value={paidNowInput}
-                        onChange={(e) => setPaidNowInput(e.target.value)}
-                        placeholder="0" className="h-8 text-xs"
-                      />
-                    </div>
+                    {/* A new close takes its payments one by one, below. */}
+                    {editing && (
+                      <div className="space-y-1">
+                        <p className="text-[11px] text-muted-foreground">
+                          Collected now{alreadyPaid > 0 ? ` · ${fmtFull(alreadyPaid)} already` : ""}
+                        </p>
+                        <Input
+                          type="number" min="0" step="0.01" value={paidNowInput}
+                          onChange={(e) => setPaidNowInput(e.target.value)}
+                          placeholder="0" className="h-8 text-xs"
+                        />
+                      </div>
+                    )}
                   </div>
-                  {/* What is typed here becomes a payment on the lead, so the
-                      money is recorded in one place rather than two that can
-                      disagree. */}
+                  {/* What is collected here becomes a payment on the lead, so
+                      the money is recorded in one place rather than two that
+                      can disagree. */}
                   {paidNow > 0 && (
                     <p className="text-[10px] text-muted-foreground">
                       {fmtFull(paidNow)} will be added to this lead&apos;s payments.
+                    </p>
+                  )}
+                  {overFee && (
+                    <p className="text-[11px] font-medium text-red-400">
+                      Collected ({fmtFull(paidAmount)}) is more than the fee ({fmtFull(totalFee)}) — check the course, the fee and the amounts.
                     </p>
                   )}
                   {totalFee > 0 && (
@@ -528,86 +553,30 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                   </div>
                 )}
 
-                {/* What finance is given about the sale. Side by side because
-                    they are two halves of one question: what was sold, and how
-                    it was paid for. */}
+                {/* What finance is given about the sale: what it is taught in,
+                    and how it was paid for — each payment with its receipt. */}
                 {!editing && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Language *</p>
-                      <Select value={language} onValueChange={setLanguage}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Taught in…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ENROLMENT_LANGUAGES.map((l) => (
-                            <SelectItem key={l} value={l} className="text-xs">{l}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Payment method *</p>
-                      <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Paid by…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ENROLMENT_PAYMENT_METHODS.map((m) => (
-                            <SelectItem key={m} value={m} className="text-xs">
-                              {PAYMENT_METHOD_LABELS[m]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Language *</p>
+                    <Select value={language} onValueChange={setLanguage}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Taught in…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ENROLMENT_LANGUAGES.map((l) => (
+                          <SelectItem key={l} value={l} className="text-xs">{l}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
 
                 {!editing && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Payment receipt *</p>
-                    {receipt ? (
-                      <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-2.5 py-2">
-                        <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <a
-                          href={receipt.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex-1 truncate text-xs hover:underline"
-                        >
-                          {receipt.name}
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => setReceipt(null)}
-                          className="text-[10px] text-muted-foreground hover:text-red-400"
-                        >
-                          Replace
-                        </button>
-                      </div>
-                    ) : (
-                      <label
-                        className={cn(
-                          "flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border/60 px-3 py-3 text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground",
-                          uploading && "pointer-events-none opacity-60",
-                        )}
-                      >
-                        <Upload className="h-3.5 w-3.5" />
-                        {uploading ? "Uploading…" : "Attach the receipt — photo or PDF"}
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) void handleReceipt(f);
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
-                    )}
-                    {uploadError && <p className="text-[10px] text-red-400">{uploadError}</p>}
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">
+                      Payments * <span className="text-[10px]">— one for each way the client paid, each with its receipt</span>
+                    </p>
+                    <PaymentRowsEditor leadId={lead._id} rows={paymentRows} onChange={setPaymentRows} />
                   </div>
                 )}
 
@@ -664,18 +633,20 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
             >
               {/* Named rather than left to a greyed-out button: a control that
                   will not respond and does not say why is the worst of both. */}
-              <span className="text-[11px] text-muted-foreground">
-                {missing.length
-                  ? `Still needed: ${missing.join(", ")}.`
-                  : editing
-                    ? "Changes apply to this enrolment."
-                    : "The lead is closed either way."}
+              <span className={cn("text-[11px]", overFee ? "text-red-400" : "text-muted-foreground")}>
+                {overFee
+                  ? "Collected is more than the fee — fix the amounts first."
+                  : missing.length
+                    ? `Still needed: ${missing.join(", ")}.`
+                    : editing
+                      ? "Changes apply to this enrolment."
+                      : "The lead is closed either way."}
               </span>
               <Button
                 size="sm"
                 className="gap-2"
                 onClick={handleCreate}
-                disabled={saving || courseMissing || missing.length > 0 || uploading}
+                disabled={saving || courseMissing || missing.length > 0 || uploading || overFee}
               >
                 {saving ? (
                   <span className="flex items-center gap-1.5"><span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" /> {editing ? "Saving…" : "Creating…"}</span>

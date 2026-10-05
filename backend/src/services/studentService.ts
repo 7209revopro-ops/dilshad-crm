@@ -7,10 +7,66 @@ import {
 } from "../types/index.js";
 import { Student } from "../models/Student.js";
 import { Lead } from "../models/Lead.js";
-import type { IStudent } from "../types/index.js";
+import type { IStudent, IStudentPayment } from "../types/index.js";
 
 function createError(msg: string, status: number) {
   return Object.assign(new Error(msg), { statusCode: status });
+}
+
+/** Whole fils, so 300.10 + 199.90 is 500 and never 499.9999. */
+const minor = (n: number) => Math.round(n * 100);
+const money = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+
+type ReceiptInput = { name?: string; url?: string; key?: string; size?: number; mimeType?: string } | null | undefined;
+type PaymentInput = { method?: string; amount?: number | string; receipt?: ReceiptInput; paidAt?: string; collectedBefore?: boolean } | null;
+
+/**
+ * The payments a close sends, checked (the user, 2026-10-05: a client may pay
+ * part in cash and part by card, each with its own receipt): every one with a
+ * method this CRM takes, an amount above zero and its receipt, and together
+ * exactly what was paid. Null when the close sent none — an older screen, with
+ * one method, one receipt and the total.
+ */
+function checkedPayments(list: unknown, paidAmount: number, enrolledOn: Date): IStudentPayment[] | null {
+  if (list === undefined || list === null) return null;
+  if (!Array.isArray(list) || list.length === 0 || list.length > 10) throw createError("A closing takes between one and ten payments.", 422);
+  const payments = (list as PaymentInput[]).map((raw, i) => {
+    const n = list.length > 1 ? `Payment ${i + 1}` : "The payment";
+    if (!ENROLMENT_PAYMENT_METHODS.includes(raw?.method as EnrolmentPaymentMethod)) throw createError(`${n} needs a payment method.`, 422);
+    const amount = Number(raw?.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw createError(`${n} needs an amount above zero.`, 422);
+    if (!raw?.receipt?.key || !raw.receipt.url) throw createError(`${n} needs its receipt.`, 422);
+    const paidAt = raw.paidAt ? new Date(raw.paidAt) : enrolledOn;
+    return {
+      method: raw.method as EnrolmentPaymentMethod,
+      amount: minor(amount) / 100,
+      receipt: {
+        name: raw.receipt.name || "Receipt",
+        url: raw.receipt.url,
+        key: raw.receipt.key,
+        ...(raw.receipt.size ? { size: raw.receipt.size } : {}),
+        ...(raw.receipt.mimeType ? { mimeType: raw.receipt.mimeType } : {}),
+        uploadedAt: new Date(),
+      },
+      paidAt: Number.isNaN(paidAt.getTime()) ? enrolledOn : paidAt,
+      ...(raw.collectedBefore ? { collectedBefore: true } : {}),
+    };
+  });
+  const sum = payments.reduce((s, p) => s + minor(p.amount), 0);
+  if (sum !== minor(paidAmount)) {
+    throw createError(`The payments come to ${money(sum / 100)}, but ${money(paidAmount)} was paid — they must match.`, 422);
+  }
+  return payments;
+}
+
+/** What was collected may not be more than the fee (the user, 2026-10-05: "block"). */
+function assertNotOverFee(totalFee: number, paidAmount: number): void {
+  if (minor(paidAmount) > minor(totalFee)) {
+    throw createError(
+      `What was collected (${money(paidAmount)}) is more than the fee (${money(totalFee)}). Check the course, the fee and the amounts, then try again.`,
+      422,
+    );
+  }
 }
 
 /** A bonus amount that can be recorded: a real number above zero. */
@@ -55,11 +111,21 @@ export class StudentService {
     language?: string;
     paymentMethod?: string;
     paymentReceipt?: { name: string; url: string; key: string; size?: number; mimeType?: string } | null;
+    /** Each payment taken, when the client paid in more than one way. */
+    payments?: unknown;
     hasBonus?: boolean;
     bonusAmount?: number;
   }) {
     const existing = await Student.findOne({ leadId: data.leadId });
     if (existing) throw createError("A student already exists for this lead", 409);
+
+    const totalFee   = data.totalFee   ?? 0;
+    const paidAmount = data.paidAmount ?? 0;
+    const enrolledOn = data.enrollmentDate ? new Date(data.enrollmentDate) : new Date();
+    // One payment or several; the first is also the one method and receipt.
+    const payments = checkedPayments(data.payments, paidAmount, enrolledOn);
+    const paymentMethod = payments?.[0]?.method ?? data.paymentMethod;
+    const paymentReceipt = payments?.[0]?.receipt ?? data.paymentReceipt;
 
     /*
      * Required here rather than on the model.
@@ -74,10 +140,10 @@ export class StudentService {
      */
     const missing: string[] = [];
     if (!ENROLMENT_LANGUAGES.includes(data.language as EnrolmentLanguage)) missing.push("language");
-    if (!ENROLMENT_PAYMENT_METHODS.includes(data.paymentMethod as EnrolmentPaymentMethod)) {
+    if (!ENROLMENT_PAYMENT_METHODS.includes(paymentMethod as EnrolmentPaymentMethod)) {
       missing.push("payment method");
     }
-    if (!data.paymentReceipt?.key || !data.paymentReceipt.url) missing.push("payment receipt");
+    if (!paymentReceipt?.key || !paymentReceipt.url) missing.push("payment receipt");
     // Yes or no, every time — and a yes is only an answer with its amount.
     if (typeof data.hasBonus !== "boolean") missing.push("whether a bonus was given");
     else if (data.hasBonus && !isBonusAmount(data.bonusAmount)) missing.push("the bonus amount");
@@ -88,9 +154,9 @@ export class StudentService {
       );
     }
 
+    assertNotOverFee(totalFee, paidAmount);
+
     const enrollmentNumber = await nextEnrollmentNumber();
-    const totalFee   = data.totalFee   ?? 0;
-    const paidAmount = data.paidAmount ?? 0;
 
     const student = await Student.create({
       enrollmentNumber,
@@ -108,17 +174,18 @@ export class StudentService {
       demoAttended:     data.demoAttended   ?? false,
       firstContactTime: data.firstContactTime ? new Date(data.firstContactTime) : null,
       lastFollowupDate: data.lastFollowupDate ? new Date(data.lastFollowupDate) : null,
-      enrollmentDate:   data.enrollmentDate  ? new Date(data.enrollmentDate) : new Date(),
+      enrollmentDate:   enrolledOn,
       feeStatus:    this.computeFeeStatus(totalFee, paidAmount, data.feeStatus),
       totalFee,
       paidAmount,
       pendingAmount: Math.max(0, totalFee - paidAmount),
       notes: data.notes,
       language: data.language,
-      paymentMethod: data.paymentMethod,
-      paymentReceipt: data.paymentReceipt
-        ? { ...data.paymentReceipt, uploadedAt: new Date() }
+      paymentMethod,
+      paymentReceipt: paymentReceipt
+        ? { ...paymentReceipt, uploadedAt: new Date() }
         : undefined,
+      ...(payments ? { payments } : {}),
       hasBonus: data.hasBonus,
       bonusAmount: data.hasBonus ? Number(data.bonusAmount) : 0,
       status: "active",
@@ -229,6 +296,29 @@ export class StudentService {
               ...(student.paymentReceipt.size ? { size: student.paymentReceipt.size } : {}),
               ...(student.paymentReceipt.mimeType ? { mimeType: student.paymentReceipt.mimeType } : {}),
             },
+          }
+        : {}),
+      // Each payment on its own, with its own method, date and receipt — they
+      // add up to declaredPaidMinor, and finance records them on approval. The
+      // fields above stay for whatever reads only the total.
+      ...(student.payments?.length
+        ? {
+            payments: student.payments.map((p) => ({
+              method: p.method,
+              amountMinor: Math.round(p.amount * 100),
+              paidOn: new Date(p.paidAt).toISOString().slice(0, 10),
+              ...(p.receipt?.key && p.receipt.url
+                ? {
+                    receipt: {
+                      name: p.receipt.name,
+                      url: p.receipt.url,
+                      key: p.receipt.key,
+                      ...(p.receipt.size ? { size: p.receipt.size } : {}),
+                      ...(p.receipt.mimeType ? { mimeType: p.receipt.mimeType } : {}),
+                    },
+                  }
+                : {}),
+            })),
           }
         : {}),
     };
@@ -396,6 +486,9 @@ export class StudentService {
     // Recompute pendingAmount and feeStatus if fee fields changed
     const total   = (student as unknown as Record<string, number>).totalFee   as number ?? 0;
     const paid    = (student as unknown as Record<string, number>).paidAmount  as number ?? 0;
+    // Only when the money is being changed: an enrolment already over its fee
+    // from before this rule can still have its notes or status edited.
+    if (data.totalFee !== undefined || data.paidAmount !== undefined) assertNotOverFee(total, paid);
     student.pendingAmount = Math.max(0, total - paid);
     // An explicitly sent status is honoured, as it is on create. The figures
     // decide when nobody says otherwise — but a counsellor who marks an

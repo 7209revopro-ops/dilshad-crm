@@ -78,6 +78,34 @@ const studentSchema = new Schema<IStudent>(
       mimeType: { type: String },
       uploadedAt: { type: Date },
     },
+    /**
+     * Each payment taken at the close — a client may pay part in cash and part
+     * by card, each with its own receipt (the user, 2026-10-05). They add up to
+     * paidAmount; the first is also paymentMethod / paymentReceipt above.
+     * Absent on enrolments from before.
+     */
+    payments: {
+      type: [
+        new Schema(
+          {
+            method: { type: String, enum: ENROLMENT_PAYMENT_METHODS, required: true },
+            amount: { type: Number, required: true, min: 0.01 },
+            receipt: {
+              name: { type: String },
+              url: { type: String },
+              key: { type: String },
+              size: { type: Number },
+              mimeType: { type: String },
+              uploadedAt: { type: Date },
+            },
+            paidAt: { type: Date, required: true },
+            collectedBefore: { type: Boolean },
+          },
+          { _id: false },
+        ),
+      ],
+      default: undefined,
+    },
     notes: { type: String, trim: true, maxlength: 2000 },
     /**
      * Whether the client was given a bonus with this enrolment, and how much.

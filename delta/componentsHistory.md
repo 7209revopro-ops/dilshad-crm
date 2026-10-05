@@ -1184,3 +1184,9 @@ A new close starts "Bonus given?" at yes with the course's bonus, marked "From t
 
 **File:** `components/students/EnrolmentSteps.tsx` — `EnrolmentStepsStrip({ steps })` (five pills at the foot of a My Enrolments card, details on hover, and "Next step: …" / "Every step done") and `EnrolmentStepsList({ steps })` (the enrolment page: each step with its detail, who and when). Green done, amber waiting, red stopped, grey unknown / not needed.
 **Page:** `app/(dashboard)/enrolments/[id]/page.tsx` — opened from the student's name on a card; the steps and the sale's commission.
+
+### Change log — 2026-10-05 (split payments)
+- `PaymentRowsEditor` (new, `components/students/`) — one row per payment at the close: method, amount (fixed for the money
+  already on the lead), its own receipt upload; add / remove rows. Exports `newPaymentRow`, `rowAmount`, `missingInRows`.
+- `CreateStudentModal` — a new close uses the rows instead of one method and one receipt; red "more than the fee" and a blocked
+  save when collected is above the fee (edit mode too).

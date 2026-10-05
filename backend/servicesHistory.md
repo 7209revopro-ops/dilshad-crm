@@ -784,3 +784,10 @@ on the lead is marked done. `getUserLeadStats` also returns `meeting_done`.
 
 #### `StudentService.getEnrolment(id, viewer)` — `src/services/studentService.ts`
 - One enrolment with its steps and its commission as the viewer may see it; 403 for somebody else's without students:view
+
+## Split payments (added 2026-10-05)
+
+- `checkedPayments(list, paidAmount, enrolledOn)` — validates a close's `payments[]` (see logicHistory) and returns them ready to
+  store, or null when none were sent.
+- `assertNotOverFee(totalFee, paidAmount)` — 422 when what was collected is more than the fee.
+- `buildHandoverPayload` — adds `payments: [{ method, amountMinor, paidOn, receipt }]` when the enrolment has them.

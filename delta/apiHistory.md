@@ -1457,3 +1457,8 @@ Copy the template at the top of this file and add under the correct module secti
 | `useEnrolment(id)` | `["enrolments", "one", id]` | `GET /api/v1/students/enrolments/:id` | The enrolment's own page: steps with who/when, commission |
 
 **Types:** `EnrolmentStep`, `EnrolmentDetail` in `hooks/useEnrolments.ts`; `EnrolmentCommission.onboarded / bonus`.
+
+## Split payments (added 2026-10-05)
+
+`useCreateStudent` sends `payments: [{ method, amount, receipt, paidAt, collectedBefore? }]` (types/student.ts `StudentPayment`)
+beside `paymentMethod` / `paymentReceipt` (the first payment's). Each new payment is added to the lead with `useAddPayment`, once.

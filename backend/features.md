@@ -636,3 +636,22 @@ Each feature documents:
 **Tests**: `scripts/commission-check.sh` — the steps, one at a time; no bonus; not Forex; Tetra Commission silent; counted early under the old rule; void; finance down; the enrolment endpoint.
 
 **Change Log**: 2026-10-04 — added (the owner: "finance approved => lms created account => commission portal get cs => onboarded => mt5 bonus approved, then only they get the commission").
+
+## Split payments at the close — and nothing collected above the fee (2026-10-05)
+
+**Description**: A client may pay in more than one way — 300 in cash and 200 by card on a 500 fee — and each payment has its
+own method, amount and receipt. A close sends `payments[]`; they must add up to `paidAmount`, and what was collected may never
+be more than the fee, on a close or on an edit that changes the money. Finance gets every payment with its receipt and records
+them against the invoice when it approves.
+
+**Routes**: `POST /api/v1/students` (unchanged route; takes `payments`), `PUT /api/v1/students/:id` (refuses an edit that leaves
+paid above the fee).
+
+**Service Methods**: `checkedPayments`, `assertNotOverFee` in `studentService.ts`; `buildHandoverPayload` sends `payments`.
+
+**Models Used**: `Student.payments` (new: method, amount, receipt, paidAt, collectedBefore).
+
+**Tests**: `scripts/split-payments-check.sh` — 27 checks in the four cases.
+
+**Change Log**:
+- 1.0.0 — Initial build. An older screen (one method, one receipt) still closes.

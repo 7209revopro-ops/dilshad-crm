@@ -796,3 +796,15 @@ A course says what bonus comes with it (`Course.bonusAmount`, the course's curre
 - A sale's commission counts only once: finance approved it; the LMS has the student; Tetra Commission gave them a CS; their CS sent the welcome (onboarded); and the MT5 bonus promised at the close was approved by a broker admin — "none" promised is approved by itself. A course Tetra Commission doesn't take (not Forex) needs only the first two.
 - Until then: `CommissionSale.state = "progress"`, `reason` = the first step not done ("Next step: …", or "Stopped at: …" when rejected/refused). Nothing is paid on a guess: Tetra Commission not answering leaves a step unknown.
 - From 1 October 2026 (UAE) on, in the month of the close; amounts frozen the day the steps complete.
+
+## Split payments at the close (2026-10-05)
+
+1. **The payments**: `payments[]` on a close — 1 to 10, each with a method this CRM takes, an amount above zero and its receipt
+   (key + url). They must add up to `paidAmount` to the fil (`minor()`), or 422. None sent = an older screen: one method, one
+   receipt, as before.
+2. **The money already on the lead** before the close is a payment of its own (`collectedBefore`), its amount fixed by the dialog.
+3. **Never above the fee** (the user, 2026-10-05: "block"): `assertNotOverFee` on every close, and on an edit that changes
+   `totalFee` or `paidAmount` — an enrolment already over it from before can still have other fields edited.
+4. **Compatibility**: the first payment is also `paymentMethod` / `paymentReceipt`, and finance still gets `declaredPaidMinor`,
+   `declaredPaymentMethod` and `receipt` beside `payments[]`.
+5. **Finance** records each payment against the invoice with its receipt when accounts approve (finance-delta).

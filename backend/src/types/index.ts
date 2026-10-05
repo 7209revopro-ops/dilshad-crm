@@ -499,6 +499,16 @@ export interface StoredFile {
   uploadedAt?: Date;
 }
 
+/** One payment taken at the close: how, how much, when, and its receipt. */
+export interface IStudentPayment {
+  method: EnrolmentPaymentMethod;
+  amount: number;
+  receipt: StoredFile;
+  paidAt: Date;
+  /** The money already on the lead before the close, as one payment. */
+  collectedBefore?: boolean;
+}
+
 export interface IStudent extends Document {
   _id: Types.ObjectId;
   enrollmentNumber: string;
@@ -528,6 +538,13 @@ export interface IStudent extends Document {
   paymentMethod?: EnrolmentPaymentMethod;
   /** Proof the money was taken, handed on to finance with the enrolment. */
   paymentReceipt?: StoredFile | null;
+  /**
+   * Each payment taken at the close, when the client paid in more than one way
+   * (cash and card, each with its own receipt). They add up to paidAmount; the
+   * first is also paymentMethod / paymentReceipt, for whatever reads only one.
+   * Absent on enrolments from before.
+   */
+  payments?: IStudentPayment[];
   notes?: string;
   /** Whether a bonus was given at the close — unset on enrolments from before it was asked. */
   hasBonus?: boolean | null;

@@ -171,8 +171,15 @@ let withBonusId = "";
   check("...and finance is told \"no\"", payload?.bonus?.given === false && payload?.bonus?.amountMinor === 0, JSON.stringify(payload?.bonus));
 }
 {
-  const s = await close({ name: "Overpaid Client", totalFee: 1000, paidAmount: 1200 });
-  const payload = await svc.buildHandoverPayload(String((s as { _id: unknown })._id)) as Record<string, any>;
+  // Collecting more than the fee is refused at the close now (the user, 2026-10-05: "block") …
+  const overpaid = await close({ name: "Overpaid Client", totalFee: 1000, paidAmount: 1200 }).then(() => null, (e: { statusCode?: number; message?: string }) => e);
+  check("Case 2 — collecting more than the fee is refused: 422", overpaid?.statusCode === 422 && /more than the fee/.test(overpaid.message ?? ""), String(overpaid?.message));
+  // … but an enrolment from before that rule may still be over it: its balance is zero, never negative.
+  const legacy = await Student.collection.insertOne({
+    enrollmentNumber: "EN-OVER-1", name: "Overpaid Client", leadId: new Types.ObjectId(),
+    enrollmentDate: new Date(), totalFee: 1000, paidAmount: 1200, pendingAmount: 0, feeStatus: "paid", status: "active",
+  });
+  const payload = await svc.buildHandoverPayload(String(legacy.insertedId)) as Record<string, any>;
   check("Case 2 — paid in full or more: the balance is zero, never negative", payload?.balanceMinor === 0, `balance=${payload?.balanceMinor}`);
   const odd = await close({ name: "Odd Fee Client", totalFee: 1000.1, paidAmount: 0.3 });
   const p2 = await svc.buildHandoverPayload(String((odd as { _id: unknown })._id)) as Record<string, any>;

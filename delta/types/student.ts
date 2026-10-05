@@ -36,6 +36,8 @@ export interface Student {
   language?: string;
   paymentMethod?: string;
   paymentReceipt?: { name: string; url: string; key: string; size?: number; mimeType?: string } | null;
+  /** Each payment taken at the close, when the client paid in more than one way. Absent on older enrolments. */
+  payments?: StudentPayment[];
   /** Whether a bonus was given at the close. Absent on enrolments from before it was asked. */
   hasBonus?: boolean | null;
   /** The bonus, in the fee's currency; 0 when none. Never part of the balance. */
@@ -86,6 +88,8 @@ export interface CreateStudentInput {
   language?: string;
   paymentMethod?: string;
   paymentReceipt?: { name: string; url: string; key: string; size?: number; mimeType?: string } | null;
+  /** Each payment taken now (and the money already on the lead, as one). They add up to paidAmount. */
+  payments?: StudentPayment[];
   hasBonus?: boolean;
   bonusAmount?: number;
 }
@@ -126,4 +130,17 @@ export interface StoredReceipt {
   key: string;
   size?: number;
   mimeType?: string;
+}
+
+/**
+ * One payment taken at the close — a client may pay part in cash and part by
+ * card, each with its own receipt. They add up to the enrolment's paidAmount.
+ */
+export interface StudentPayment {
+  method: string;
+  amount: number;
+  receipt: StoredReceipt;
+  paidAt: string;
+  /** The money already on the lead before the close, as one payment. */
+  collectedBefore?: boolean;
 }
