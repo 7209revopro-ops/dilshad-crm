@@ -17,7 +17,9 @@ import { useCreateStudent, useUpdateStudent } from "@/hooks/useStudents";
 import { useAllCourses } from "@/hooks/useCourses";
 import { useAddPayment } from "@/hooks/usePayments";
 import { CommissionPreview } from "@/components/commission/CommissionPreview";
-import { PaymentRowsEditor, missingInRows, newPaymentRow, rowAmount, type PaymentRow } from "@/components/students/PaymentRowsEditor";
+import {
+  PaymentRowsEditor, describeForeign, missingInRows, newPaymentRow, rowAmount, rowForeignFields, type PaymentRow,
+} from "@/components/students/PaymentRowsEditor";
 import type { Lead } from "@/types/lead";
 import type { Course } from "@/types/course";
 import type { EnrolmentPaymentMethod, FeeStatus, Student, StoredReceipt } from "@/types/student";
@@ -210,9 +212,12 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
     if (!editing) {
       for (const row of paymentRows) {
         if (row.collectedBefore || row.addedToLead) continue;
+        // In AED; one paid in another currency says what was handed over.
         await addPayment.mutateAsync({
           amount: rowAmount(row),
-          note: `Collected at enrolment${pickedCourse ? ` — ${pickedCourse.name}` : ""} · ${PAYMENT_METHOD_LABELS[row.method as EnrolmentPaymentMethod] ?? row.method}`,
+          note: `Collected at enrolment${pickedCourse ? ` — ${pickedCourse.name}` : ""} · ${PAYMENT_METHOD_LABELS[row.method as EnrolmentPaymentMethod] ?? row.method}${
+            describeForeign(row) ? ` · ${describeForeign(row)}` : ""
+          }`,
           paidAt: new Date(enrollmentDate).toISOString(),
         });
         setPaymentRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, addedToLead: true } : r)));
@@ -273,6 +278,8 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
         receipt: r.receipt as StoredReceipt,
         paidAt: new Date(enrollmentDate).toISOString(),
         ...(r.collectedBefore ? { collectedBefore: true } : {}),
+        // Paid in another currency: what was handed over, and the rate — `amount` is the AED.
+        ...rowForeignFields(r),
       })),
       ...bonusFields,
     });

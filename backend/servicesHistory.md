@@ -791,3 +791,10 @@ on the lead is marked done. `getUserLeadStats` also returns `meeting_done`.
   store, or null when none were sent.
 - `assertNotOverFee(totalFee, paidAmount)` — 422 when what was collected is more than the fee.
 - `buildHandoverPayload` — adds `payments: [{ method, amountMinor, paidOn, receipt }]` when the enrolment has them.
+
+## studentService — currency per payment (changed 2026-10-05)
+
+- `checkedPayments` — each payment may carry `currency` / `amountInCurrency` / `exchangeRate`, checked by `foreignPart(raw,
+  aed, label)`: a currency of `CLOSE_CURRENCIES`, amount and rate above zero, `amount` within 0.5% of `amountInCurrency ×
+  exchangeRate`, never on `collectedBefore`; stored on `Student.payments[]`.
+- `buildHandoverPayload` — a payment in another currency adds `original: { currency, amountMinor (×100), rate }`.

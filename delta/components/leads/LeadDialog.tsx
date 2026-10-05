@@ -28,15 +28,14 @@ import { useTeams, useTeam } from "@/hooks/useTeams";
 import { useSheetSources } from "@/hooks/useSheetSources";
 import type { Lead } from "@/types/lead";
 
-// Sources never selectable when creating or editing a lead — pick a real source
-const DISABLED_SOURCES = new Set(["other", "social", "direct"]);
-
+// Every source can be picked (the owner, 2026-10-05) — Social Media, Direct and
+// Other were switched off in the copy from Delta's CRM.
 const FALLBACK_SOURCES = [
   { value: "website",  label: "Website" },
   { value: "referral", label: "Referral" },
-  { value: "social",   label: "Social Media", disabled: true },
-  { value: "direct",   label: "Direct", disabled: true },
-  { value: "other",    label: "Other", disabled: true },
+  { value: "social",   label: "Social Media" },
+  { value: "direct",   label: "Direct" },
+  { value: "other",    label: "Other" },
 ];
 
 interface LeadDialogProps {
@@ -63,7 +62,6 @@ export function LeadDialog({ open, onOpenChange, lead, mode }: LeadDialogProps) 
           s.sources.map((key) => ({
             value: key,
             label: `${s.name} · ${key}`,
-            disabled: DISABLED_SOURCES.has(key.trim().toLowerCase()),
           }))
         ),
         // Referral must always be selectable regardless of sheet integrations
@@ -230,11 +228,7 @@ export function LeadDialog({ open, onOpenChange, lead, mode }: LeadDialogProps) 
                     <SelectTrigger aria-invalid={!!errors.source}><SelectValue placeholder="Select source" /></SelectTrigger>
                     <SelectContent>
                       {SOURCES.map((s) => (
-                        <SelectItem
-                          key={s.value}
-                          value={s.value}
-                          disabled={(s as { disabled?: boolean }).disabled}
-                        >
+                        <SelectItem key={s.value} value={s.value}>
                           {s.label}
                         </SelectItem>
                       ))}

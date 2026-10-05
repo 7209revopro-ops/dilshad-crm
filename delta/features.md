@@ -816,3 +816,15 @@ how it was paid. Editing an enrolment keeps its single "collected now" figure, a
 
 **Change Log**:
 - 1.0.0 — Initial build
+
+## Currency at the close; every source selectable (2026-10-05)
+
+**What it does**: At the close each payment can be in another currency (INR, USD, SAR …): the amount in it, the rate to AED,
+and the AED it comes to — worked out from the rate, or typed and the rate worked out. AED is what counts everywhere in the CRM;
+finance shows the original beside each payment and records it in AED. On Add/Edit Lead, Social Media, Direct and Other can be
+picked as the source again.
+
+**API**: `POST /students` (payments' `currency`, `amountInCurrency`, `exchangeRate`).
+
+**Change Log**:
+- 1.0.0 — Initial build

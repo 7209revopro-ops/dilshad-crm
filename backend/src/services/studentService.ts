@@ -1,7 +1,10 @@
 import { Types } from "mongoose";
 import {
+  BASE_CURRENCY,
+  CLOSE_CURRENCIES,
   ENROLMENT_LANGUAGES,
   ENROLMENT_PAYMENT_METHODS,
+  type CloseCurrency,
   type EnrolmentLanguage,
   type EnrolmentPaymentMethod,
 } from "../types/index.js";
@@ -18,7 +21,43 @@ const minor = (n: number) => Math.round(n * 100);
 const money = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
 type ReceiptInput = { name?: string; url?: string; key?: string; size?: number; mimeType?: string } | null | undefined;
-type PaymentInput = { method?: string; amount?: number | string; receipt?: ReceiptInput; paidAt?: string; collectedBefore?: boolean } | null;
+type PaymentInput = {
+  method?: string;
+  amount?: number | string;
+  receipt?: ReceiptInput;
+  paidAt?: string;
+  collectedBefore?: boolean;
+  currency?: string;
+  amountInCurrency?: number | string;
+  exchangeRate?: number | string;
+} | null;
+
+/**
+ * A payment taken in another currency than AED (the owner, 2026-10-05): the
+ * currency, the amount in it and the rate — 1 of it = `exchangeRate` AED —
+ * checked against the AED amount the close converted it to. Within half a
+ * percent, for rounding; a figure typed in the wrong currency is refused rather
+ * than billed. Nothing for an AED payment, nor for the money already on the
+ * lead, which is in AED.
+ */
+function foreignPart(raw: PaymentInput, aed: number, n: string): Pick<IStudentPayment, "currency" | "amountInCurrency" | "exchangeRate"> {
+  const currency = typeof raw?.currency === "string" ? raw.currency.trim().toUpperCase() : "";
+  if (!currency || currency === BASE_CURRENCY) return {};
+  if (!CLOSE_CURRENCIES.includes(currency as CloseCurrency)) throw createError(`${n} is in a currency this CRM does not take (${currency}).`, 422);
+  if (raw?.collectedBefore) throw createError(`${n} was already on the lead in ${BASE_CURRENCY}, so it cannot be in ${currency}.`, 422);
+  const inCurrency = Number(raw?.amountInCurrency);
+  if (!Number.isFinite(inCurrency) || inCurrency <= 0) throw createError(`${n} needs the amount paid in ${currency}.`, 422);
+  const rate = Number(raw?.exchangeRate);
+  if (!Number.isFinite(rate) || rate <= 0) throw createError(`${n} needs its rate: 1 ${currency} = how many ${BASE_CURRENCY}.`, 422);
+  const expected = Math.round(inCurrency * rate * 100);
+  if (Math.abs(minor(aed) - expected) > Math.max(1, Math.round(expected * 0.005))) {
+    throw createError(
+      `${n}: ${money(inCurrency)} ${currency} at 1 ${currency} = ${rate} ${BASE_CURRENCY} comes to ${money(expected / 100)} ${BASE_CURRENCY}, not ${money(aed)}.`,
+      422,
+    );
+  }
+  return { currency: currency as CloseCurrency, amountInCurrency: minor(inCurrency) / 100, exchangeRate: rate };
+}
 
 /**
  * The payments a close sends, checked (the user, 2026-10-05: a client may pay
@@ -50,6 +89,7 @@ function checkedPayments(list: unknown, paidAmount: number, enrolledOn: Date): I
       },
       paidAt: Number.isNaN(paidAt.getTime()) ? enrolledOn : paidAt,
       ...(raw.collectedBefore ? { collectedBefore: true } : {}),
+      ...foreignPart(raw, amount, n),
     };
   });
   const sum = payments.reduce((s, p) => s + minor(p.amount), 0);
@@ -317,6 +357,12 @@ export class StudentService {
                       ...(p.receipt.mimeType ? { mimeType: p.receipt.mimeType } : {}),
                     },
                   }
+                : {}),
+              // Paid in another currency: amountMinor above is the AED it was
+              // converted to (what finance records); this is what was handed
+              // over, and the rate — finance's `original`, 1 of it = rate AED.
+              ...(p.currency && p.currency !== BASE_CURRENCY && p.amountInCurrency && p.exchangeRate
+                ? { original: { currency: p.currency, amountMinor: Math.round(p.amountInCurrency * 100), rate: p.exchangeRate } }
                 : {}),
             })),
           }

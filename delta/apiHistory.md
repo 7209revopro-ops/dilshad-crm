@@ -1462,3 +1462,9 @@ Copy the template at the top of this file and add under the correct module secti
 
 `useCreateStudent` sends `payments: [{ method, amount, receipt, paidAt, collectedBefore? }]` (types/student.ts `StudentPayment`)
 beside `paymentMethod` / `paymentReceipt` (the first payment's). Each new payment is added to the lead with `useAddPayment`, once.
+
+## Currency per payment (changed 2026-10-05)
+
+**File:** `hooks/useStudents.ts` (`useCreateStudent`) · `POST /students` — each of `payments[]` may add `currency`,
+`amountInCurrency` and `exchangeRate` (1 of it = that many AED); `amount` stays the AED figure. Built by `rowForeignFields` in
+`components/students/PaymentRowsEditor.tsx`. **Types:** `StudentPayment` gains the three; `BASE_CURRENCY` in `types/student.ts`.

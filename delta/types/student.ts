@@ -138,9 +138,20 @@ export interface StoredReceipt {
  */
 export interface StudentPayment {
   method: string;
+  /** In AED — converted, when the client paid in another currency. */
   amount: number;
   receipt: StoredReceipt;
   paidAt: string;
   /** The money already on the lead before the close, as one payment. */
   collectedBefore?: boolean;
+  /** Paid in another currency: which, how much of it, and 1 of it = `exchangeRate` AED. Absent for AED. */
+  currency?: string;
+  amountInCurrency?: number;
+  exchangeRate?: number;
 }
+
+/**
+ * The currency the fees are in — Delta HQ's, which finance bills in. A payment
+ * taken in another is converted to it at the close (the owner, 2026-10-05).
+ */
+export const BASE_CURRENCY = "AED";

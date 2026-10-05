@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { ENROLMENT_LANGUAGES, ENROLMENT_PAYMENT_METHODS } from "../types/index.js";
+import { CLOSE_CURRENCIES, ENROLMENT_LANGUAGES, ENROLMENT_PAYMENT_METHODS } from "../types/index.js";
 import type { IStudent } from "../types/index.js";
 
 const studentSchema = new Schema<IStudent>(
@@ -100,6 +100,11 @@ const studentSchema = new Schema<IStudent>(
             },
             paidAt: { type: Date, required: true },
             collectedBefore: { type: Boolean },
+            // Paid in another currency (the owner, 2026-10-05): which, how much
+            // of it, and 1 of it = exchangeRate AED. `amount` is the AED figure.
+            currency: { type: String, enum: CLOSE_CURRENCIES },
+            amountInCurrency: { type: Number, min: 0.01 },
+            exchangeRate: { type: Number, min: 0 },
           },
           { _id: false },
         ),

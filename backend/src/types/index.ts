@@ -489,6 +489,18 @@ export const PAYMENT_METHOD_LABELS: Record<EnrolmentPaymentMethod, string> = {
   billexpro: "BillExPro",
 };
 
+/**
+ * The currency this CRM's fees are in: Delta HQ's, which finance bills in. A
+ * payment taken in another is converted to it at the close (the owner,
+ * 2026-10-05), and the converted figure is what counts — paid, balance, fee
+ * status, commission.
+ */
+export const BASE_CURRENCY = "AED";
+
+/** What a payment can be taken in at the close — the app's currency list. */
+export const CLOSE_CURRENCIES = ["AED", "USD", "INR", "EUR", "GBP", "SAR", "CAD", "AUD", "SGD", "JPY", "MYR"] as const;
+export type CloseCurrency = (typeof CLOSE_CURRENCIES)[number];
+
 /** A file kept in object storage, as the enrolment records it. */
 export interface StoredFile {
   name: string;
@@ -502,11 +514,16 @@ export interface StoredFile {
 /** One payment taken at the close: how, how much, when, and its receipt. */
 export interface IStudentPayment {
   method: EnrolmentPaymentMethod;
+  /** In AED (BASE_CURRENCY) — converted, when the client paid in another currency. */
   amount: number;
   receipt: StoredFile;
   paidAt: Date;
   /** The money already on the lead before the close, as one payment. */
   collectedBefore?: boolean;
+  /** Paid in another currency: which, how much of it, and 1 of it = `exchangeRate` AED. Absent for AED. */
+  currency?: CloseCurrency;
+  amountInCurrency?: number;
+  exchangeRate?: number;
 }
 
 export interface IStudent extends Document {

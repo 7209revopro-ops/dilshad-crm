@@ -808,3 +808,15 @@ A course says what bonus comes with it (`Course.bonusAmount`, the course's curre
 4. **Compatibility**: the first payment is also `paymentMethod` / `paymentReceipt`, and finance still gets `declaredPaidMinor`,
    `declaredPaymentMethod` and `receipt` beside `payments[]`.
 5. **Finance** records each payment against the invoice with its receipt when accounts approve (finance-delta).
+
+## Currency at the close (2026-10-05)
+
+1. Every payment at the close is in AED (`BASE_CURRENCY`) unless it says otherwise: `currency` (one of `CLOSE_CURRENCIES`),
+   `amountInCurrency` and `exchangeRate` — 1 of the currency = `exchangeRate` AED. `amount` is always the AED figure.
+2. `checkedPayments` → `foreignPart`: for another currency the amount in it and the rate must be above zero, and `amount` must be
+   what they come to, within half a percent (rounding) — so a figure typed in the wrong currency (INR 50,000 sent as AED 50,000)
+   is refused. The money already on the lead (`collectedBefore`) is AED and can't carry a currency. AED (or no currency) drops
+   any stray fields. Everything else — the sum, the over-the-fee block — runs on the AED figures, as before.
+3. Handover: each such payment goes to finance with `original: { currency, amountMinor, rate }` beside its AED `amountMinor`;
+   finance keeps it, shows it, and records the payment in AED with the original in its note.
+4. The lead's payment (added at the close) is in AED; its note ends "· INR 50,000 at 1 INR = 0.044 AED".

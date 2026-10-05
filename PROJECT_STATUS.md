@@ -8,7 +8,11 @@ mark and a redesigned login. Backend: Bun + Express + Mongoose on **port 7868** 
 Frontend: Next.js 14 in `delta/` (dev 3001, start 3007). Database: MongoDB `dilshad_crm` (connection in `backend/.env`).
 
 ## Last working item
-2026-10-04: **View as** — a super admin opens the CRM as any active user who isn't a super admin, for 30 minutes, view only (the
+2026-10-05: **currency at the close** — each payment in AED or another currency with its rate; the AED figure counts and
+finance keeps the original (finance repo, same day); Social Media, Direct and Other selectable as lead sources again. 32/32
+API checks + UI on a scratch database (finance: 23/23 end to end; split-payment checks still pass); not committed yet.
+
+Before that: 2026-10-04: **View as** — a super admin opens the CRM as any active user who isn't a super admin, for 30 minutes, view only (the
 server refuses every change; nothing counts as their activity), under an amber bar with "Back to my account"; each session is
 recorded and ending it ends the pass. 41/41 API checks + UI (list and user page, view-only toast, Back, a session ended on the
 server, the countdown, Logout while viewing, phone width) on a scratch database; pushed 2026-10-04. Needs the API deployed
@@ -105,3 +109,4 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
 - 2026-10-04 — View as (impersonation) for super admins: 30 minutes, view only, each session on record.
 - 2026-10-04 — A course's bonus: set on the Courses page (Add / Edit), and a new close starts from it (`Course.bonusAmount`);
   the same in Delta and Draw. Saving it on the live site needs the API deployed.
+- 2026-10-05 — Currency per payment at the close (rate to AED; finance shows the original); every lead source selectable.

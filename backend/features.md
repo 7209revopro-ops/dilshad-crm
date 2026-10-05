@@ -655,3 +655,19 @@ paid above the fee).
 
 **Change Log**:
 - 1.0.0 — Initial build. An older screen (one method, one receipt) still closes.
+
+## Currency at the close (2026-10-05)
+
+**Description**: A payment taken at the close can be in another currency than AED (the owner, 2026-10-05): the seller picks the
+currency, types the amount in it and the rate (1 of it = so many AED), and the AED figure is worked out (or typed, and the rate
+worked out). The AED figure is what counts — paid, balance, fee status, the over-the-fee block, commission — and finance gets it
+with what was handed over beside it.
+
+**Routes**: unchanged — `POST /api/v1/students` takes `currency`, `amountInCurrency`, `exchangeRate` on each payment.
+
+**Service Methods**: `studentService.checkedPayments` (→ `foreignPart`), `buildHandoverPayload` (each payment's `original`).
+
+**Models Used**: `Student.payments[]` gains `currency`, `amountInCurrency`, `exchangeRate`.
+
+**Change Log**:
+- 1.0.0 — Initial build. The 11 currencies of the app's currency setting; AED (`BASE_CURRENCY`) is the base.
