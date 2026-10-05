@@ -3,6 +3,8 @@ import { z } from "zod";
 import { Lead } from "../models/Lead.js";
 import { User } from "../models/User.js";
 import { LeadService } from "../services/leadService.js";
+import { notifyLeadAssignment, notifyBulkLeadAssignment } from "../services/pushService.js";
+import { emitToUser } from "../socket.js";
 import { sendWelcomeToLead } from "../services/whatsappCloudService.js";
 import { sendSuccess, sendError } from "../utils/response.js";
 
@@ -254,6 +256,12 @@ export const syncSheetLead = async (
     // Instant WhatsApp welcome (fire-and-forget — never blocks the sync)
     void sendWelcomeToLead(lead._id.toString());
 
+    // Directly-assigned counselors (a person named by Root's split, an agent column) never went
+    // through the split, which is the only place that notified them (the user, 2026-10-05)
+    if (assignedUser) {
+      void notifyLeadAssignment(String(assignedUser._id), lead._id.toString(), lead.name, emitToUser).catch(() => null);
+    }
+
     // ── Auto-assign to team only if no direct counselor assigned ──────────
     let assignedTeam: string | null = null;
     if (!assignedUser) {
@@ -327,6 +335,8 @@ export const syncSheetLeadsBatch = async (
       phone?: string;
       reason?: string;
     }> = [];
+    // counselor id → leads directly assigned to them in this batch
+    const directByUser = new Map<string, { count: number; first: { id: string; name: string } }>();
 
     for (let i = 0; i < rows.length; i++) {
       const parsed = sheetRowSchema.safeParse(rows[i]);
@@ -409,6 +419,11 @@ export const syncSheetLeadsBatch = async (
           leadId: lead._id.toString(),
           phone,
         });
+        if (assignedUser) {
+          const uid = String(assignedUser._id);
+          const cur = directByUser.get(uid);
+          directByUser.set(uid, cur ? { count: cur.count + 1, first: cur.first } : { count: 1, first: { id: lead._id.toString(), name: lead.name } });
+        }
 
         // Instant WhatsApp welcome (fire-and-forget — never blocks the batch)
         void sendWelcomeToLead(lead._id.toString());
@@ -416,6 +431,12 @@ export const syncSheetLeadsBatch = async (
         const msg = rowErr instanceof Error ? rowErr.message : String(rowErr);
         results.push({ index: i, status: "invalid", phone, reason: msg });
       }
+    }
+
+    // One alert per counselor for this batch: the lead itself if one, a count if several
+    for (const [uid, info] of directByUser) {
+      if (info.count === 1) void notifyLeadAssignment(uid, info.first.id, info.first.name, emitToUser).catch(() => null);
+      else void notifyBulkLeadAssignment(uid, info.count, emitToUser).catch(() => null);
     }
 
     const created = results.filter((r) => r.status === "created").length;

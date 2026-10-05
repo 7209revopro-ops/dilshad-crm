@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getSocket } from "@/lib/socket";
 import { useAuthStore } from "@/lib/store/authStore";
@@ -15,7 +15,6 @@ import type { TeamUpdateItem } from "@/types/team";
 export function useTeamSocket(teamId: string) {
   const { accessToken } = useAuthStore();
   const queryClient     = useQueryClient();
-  const joinedRef       = useRef(false);
 
   useEffect(() => {
     if (!teamId || !accessToken) return;
@@ -23,18 +22,13 @@ export function useTeamSocket(teamId: string) {
     const socket = getSocket(accessToken);
 
     function joinRoom() {
-      if (!joinedRef.current) {
-        socket.emit("join:team", teamId);
-        joinedRef.current = true;
-      }
+      socket.emit("join:team", teamId);
     }
 
-    // Join immediately if already connected, otherwise wait for connect
-    if (socket.connected) {
-      joinRoom();
-    } else {
-      socket.once("connect", joinRoom);
-    }
+    // Join now if connected, and on every connect after — rooms belong to a
+    // connection, and a reconnected one (after a restart or a dropped network) starts in none
+    if (socket.connected) joinRoom();
+    socket.on("connect", joinRoom);
 
     // On every team:update event — prepend item to the first page cache
     // and also invalidate so next refetch is fresh
@@ -58,7 +52,6 @@ export function useTeamSocket(teamId: string) {
       socket.off("connect",     joinRoom);
       socket.off("team:update", handleUpdate);
       socket.emit("leave:team", teamId);
-      joinedRef.current = false;
     };
   }, [teamId, accessToken, queryClient]);
 }

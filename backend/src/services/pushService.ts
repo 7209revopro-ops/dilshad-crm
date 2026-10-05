@@ -20,11 +20,13 @@ export interface PushPayload {
 }
 
 // ── Send push to a single user ────────────────────────────────────────────────
-export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
+/** To every device the user enabled notifications on; how many there were, and how many took it. */
+export async function sendPushToUser(userId: string, payload: PushPayload): Promise<{ devices: number; delivered: number }> {
   const subs = await PushSubscription.find({ userId });
-  if (!subs.length) return;
+  if (!subs.length) return { devices: 0, delivered: 0 };
 
   const json = JSON.stringify(payload);
+  let delivered = 0;
 
   await Promise.allSettled(
     subs.map(async (sub) => {
@@ -33,15 +35,28 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
           { endpoint: sub.endpoint, keys: sub.keys },
           json
         );
+        delivered++;
       } catch (err: unknown) {
-        // 404 / 410 = subscription gone, remove it
         const code = (err as { statusCode?: number }).statusCode;
+        const host = (sub.endpoint.match(/^https:\/\/([^/]+)/) || [])[1];
         if (code === 404 || code === 410) {
+          // 404 / 410 = subscription gone, remove it
           await PushSubscription.deleteOne({ _id: sub._id });
+        } else if (code === 403) {
+          // Made with another VAPID key (the keys were changed): it can never be
+          // delivered to with this one. The website registers the device again,
+          // with this key, the next time it is opened.
+          await PushSubscription.deleteOne({ _id: sub._id });
+          console.error(`[push] dropped a device made with another VAPID key user=${userId} host=${host}: ${(err as Error).message}`);
+        } else {
+          // Anything else (413, network…) used to be swallowed, leaving no
+          // trace of why nobody got notified
+          console.error(`[push] send failed user=${userId} host=${host} status=${code ?? "n/a"}: ${(err as Error).message}`);
         }
       }
     })
   );
+  return { devices: subs.length, delivered };
 }
 
 // ── Send push to multiple users ───────────────────────────────────────────────

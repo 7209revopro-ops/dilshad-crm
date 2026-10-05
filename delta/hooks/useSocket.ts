@@ -1,47 +1,21 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { io, type Socket } from "socket.io-client";
+import { useEffect, useState } from "react";
+import type { Socket } from "socket.io-client";
+import { getSocket } from "@/lib/socket";
 import { useAuthStore } from "@/lib/store/authStore";
 
-let globalSocket: Socket | null = null;
-
-/** Returns a singleton socket connected with the current user's token */
+/** The tab's one live connection (lib/socket.ts), signed in with the current user's token. */
 export function useSocket(): Socket | null {
   const { accessToken: token } = useAuthStore();
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
     if (!token || typeof window === "undefined") return;
-
-    // Reuse existing connected socket
-    if (globalSocket?.connected) {
-      socketRef.current = globalSocket;
-      return;
-    }
-
-    const serverUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ?? "http://localhost:5000";
-
-    const socket = io(serverUrl, {
-      auth: { token },
-      transports: ["websocket", "polling"],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
-    });
-
-    globalSocket = socket;
-    socketRef.current = socket;
-
-    socket.on("connect_error", (err) => {
-      console.warn("Socket connect error:", err.message);
-    });
-
-    return () => {
-      // Don't disconnect — keep the global socket alive across page navigations
-    };
+    setSocket(getSocket(token));
   }, [token]);
 
-  return socketRef.current;
+  return socket;
 }
 
 /** Join a specific team room */
@@ -53,11 +27,9 @@ export function useTeamSocket(teamId: string | undefined): Socket | null {
 
     const join = () => socket.emit("join:team", teamId);
 
-    if (socket.connected) {
-      join();
-    } else {
-      socket.on("connect", join);
-    }
+    if (socket.connected) join();
+    // On every connect, not only the first: rooms belong to a connection, and a reconnected one starts in none.
+    socket.on("connect", join);
 
     return () => {
       socket.emit("leave:team", teamId);

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import api from "@/lib/axios";
 import { toast } from "@/lib/toast";
 import { getViewAs } from "@/lib/impersonation";
+import { madeWithKey, subscriptionKey } from "@/lib/pushKey";
 
 /**
  * This browser's push subscription belongs to whoever signed in on it — while
@@ -26,6 +27,35 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
     output[i] = rawData.charCodeAt(i);
   }
   return output;
+}
+
+// Get (or create) this device's push subscription and save it on the server.
+// The server upserts by endpoint, so calling this on every visit is safe — it
+// re-registers devices whose subscription the browser rotated or the server
+// dropped after a 404/410/403.
+async function syncSubscription(reg: ServiceWorkerRegistration): Promise<void> {
+  const { data: vapidData } = await api.get<{ data: { publicKey: string } }>(
+    "/push/vapid-public-key"
+  );
+  const publicKey = vapidData.data.publicKey;
+  let subscription = await reg.pushManager.getSubscription();
+  // Made with another VAPID key (the server's keys were changed): it can never
+  // be delivered to — make it again with this key, and have the server forget the old one.
+  if (subscription && !madeWithKey(subscriptionKey(subscription), publicKey)) {
+    const old = subscription.endpoint;
+    await subscription.unsubscribe().catch(() => false);
+    await api.delete("/push/unsubscribe", { data: { endpoint: old } }).catch(() => null);
+    subscription = null;
+  }
+  if (!subscription) {
+    const applicationServerKey = urlBase64ToUint8Array(publicKey);
+    subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
+    });
+  }
+  const sub = subscription.toJSON();
+  await api.post("/push/subscribe", { endpoint: sub.endpoint, keys: sub.keys });
 }
 
 export type NotificationPermission = "default" | "granted" | "denied";
@@ -55,8 +85,14 @@ export function usePushNotification(): UsePushNotificationReturn {
       .register("/push-sw.js")
       .then(async (reg) => {
         swRef.current = reg;
-        const existing = await reg.pushManager.getSubscription();
-        setIsSubscribed(!!existing);
+        if (Notification.permission === "granted") {
+          // Self-heal: already allowed → make sure the server has this device
+          await syncSubscription(reg);
+          setIsSubscribed(true);
+        } else {
+          const existing = await reg.pushManager.getSubscription();
+          setIsSubscribed(!!existing);
+        }
       })
       .catch(() => null);
   }, []);
@@ -79,25 +115,7 @@ export function usePushNotification(): UsePushNotificationReturn {
         swRef.current = reg;
       }
 
-      // Get VAPID public key from backend
-      const { data: vapidData } = await api.get<{ data: { publicKey: string } }>(
-        "/push/vapid-public-key"
-      );
-      const applicationServerKey = urlBase64ToUint8Array(vapidData.data.publicKey);
-
-      // Subscribe
-      const subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
-      });
-
-      // Send subscription to backend
-      const sub = subscription.toJSON();
-      await api.post("/push/subscribe", {
-        endpoint: sub.endpoint,
-        keys: sub.keys,
-      });
-
+      await syncSubscription(reg);
       setIsSubscribed(true);
     } catch (err) {
       console.error("Push subscription failed:", err);
@@ -133,4 +151,35 @@ export function usePushNotification(): UsePushNotificationReturn {
   }, []);
 
   return { permission, isSubscribed, isLoading, requestPermission, unsubscribe };
+}
+
+/**
+ * "Send a test to my devices": the server pushes a test notification to every
+ * device this person enabled — the installed phone app as much as this
+ * browser, open or closed. Resolves to what the server said ("Sent to 2 of 2
+ * devices"); rejects with its reason (nothing enabled yet, too soon after the
+ * last test).
+ */
+export async function sendTestPush(): Promise<string> {
+  try {
+    const res = await api.post<{ message?: string }>("/push/test");
+    return res.data.message ?? "Test sent";
+  } catch (err) {
+    const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+    throw new Error(msg ?? "Could not send the test");
+  }
+}
+
+/** A test notification shown by this browser itself, through the same service worker the real ones use. */
+export async function showLocalTestNotification(): Promise<void> {
+  if (!("serviceWorker" in navigator) || !("Notification" in window)) throw new Error("This browser can't show notifications");
+  if (Notification.permission !== "granted") throw new Error("Allow notifications on this device first");
+  const reg = (await navigator.serviceWorker.getRegistration("/push-sw.js")) ?? (await navigator.serviceWorker.ready);
+  await reg.showNotification("Test notification", {
+    body: "Browser notifications work on this device.",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: "crm-test-local",
+    data: { url: "/dashboard", type: "test" },
+  });
 }

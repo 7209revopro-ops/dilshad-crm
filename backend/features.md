@@ -671,3 +671,21 @@ with what was handed over beside it.
 
 **Change Log**:
 - 1.0.0 — Initial build. The 11 currencies of the app's currency setting; AED (`BASE_CURRENCY`) is the base.
+
+## Notifications for sheet leads, test notifications, and VAPID key changes (2026-10-05)
+
+**Description**: New-lead notifications weren't reaching people (the user, 2026-10-05).
+- A sheet lead given straight to somebody (`assigned_to` — as when Root's split names one person) now tells them at
+  once, on the website (the live connection) and on their devices: one alert per lead, or one per batch with the
+  count. It used to tell nobody; only the team split notified.
+- `POST /api/v1/push/test` (as in the Sales CRM): a test notification to every device the signed-in person enabled,
+  only them — "Sent to 2 of 3 devices"; 409 when nothing is enabled yet, 429 within 10 seconds of the last test.
+- `sendPushToUser` returns `{ devices, delivered }`, logs a failed send, and drops a device registered with another
+  VAPID key (403 — as after the keys are changed) as it drops a gone one (404/410). The website registers the device
+  again with the current key when it is next opened.
+
+**Tests**: `scripts/push-test-check.sh` — 20 checks in six cases (web-push's send replaced by a stand-in; a real
+socket.io connection for the website side).
+
+**Change Log**:
+- 1.0.0 — Initial build, ported from the Sales CRM.
