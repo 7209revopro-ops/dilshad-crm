@@ -1195,3 +1195,6 @@ A new close starts "Bonus given?" at yes with the course's bonus, marked "From t
 - `PaymentRowsEditor` — each payment row has a currency (AED first, then the app's other ten). Another currency shows "1 INR = [rate] AED → [AED] AED": typing the rate works out the AED figure, typing the AED figure works out the rate, a new amount keeps the rate. `rowAmount` is the AED figure (totals, balance, fee status, over-the-fee); `missingInRows` asks for the rate; `rowForeignFields` / `describeForeign` for the close and the lead's payment note.
 - `CreateStudentModal` — sends each row's currency fields; the lead's payment note says what was handed over.
 - `LeadDialog` — Social Media, Direct and Other can be picked as a source again (they were switched off in the copy from Delta's CRM).
+
+### Change log — 2026-10-06 (Mentors and Commission for every role)
+- `app/(dashboard)/layout.tsx` — `OPEN_TO_EVERYONE` (profile, calendar, Mentors, Commission): every role may open these. The guard read the address as a permission, and there is no "mentors" or "commission" one, so everyone but the Super Admin was sent away though the sidebar listed both. The server already narrows Commission to each person's own.

@@ -67,9 +67,7 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   which starts a new page), and "₹" and "→" don't render in the built-in font.
 - **P2 — Committed build junk.** 956 `CallRecorder/app/build` files, a root `.DS_Store` and `delta/public/swe-worker-*.js` are
   tracked; `3cxExample` is an empty gitlink.
-- **P2 — Mentors page redirects everyone but the super admin (pre-existing).** Its menu item shows for all, but the dashboard
-  layout sends anyone without a "mentors" permission away — no such module exists. `/calendar` was let through the same check;
-  `/mentors` could be too (one line).
+
 - **P2 — Sign-out doesn't revoke tokens.** Recorded, and the app drops its copy, but an access token stays valid until it expires
   (15 min) and a refresh token for 7 days. Server-side revocation would need a token blocklist.
 - **P2 — IPs behind a proxy.** The sign-in history reads the first `X-Forwarded-For` hop; make sure the production proxy sets it
@@ -110,3 +108,4 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
 - 2026-10-04 — A course's bonus: set on the Courses page (Add / Edit), and a new close starts from it (`Course.bonusAmount`);
   the same in Delta and Draw. Saving it on the live site needs the API deployed.
 - 2026-10-05 — Currency per payment at the close (rate to AED; finance shows the original); every lead source selectable.
+- 2026-10-06 — Mentors and Commission open to every role (the page guard sent all but the Super Admin away).
