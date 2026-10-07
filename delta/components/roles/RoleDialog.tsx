@@ -21,14 +21,13 @@ import {
 } from "@/lib/validations/roleSchema";
 import { useCreateRole, useUpdateRole } from "@/hooks/useRoles";
 import type { Role, PermissionsMap } from "@/types";
-import { CRM_MODULES } from "@/types";
+import { CRM_MODULES, modulePermissions } from "@/types";
 
-const defaultPermissions: PermissionsMap = Object.fromEntries(
-  CRM_MODULES.map((mod) => [
-    mod,
-    { view: false, create: false, edit: false, delete: false, approve: false, export: false },
-  ])
-) as PermissionsMap;
+/** Every module as a role holds it — given, or the module's default (nothing, or today's open access). */
+const fullPermissions = (perms?: PermissionsMap): PermissionsMap =>
+  Object.fromEntries(CRM_MODULES.map((mod) => [mod, modulePermissions(perms, mod)])) as PermissionsMap;
+
+const defaultPermissions: PermissionsMap = fullPermissions();
 
 interface RoleDialogProps {
   open: boolean;
@@ -63,7 +62,7 @@ export function RoleDialog({ open, onOpenChange, role }: RoleDialogProps) {
         reset({
           roleName: role.roleName,
           description: role.description ?? "",
-          permissions: { ...defaultPermissions, ...role.permissions },
+          permissions: fullPermissions(role.permissions),
         });
       } else {
         reset({ roleName: "", description: "", permissions: defaultPermissions });

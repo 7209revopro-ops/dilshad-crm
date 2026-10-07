@@ -11,13 +11,12 @@ import { RecentPageTracker } from "@/components/shared/CommandPalette";
 import { RootPortalHistoryBridge } from "@/components/shared/RootPortalHistoryBridge";
 
 /**
- * Pages everyone signed in may open, whatever their role: their profile, their
- * own calendar, and Mentors and Commission (the owner, 2026-10-06) — booking an
- * hour with a mentor, and their own commission, which the server narrows to what
- * each person may see. Neither has a permission of its own to grant, so reading
- * the address as one sent everyone but the Super Admin away.
+ * Pages everyone signed in may open, whatever their role. Every other page is
+ * read as a module on the Roles screen — Mentors, Commission, Leaderboard and
+ * Calendar have their own rows since 2026-10-07, open to every role until
+ * someone unticks them.
  */
-const OPEN_TO_EVERYONE = new Set(["/login", "/profile", "/calendar", "/mentors", "/commission", "/leaderboard"]);
+const OPEN_TO_EVERYONE = new Set(["/login", "/profile"]);
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, hasPermission } = useAuthStore();

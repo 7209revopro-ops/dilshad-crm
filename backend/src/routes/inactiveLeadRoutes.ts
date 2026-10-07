@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth.js";
-import { requireSuperAdmin } from "../middleware/permissions.js";
+import { checkPermission } from "../middleware/permissions.js";
 import {
   listInactiveLeadsHandler,
   listLeadMovesHandler,
@@ -10,10 +10,12 @@ import {
 /** The super admin's Inactive leads page — nobody else's. */
 const router = Router();
 
-router.use(authenticate, requireSuperAdmin);
+// The Super Admin, and any role given the Inactive Leads box: view to look,
+// edit to move leads to someone else.
+router.use(authenticate);
 
-router.get("/", listInactiveLeadsHandler);
-router.get("/moves", listLeadMovesHandler);
-router.post("/reassign", reassignInactiveLeadsHandler);
+router.get("/", checkPermission("inactive-leads", "view"), listInactiveLeadsHandler);
+router.get("/moves", checkPermission("inactive-leads", "view"), listLeadMovesHandler);
+router.post("/reassign", checkPermission("inactive-leads", "edit"), reassignInactiveLeadsHandler);
 
 export default router;

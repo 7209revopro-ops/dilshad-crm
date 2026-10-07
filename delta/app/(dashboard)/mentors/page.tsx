@@ -93,6 +93,12 @@ const weekStart = (d: Date) => {
 
 export default function MentorsPage() {
   const { user } = useAuthStore();
+  const can = useAuthStore((s) => s.hasPermission);
+  /* The Mentors row on the Roles screen: create books, edit changes a booking,
+     delete cancels one. The server checks the same boxes. */
+  const canBook = can("mentors", "create");
+  const canChange = can("mentors", "edit");
+  const canCancel = can("mentors", "delete");
   const qc = useQueryClient();
   const [offset, setOffset] = useState(0);
   /* Which day the phone is showing. Seven columns do not fit on a phone and
@@ -662,12 +668,14 @@ export default function MentorsPage() {
                       on a phone to reveal that the day is a target, and a card
                       that books a meeting when you meant to read it is worse
                       than a button that takes up a line. */}
-                  <Button
-                    variant="outline" size="sm" className="w-full gap-1.5"
-                    onClick={() => openBooking(m, day)}
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Book time
-                  </Button>
+                  {canBook && (
+                    <Button
+                      variant="outline" size="sm" className="w-full gap-1.5"
+                      onClick={() => openBooking(m, day)}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Book time
+                    </Button>
+                  )}
                 </div>
               </Card>
             );
@@ -708,16 +716,18 @@ export default function MentorsPage() {
                     {days.map((day) => (
                       <td
                         key={day.toISOString()}
-                        className="group/cell cursor-pointer px-2 py-2.5 transition-colors hover:bg-accent/40"
-                        title={`Book time with ${m.name || m.email}`}
-                        onClick={() => openBooking(m, day)}
+                        className={canBook ? "group/cell cursor-pointer px-2 py-2.5 transition-colors hover:bg-accent/40" : "px-2 py-2.5"}
+                        title={canBook ? `Book time with ${m.name || m.email}` : undefined}
+                        onClick={canBook ? () => openBooking(m, day) : undefined}
                       >
                         {dayCell(m, day) ?? (
                           <span className="text-xs text-muted-foreground/40 group-hover/cell:hidden">—</span>
                         )}
-                        <span className="mt-1 hidden text-[11px] text-primary group-hover/cell:block">
-                          + Book
-                        </span>
+                        {canBook && (
+                          <span className="mt-1 hidden text-[11px] text-primary group-hover/cell:block">
+                            + Book
+                          </span>
+                        )}
                       </td>
                     ))}
                   </tr>
@@ -997,14 +1007,18 @@ export default function MentorsPage() {
                       </div>
                     ) : (
                       <>
-                        <Button variant="ghost" onClick={() => setConfirmCancel(true)}>Cancel meeting</Button>
-                        <Button
-                          disabled={!mentor}
-                          title={mentor ? undefined : "Reopen the week this meeting is in to edit it"}
-                          onClick={() => mentor && openEdit(mentor, d)}
-                        >
-                          Edit
-                        </Button>
+                        {canCancel && (
+                          <Button variant="ghost" onClick={() => setConfirmCancel(true)}>Cancel meeting</Button>
+                        )}
+                        {canChange && (
+                          <Button
+                            disabled={!mentor}
+                            title={mentor ? undefined : "Reopen the week this meeting is in to edit it"}
+                            onClick={() => mentor && openEdit(mentor, d)}
+                          >
+                            Edit
+                          </Button>
+                        )}
                       </>
                     )
                   ) : null}

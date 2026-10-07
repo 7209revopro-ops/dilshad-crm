@@ -56,7 +56,7 @@ export const navItems: { href: string; label: string; icon: React.ElementType; p
   { href: "/leads",     label: "Leads",              icon: FileText,        permModule: "leads"     },
   { href: "/calls",     label: "Calls",              icon: PhoneCall,       permModule: "leads"     },
   { href: "/reminders", label: "Reminders",          icon: Bell,            permModule: "reminders" },
-  /* Not a module any role is granted — only the Super Admin passes this check. */
+  /* The Super Admin's, unless a role is given the Inactive Leads box. */
   { href: "/inactive-leads", label: "Inactive Leads", icon: TimerOff,       permModule: "inactive-leads" },
   { href: "/activity",  label: "Activity",           icon: Activity,        permModule: "activity"  },
   { href: "/teams",     label: "Teams",              icon: UsersRound,      permModule: "teams"     },
@@ -65,18 +65,14 @@ export const navItems: { href: string; label: string; icon: React.ElementType; p
   { href: "/users",     label: "Users",              icon: Users,           permModule: "users"     },
   { href: "/closings", label: "Daily Closings",     icon: CalendarCheck,   permModule: "closings"  },
   { href: "/enrolments",label: "My Enrolments",      icon: Receipt,         permModule: "enrolments" },
-  /* No permModule — everyone sees their own pay; the server narrows each
-     person to their own, their team's, or everyone's. Only a Super Admin
-     changes the plan, and that is checked on the server too. */
-  { href: "/commission",label: "Commission",         icon: Coins,           permModule: null        },
-  /* No permModule — everyone sees the month's leaderboard (the owner, 2026-10-07). */
-  { href: "/leaderboard",label: "Leaderboard",       icon: Trophy,          permModule: null        },
-  /* No permModule — booking an hour with a mentor is work the people doing
-     the work do, not something to gate behind a module first. Same rule the
-     Root portal already holds for this same screen. */
-  { href: "/mentors",   label: "Mentors",            icon: CalendarDays,    permModule: null        },
-  /* Everyone's own calendar — open to all, like Mentors (the dashboard layout lets /calendar through). */
-  { href: "/calendar",  label: "Calendar",           icon: CalendarClock,   permModule: null        },
+  /* Commission, Leaderboard, Mentors and Calendar were open to everyone and are
+     still open to every role until its box is unticked on the Roles screen
+     (2026-10-07). Commission: the server narrows each person to their own,
+     their team's or everyone's, and only a Super Admin changes the plan. */
+  { href: "/commission",label: "Commission",         icon: Coins,           permModule: "commission" },
+  { href: "/leaderboard",label: "Leaderboard",       icon: Trophy,          permModule: "leaderboard" },
+  { href: "/mentors",   label: "Mentors",            icon: CalendarDays,    permModule: "mentors"   },
+  { href: "/calendar",  label: "Calendar",           icon: CalendarClock,   permModule: "calendar"  },
   { href: "/students",  label: "Students",           icon: GraduationCap,   permModule: "students"  },
   { href: "/roles",     label: "Roles & Permissions",icon: Shield,          permModule: "roles"     },
   { href: "/settings",  label: "Settings",           icon: Settings,        permModule: null        },

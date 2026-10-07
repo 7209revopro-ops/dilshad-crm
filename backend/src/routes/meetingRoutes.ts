@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth.js";
+import { checkPermission } from "../middleware/permissions.js";
 import {
   calendarHandler,
   cancelHandler,
@@ -20,7 +21,8 @@ const router = Router();
 router.use(authenticate);
 
 // Static paths before /:id
-router.get("/calendar", calendarHandler);
+// The Calendar page itself follows the Calendar box on the Roles screen.
+router.get("/calendar", checkPermission("calendar", "view"), calendarHandler);
 router.get("/people", peopleHandler);
 router.post("/conflicts", conflictsHandler);
 router.post("/", createHandler);

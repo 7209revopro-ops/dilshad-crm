@@ -1,7 +1,8 @@
 "use client"
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { AuthUser } from "@/types";
+import type { AuthUser, CrmModule } from "@/types";
+import { CRM_MODULES, modulePermissions } from "@/types";
 
 interface AuthState {
   user: AuthUser | null;
@@ -51,9 +52,8 @@ export const useAuthStore = create<AuthState>()(
         // Super Admin has full access
         if (role.isSystemRole && role.roleName === "Super Admin") return true;
 
-        const modulePerms = role.permissions?.[module as keyof typeof role.permissions];
-        if (!modulePerms) return false;
-
+        if (!(CRM_MODULES as readonly string[]).includes(module)) return false;
+        const modulePerms = modulePermissions(role.permissions, module as CrmModule);
         return modulePerms[action as keyof typeof modulePerms] === true;
       },
     }),

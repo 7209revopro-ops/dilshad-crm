@@ -17,7 +17,14 @@ import { useLeaderboard, type LeaderboardRow } from "@/hooks/useLeaderboard";
 const TOP = 5;
 const MEDALS = ["🥇", "🥈", "🥉"];
 
+/** Shown only to a role with the Leaderboard box (every role until it is unticked). */
 export function DashboardLeaderboardCard() {
+  useAuthStore((s) => s.user); // re-check when the signed-in user changes
+  const canSee = useAuthStore((s) => s.hasPermission)("leaderboard", "view");
+  return canSee ? <LeaderboardCard /> : null;
+}
+
+function LeaderboardCard() {
   const me = useAuthStore((s) => s.user);
   const { data, isLoading, error } = useLeaderboard();
   const rows = data?.rows ?? [];
