@@ -13,6 +13,7 @@ import { useReportTeamRankings } from "@/hooks/useReports";
 import { cn } from "@/lib/utils";
 import { useCurrencyStore } from "@/lib/store/currencyStore";
 import { fmtFull } from "@/lib/currency";
+import { DashboardLeaderboardCard } from "@/components/dashboard/DashboardLeaderboardCard";
 import { DailyFollowupsPopup } from "@/components/leads/DailyFollowupsPopup";
 
 const containerVariants = {
@@ -113,6 +114,9 @@ export default function DashboardPage() {
           <DailyFollowupsPopup />
         </div>
       </motion.div>
+
+      {/* This month's leaderboard */}
+      <DashboardLeaderboardCard />
 
       {/* Stats Grid */}
       <motion.div
