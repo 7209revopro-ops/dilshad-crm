@@ -136,8 +136,9 @@ function CorrectionForm({ studentId, start, onClose }: { studentId: string; star
   const [paymentRows, setPaymentRows] = useState<PaymentRow[]>(() => startingRows(s, start.ownOnLead));
   const paidAmount = paymentRows.reduce((t, r) => t + rowAmount(r), 0);
   const pending = Math.max(0, totalFee - paidAmount);
-  /** Collected more than the fee — refused here and by the server. */
+  /** Collected more than the fee: taken (the owner, 2026-10-06) and said so in amber, not refused. */
   const overFee = Math.round(paidAmount * 100) > Math.round(totalFee * 100);
+  const overBy = Math.max(0, paidAmount - totalFee);
   const uploading = paymentRows.some((r) => r.uploading);
 
   const computedFeeStatus: FeeStatus =
@@ -321,8 +322,8 @@ function CorrectionForm({ studentId, start, onClose }: { studentId: string; star
               />
             </div>
             {overFee && (
-              <p className="text-[11px] font-medium text-red-400">
-                Collected ({fmtFull(paidAmount)}) is more than the fee ({fmtFull(totalFee)}) — check the course, the fee and the amounts.
+              <p className="text-[11px] font-medium text-amber-400">
+                Collected ({fmtFull(paidAmount)}) is {fmtFull(overBy)} more than the fee ({fmtFull(totalFee)}) — fine if it was taken: it goes to finance as collected.
               </p>
             )}
           </div>
@@ -462,18 +463,18 @@ function CorrectionForm({ studentId, start, onClose }: { studentId: string; star
 
       {/* Footer */}
       <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-border/50 bg-card px-5 py-3">
-        <span className={cn("text-[11px]", overFee ? "text-red-400" : "text-muted-foreground")}>
-          {overFee
-            ? "Collected is more than the fee — fix the amounts first."
-            : missing.length
-              ? `Still needed: ${missing.join(", ")}.`
+        <span className={cn("text-[11px]", !missing.length && overFee ? "text-amber-400" : "text-muted-foreground")}>
+          {missing.length
+            ? `Still needed: ${missing.join(", ")}.`
+            : overFee
+              ? `Collected is ${fmtFull(overBy)} more than the fee — it goes to finance as collected.`
               : "Saved, and sent to finance again in the same step."}
         </span>
         <Button
           size="sm"
           className="gap-2 shrink-0"
           onClick={save}
-          disabled={correct.isPending || missing.length > 0 || uploading || overFee}
+          disabled={correct.isPending || missing.length > 0 || uploading}
         >
           {correct.isPending
             ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending…</>

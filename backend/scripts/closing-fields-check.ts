@@ -171,10 +171,10 @@ let withBonusId = "";
   check("...and finance is told \"no\"", payload?.bonus?.given === false && payload?.bonus?.amountMinor === 0, JSON.stringify(payload?.bonus));
 }
 {
-  // Collecting more than the fee is refused at the close now (the user, 2026-10-05: "block") …
+  // Collecting more than the fee is taken (the owner, 2026-10-06) …
   const overpaid = await close({ name: "Overpaid Client", totalFee: 1000, paidAmount: 1200 }).then(() => null, (e: { statusCode?: number; message?: string }) => e);
-  check("Case 2 — collecting more than the fee is refused: 422", overpaid?.statusCode === 422 && /more than the fee/.test(overpaid.message ?? ""), String(overpaid?.message));
-  // … but an enrolment from before that rule may still be over it: its balance is zero, never negative.
+  check("Case 2 — collecting more than the fee is taken", overpaid === null, String(overpaid?.message));
+  // … and an enrolment over its fee, from then or before: its balance is zero, never negative.
   const legacy = await Student.collection.insertOne({
     enrollmentNumber: "EN-OVER-1", name: "Overpaid Client", leadId: new Types.ObjectId(),
     enrollmentDate: new Date(), totalFee: 1000, paidAmount: 1200, pendingAmount: 0, feeStatus: "paid", status: "active",

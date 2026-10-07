@@ -17,7 +17,7 @@ import { RootPortalHistoryBridge } from "@/components/shared/RootPortalHistoryBr
  * each person may see. Neither has a permission of its own to grant, so reading
  * the address as one sent everyone but the Super Admin away.
  */
-const OPEN_TO_EVERYONE = new Set(["/login", "/profile", "/calendar", "/mentors", "/commission"]);
+const OPEN_TO_EVERYONE = new Set(["/login", "/profile", "/calendar", "/mentors", "/commission", "/leaderboard"]);
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, hasPermission } = useAuthStore();

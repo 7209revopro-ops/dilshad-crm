@@ -97,8 +97,9 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
     : paymentRows.filter((r) => !r.collectedBefore).reduce((s, r) => s + rowAmount(r), 0);
   const paidAmount = editing ? alreadyPaid + paidNow : paymentRows.reduce((s, r) => s + rowAmount(r), 0);
   const pending = Math.max(0, totalFee - paidAmount);
-  /** Collected more than the fee — refused here and by the server (the user, 2026-10-05: "block"). */
+  /** Collected more than the fee: taken (the owner, 2026-10-06) and said so in amber, not refused. */
   const overFee = Math.round(paidAmount * 100) > Math.round(totalFee * 100);
+  const overBy = Math.max(0, paidAmount - totalFee);
   const uploading = paymentRows.some((r) => r.uploading);
 
   const computedFeeStatus: FeeStatus =
@@ -436,8 +437,8 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                     </p>
                   )}
                   {overFee && (
-                    <p className="text-[11px] font-medium text-red-400">
-                      Collected ({fmtFull(paidAmount)}) is more than the fee ({fmtFull(totalFee)}) — check the course, the fee and the amounts.
+                    <p className="text-[11px] font-medium text-amber-400">
+                      Collected ({fmtFull(paidAmount)}) is {fmtFull(overBy)} more than the fee ({fmtFull(totalFee)}) — fine if it was taken: it goes to finance as collected.
                     </p>
                   )}
                   {totalFee > 0 && (
@@ -640,11 +641,11 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
             >
               {/* Named rather than left to a greyed-out button: a control that
                   will not respond and does not say why is the worst of both. */}
-              <span className={cn("text-[11px]", overFee ? "text-red-400" : "text-muted-foreground")}>
-                {overFee
-                  ? "Collected is more than the fee — fix the amounts first."
-                  : missing.length
-                    ? `Still needed: ${missing.join(", ")}.`
+              <span className={cn("text-[11px]", !missing.length && overFee ? "text-amber-400" : "text-muted-foreground")}>
+                {missing.length
+                  ? `Still needed: ${missing.join(", ")}.`
+                  : overFee
+                    ? `Collected is ${fmtFull(overBy)} more than the fee — it goes to finance as collected.`
                     : editing
                       ? "Changes apply to this enrolment."
                       : "The lead is closed either way."}
@@ -653,7 +654,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                 size="sm"
                 className="gap-2"
                 onClick={handleCreate}
-                disabled={saving || courseMissing || missing.length > 0 || uploading || overFee}
+                disabled={saving || courseMissing || missing.length > 0 || uploading}
               >
                 {saving ? (
                   <span className="flex items-center gap-1.5"><span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" /> {editing ? "Saving…" : "Creating…"}</span>

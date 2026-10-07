@@ -109,3 +109,4 @@ the Delta Trading Hub sheet — every row shows its Remote CRM sync status (33/3
   the same in Delta and Draw. Saving it on the live site needs the API deployed.
 - 2026-10-05 — Currency per payment at the close (rate to AED; finance shows the original); every lead source selectable.
 - 2026-10-06 — Mentors and Commission open to every role (the page guard sent all but the Super Admin away).
+- 2026-10-07 — Collecting more than the fee is taken (amber note, not a block); the Leads view (Table/Kanban) is remembered per browser; Leaderboard page (revenue > closings > follow-ups > calls, Dubai month, everyone sees it).

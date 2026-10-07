@@ -99,6 +99,8 @@ const ALL_COLUMNS: ColumnDef[] = [
 ];
 
 const DEFAULT_VISIBLE = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id));
+/** This browser's last choice of Table or Kanban on the Leads page. */
+const LEADS_VIEW_KEY = "crm_leads_view";
 /** Remembers "All leads" / "My leads" for super admins and team leaders, per browser. */
 const LEADS_SCOPE_KEY = "crm_leads_scope";
 
@@ -173,9 +175,12 @@ function LeadsPageContent() {
   });
 
   // ── View mode — synced to ?view= URL param ────────────────────────────────────
+  // Table or Kanban: a link's ?view= wins, else what this browser last chose (the owner, 2026-10-07).
   const [viewMode, setViewMode] = useState<"table" | "kanban">(() => {
     const v = searchParams.get("view");
-    return v === "kanban" ? "kanban" : "table";
+    if (v === "kanban" || v === "table") return v;
+    if (typeof window === "undefined") return "table";
+    try { return localStorage.getItem(LEADS_VIEW_KEY) === "kanban" ? "kanban" : "table"; } catch { return "table"; }
   });
 
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
@@ -501,6 +506,7 @@ function LeadsPageContent() {
 
   function changeViewMode(mode: "table" | "kanban") {
     setViewMode(mode);
+    try { localStorage.setItem(LEADS_VIEW_KEY, mode); } catch { /* ignore */ }
   }
 
   // ── Sync all filter state → URL ───────────────────────────────────────────────

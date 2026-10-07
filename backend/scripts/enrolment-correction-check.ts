@@ -284,7 +284,6 @@ await refused("no course: 422", correction({ course: null }), 422, /a course/);
 await refused("a course that no longer exists: 422", correction({ course: String(new Types.ObjectId()) }), 422, /no longer exists/);
 await refused("no fee: 422", correction({ totalFee: "" }), 422, /the fee/);
 await refused("payments that don't add up to what was paid: 422", correction({ paidAmount: 900 }), 422, /must match/);
-await refused("collected more than the fee: 422", correction({ totalFee: 700 }), 422, /more than the fee/);
 await refused("a payment without its receipt: 422", correction({ payments: [pay("cash", 200, "own", { collectedBefore: true }), { method: "card", amount: 600, paidAt: "2026-10-05" }] }), 422, /Payment 2 needs its receipt/);
 await refused("no payments at all: 422", correction({ payments: undefined }), 422, /needs its payments/);
 await refused("the lead's own 200 left out: 422", correction({ paidAmount: 600, payments: [pay("card", 500), pay("tabby", 100)] }), 422, /holds 200 of its own/);
@@ -404,6 +403,12 @@ r = await call("PUT", `/students/${abroad.id}/correction`, "Theertha", correctio
   payments: [pay("cash", 200, "own-cash", { collectedBefore: true }), pay("bank_transfer", 500, "inr-transfer", { currency: "INR", amountInCurrency: 10000, exchangeRate: 0.044 })],
 }));
 check("a figure that isn't what the rate makes it is refused: 422, nothing sent", r.status === 422 && /comes to 440/.test(r.body.message ?? "") && sendsFor(abroad.id).length === k, `${r.status} ${r.body.message}`);
+
+// Collecting more than the fee is taken now (the owner, 2026-10-06) — last, so nothing above depends on it.
+await sendBack(sale.id);
+const overRes = await call("PUT", `/students/${sale.id}/correction`, "Theertha", correction({ totalFee: 700 }));
+const overSaved = await Student.findById(sale.id).lean();
+check("collected more than the fee: taken (200), balance 0", overRes.status === 200 && overSaved?.totalFee === 700 && overSaved?.pendingAmount === 0, `${overRes.status} ${overRes.body.message}`);
 
 server.close();
 finance.close();

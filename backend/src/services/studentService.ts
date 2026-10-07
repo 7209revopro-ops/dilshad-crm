@@ -100,15 +100,12 @@ function checkedPayments(list: unknown, paidAmount: number, enrolledOn: Date): I
   return payments;
 }
 
-/** What was collected may not be more than the fee (the user, 2026-10-05: "block"). */
-function assertNotOverFee(totalFee: number, paidAmount: number): void {
-  if (minor(paidAmount) > minor(totalFee)) {
-    throw createError(
-      `What was collected (${money(paidAmount)}) is more than the fee (${money(totalFee)}). Check the course, the fee and the amounts, then try again.`,
-      422,
-    );
-  }
-}
+/*
+ * Collecting more than the fee is taken (the owner, 2026-10-06: more is
+ * sometimes collected and it must still go through). The close and correction
+ * forms say so in amber, the balance stays at zero, never negative, and finance
+ * leaves payments above its invoice for accounts to record by hand.
+ */
 
 /** A bonus amount that can be recorded: a real number above zero. */
 function isBonusAmount(v: unknown): boolean {
@@ -231,8 +228,6 @@ export class StudentService {
         422,
       );
     }
-
-    assertNotOverFee(totalFee, paidAmount);
 
     const enrollmentNumber = await nextEnrollmentNumber();
 
@@ -570,9 +565,6 @@ export class StudentService {
     // Recompute pendingAmount and feeStatus if fee fields changed
     const total   = (student as unknown as Record<string, number>).totalFee   as number ?? 0;
     const paid    = (student as unknown as Record<string, number>).paidAmount  as number ?? 0;
-    // Only when the money is being changed: an enrolment already over its fee
-    // from before this rule can still have its notes or status edited.
-    if (data.totalFee !== undefined || data.paidAmount !== undefined) assertNotOverFee(total, paid);
     student.pendingAmount = Math.max(0, total - paid);
     // An explicitly sent status is honoured, as it is on create. The figures
     // decide when nobody says otherwise — but a counsellor who marks an
@@ -1187,7 +1179,6 @@ export class StudentService {
 
     const payments = checkedPayments(data.payments, paidAmount, enrolledOn!);
     if (!payments) throw createError("A correction needs its payments, each with its method, amount and receipt.", 422);
-    assertNotOverFee(totalFee, paidAmount);
 
     /*
      * The money the lead held of its own — every payment on it but the ones the

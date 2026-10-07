@@ -161,14 +161,20 @@ await refused("a method this CRM doesn't take: 422", { paidAmount: 500, payments
 await refused("a payment of nothing: 422", { paidAmount: 500, payments: [pay("cash", 500), pay("card", 0)] }, /above zero/);
 await refused("eleven payments: 422", { paidAmount: 550, totalFee: 600, payments: Array.from({ length: 11 }, (_, i) => pay("cash", 50, `c${i}`)) }, /between one and ten/);
 await refused("an empty list: 422", { paidAmount: 0, payments: [] }, /between one and ten/);
-await refused("collected 600 on a 500 fee: 422", { paidAmount: 600, payments: [pay("cash", 300), pay("card", 300)] }, /more than the fee/);
-await refused("…from an older screen too: 422", { paidAmount: 600, paymentMethod: "cash", paymentReceipt: receipt("over") }, /more than the fee/);
+// Collecting more than the fee is taken (the owner, 2026-10-06): the balance is zero, never negative.
+{
+  const over = await close({ paidAmount: 600, payments: [pay("cash", 300), pay("card", 300)] });
+  const saved = over.status === 201 ? await Student.findById(String(over.body.data?._id)).lean() : null;
+  check("collected 600 on a 500 fee: taken (201), balance 0", over.status === 201 && saved?.pendingAmount === 0, `${over.status} ${over.body.message}`);
+  const older = await close({ paidAmount: 600, paymentMethod: "cash", paymentReceipt: receipt("over") });
+  check("…from an older screen too: taken (201)", older.status === 201, `${older.status} ${older.body.message}`);
+}
 const ok = await close({ paidAmount: 300, payments: [pay("cash", 300)] });
 r = await call("PUT", `/students/${String(ok.body.data?._id)}`, "Theertha", { paidAmount: 700 });
 s = await Student.findById(String(ok.body.data?._id)).lean();
-check("an edit taking it above the fee: 422, and unchanged", r.status === 422 && s?.paidAmount === 300, `${r.status} ${s?.paidAmount}`);
+check("an edit taking it above the fee: taken (200), balance 0", r.status === 200 && s?.paidAmount === 700 && s?.pendingAmount === 0, `${r.status} ${s?.paidAmount}`);
 r = await call("PUT", `/students/${String(ok.body.data?._id)}`, "Theertha", { totalFee: 200 });
-check("…or lowering the fee below what was paid: 422", r.status === 422, `${r.status}`);
+check("…or lowering the fee below what was paid: taken (200)", r.status === 200, `${r.status}`);
 const legacy = await Student.create({ enrollmentNumber: "STU-9999", name: "Legacy", leadId: new Types.ObjectId(), totalFee: 1000, paidAmount: 2250, pendingAmount: 0, feeStatus: "paid", enrollmentDate: new Date() });
 r = await call("PUT", `/students/${String(legacy._id)}`, "Theertha", { notes: "Checked with accounts" });
 check("an enrolment over its fee from before still takes an edit that leaves the money alone", r.status === 200, `${r.status} ${r.body.message}`);
