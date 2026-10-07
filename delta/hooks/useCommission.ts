@@ -7,7 +7,11 @@ import type {
   CommissionEarnings,
   CommissionPlanView,
   CommissionPreview,
+  CommissionRole,
   CoursePlan,
+  PayView,
+  SlabRow,
+  Slabs,
 } from "@/types/commission";
 
 const COMMISSION_KEY = ["commission"] as const;
@@ -40,6 +44,22 @@ export const useCommissionEarnings = (month: string) =>
       });
       return response.data.data!;
     },
+  });
+
+/**
+ * A month's salary and commission on the slabs: the viewer's own, and
+ * everyone's for a Super Admin. Off until there's a month to ask about.
+ */
+export const usePay = (month: string | null) =>
+  useQuery({
+    queryKey: [...COMMISSION_KEY, "pay", month],
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<PayView>>("/commission/pay", { params: { month } });
+      return response.data.data!;
+    },
+    enabled: Boolean(month),
+    staleTime: 60_000,
+    retry: 1,
   });
 
 /**
@@ -80,6 +100,26 @@ export const useUpdateCoursePlan = () => {
       toast.success("Commission plan saved");
     },
     onError: (error: unknown) => toast.error(errMsg(error, "Couldn't save the commission plan")),
+  });
+};
+
+/** One role's salary slab, in force from this month on. */
+export const useUpdateSlab = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ role, rows }: { role: CommissionRole; rows: SlabRow[] }) => {
+      const response = await api.put<ApiResponse<{ slabs: Slabs; from: string | null }>>(
+        `/commission/slabs/${role}`,
+        { rows },
+      );
+      return response.data.data!;
+    },
+    onSuccess: () => {
+      // The plan shows the slabs; everyone's pay follows them.
+      queryClient.invalidateQueries({ queryKey: COMMISSION_KEY });
+      toast.success("Salary slab saved");
+    },
+    onError: (error: unknown) => toast.error(errMsg(error, "Couldn't save the salary slab")),
   });
 };
 

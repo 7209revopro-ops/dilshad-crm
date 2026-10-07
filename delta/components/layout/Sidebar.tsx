@@ -30,6 +30,7 @@ import {
   CalendarClock,
   Coins,
   Trophy,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/lib/store/uiStore";
@@ -71,6 +72,9 @@ export const navItems: { href: string; label: string; icon: React.ElementType; p
      their team's or everyone's, and only a Super Admin changes the plan. */
   { href: "/commission",label: "Commission",         icon: Coins,           permModule: "commission" },
   { href: "/leaderboard",label: "Leaderboard",       icon: Trophy,          permModule: "leaderboard" },
+  /* Open to every role by default; the server narrows it to their own month
+     (everyone's for a Super Admin and the Sales Manager). */
+  { href: "/my-pay",    label: "My Pay",             icon: Wallet,          permModule: "pay"       },
   { href: "/mentors",   label: "Mentors",            icon: CalendarDays,    permModule: "mentors"   },
   { href: "/calendar",  label: "Calendar",           icon: CalendarClock,   permModule: "calendar"  },
   { href: "/students",  label: "Students",           icon: GraduationCap,   permModule: "students"  },

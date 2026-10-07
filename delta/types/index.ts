@@ -36,6 +36,7 @@ export const CRM_MODULES = [
   "mentors",
   "commission",
   "leaderboard",
+  "pay",
   "calendar",
   "activity",
   "inactive-leads",
@@ -60,6 +61,7 @@ export const MODULE_LABELS: Record<CrmModule, string> = {
   mentors: "Mentors (booking)",
   commission: "Commission",
   leaderboard: "Leaderboard",
+  pay: "My Pay",
   calendar: "Calendar",
   activity: "Activity",
   "inactive-leads": "Inactive Leads",
@@ -81,6 +83,7 @@ export const OPEN_BY_DEFAULT: Partial<Record<CrmModule, Partial<ModulePermission
   mentors: { view: true, create: true, edit: true, delete: true },
   commission: { view: true },
   leaderboard: { view: true },
+  pay: { view: true },
   calendar: { view: true },
 };
 

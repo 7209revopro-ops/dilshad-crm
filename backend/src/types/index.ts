@@ -49,6 +49,8 @@ export const CRM_MODULES = [
   "calendar",
   "activity",
   "inactive-leads",
+  // My Pay: the salary slabs (salaryService) — open to everyone, as in the Sales CRM.
+  "pay",
 ] as const;
 
 export type CrmModule = (typeof CRM_MODULES)[number];
@@ -64,6 +66,7 @@ export const OPEN_BY_DEFAULT: Partial<Record<CrmModule, Partial<ModulePermission
   commission: { view: true },
   leaderboard: { view: true },
   calendar: { view: true },
+  pay: { view: true },
 };
 
 export type PermissionsMap = {
@@ -263,6 +266,12 @@ export interface ICommissionSale extends Document {
   approvedAt?: Date;
   /** When its five steps were all done and who earns what was decided. */
   stepsDoneAt?: Date;
+  /**
+   * The course fee in AED — finance's invoice total, kept up to date by the
+   * sweep; absent on a sale it hasn't reached yet. What the sale adds to a
+   * salary-slab target (salaryService).
+   */
+  fee?: number;
   /** The plan row as it was when decided — what the lines are paid from. */
   plan: { sales: number; tl: number; sm: number; creditUsd: number };
   state: CommissionSaleState;
@@ -281,9 +290,35 @@ export interface ICommissionSettings extends Document {
   salesManager: Types.ObjectId | null;
   /** Shared logins whose sales earn nobody commission. */
   excludedUsers: Types.ObjectId[];
+  /** The salary slabs, one version per month they were changed in (salaryService). */
+  salarySlabs?: ISalarySlabsVersion[];
   updatedBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** Whose slab a person is paid on: Sales Staff, Team Leader or Sales Manager. */
+export type SlabRole = CommissionRole;
+
+/**
+ * One level of a salary slab: reach `target` AED of approved sales in a month
+ * and the month pays `salary`, plus `percent` of the commission earned. The
+ * first row of each slab is its base, at target 0.
+ */
+export interface ISlabRow {
+  name: string;
+  target: number;
+  salary: number;
+  percent: number;
+}
+
+export type ISlabs = Record<SlabRole, ISlabRow[]>;
+
+/** The slabs as changed in a month ("YYYY-MM") — in force from it until the next change. */
+export interface ISalarySlabsVersion extends ISlabs {
+  from: string;
+  updatedAt?: Date;
+  updatedBy?: Types.ObjectId;
 }
 
 // ─── Lead ──────────────────────────────────────────────────────────────────────

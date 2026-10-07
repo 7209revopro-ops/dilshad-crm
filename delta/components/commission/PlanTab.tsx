@@ -17,6 +17,7 @@ import {
 } from "@/hooks/useCommission";
 import { aed, TL_PAID, TL_RULE, uaeDate, usd } from "@/lib/commission";
 import type { CommissionPlanView, CoursePlan } from "@/types/commission";
+import { SlabsCard } from "@/components/commission/SlabsCard";
 
 /** The plan: what each course pays, who the Sales Manager is, and what needs fixing. */
 export function PlanTab() {
@@ -43,6 +44,7 @@ export function PlanTab() {
     <div className="flex flex-col gap-5">
       <HowItsPaid />
       <PlanTable plan={data} />
+      <SlabsCard plan={data} />
       <div className="grid gap-4 lg:grid-cols-2">
         <SalesManagerCard plan={data} />
         <ExcludedCard plan={data} />

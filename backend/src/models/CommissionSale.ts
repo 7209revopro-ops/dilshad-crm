@@ -44,6 +44,12 @@ const commissionSaleSchema = new Schema<ICommissionSale>(
     approvedAt: { type: Date },
     /** When its five steps were all done — and who earns what was decided. */
     stepsDoneAt: { type: Date },
+    /**
+     * The course fee in AED: finance's invoice total, refreshed by the sweep
+     * (tax inside it, as the counsellor typed it). No default — a sale the
+     * sweep hasn't reached falls back to the student's fee (salaryService).
+     */
+    fee: { type: Number, min: 0 },
     plan: {
       sales: { type: Number, default: 0 },
       tl: { type: Number, default: 0 },

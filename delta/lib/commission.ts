@@ -7,6 +7,9 @@ import type { CommissionRole, CommissionSaleState } from "@/types/commission";
  */
 export const aed = (n: number) => `AED ${n.toLocaleString("en-AE", { maximumFractionDigits: 2 })}`;
 export const usd = (n: number) => `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} USD`;
+/** A target on a slab's bar, short: 15K, 132K, 1.2M. */
+export const aedShort = (n: number) =>
+  n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${+(n / 1_000).toFixed(1)}K` : String(n);
 
 /**
  * How this CRM pays a team's leader — the backend's TL_RULE, which this must
@@ -47,6 +50,17 @@ export function recentMonths(count = 12): string[] {
     const d = new Date(Date.UTC(y, m - 1 - i, 1));
     return d.toISOString().slice(0, 7);
   });
+}
+
+/**
+ * The first month on the salary slabs — commission counts sales closed from
+ * 1 October 2026 (the backend's COUNT_FROM).
+ */
+export const PAY_FROM_MONTH = "2026-10";
+
+/** The months there's pay to show, newest first: this month back to PAY_FROM_MONTH. */
+export function payMonths(): string[] {
+  return recentMonths(36).filter((m) => m >= PAY_FROM_MONTH);
 }
 
 export function monthLabel(month: string): string {

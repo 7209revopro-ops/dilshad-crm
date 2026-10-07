@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useCurrencyStore } from "@/lib/store/currencyStore";
 import { fmtFull } from "@/lib/currency";
 import { DashboardLeaderboardCard } from "@/components/dashboard/DashboardLeaderboardCard";
+import { DashboardPayCard } from "@/components/pay/DashboardPayCard";
 import { DailyFollowupsPopup } from "@/components/leads/DailyFollowupsPopup";
 
 const containerVariants = {
@@ -116,6 +117,9 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* This month's leaderboard */}
+      {/* This month on the salary slab */}
+      <DashboardPayCard />
+
       <DashboardLeaderboardCard />
 
       {/* Stats Grid */}

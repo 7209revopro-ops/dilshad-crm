@@ -2,9 +2,12 @@ import type { Response, NextFunction } from "express";
 import { z } from "zod";
 import type { AuthenticatedRequest } from "../types/index.js";
 import { CommissionService, isSuperAdmin, uaeMonthOf } from "../services/commissionService.js";
+import { PAY_FROM_MONTH, SalaryService } from "../services/salaryService.js";
+import { saveSlab, slabProblem, SLAB_ROLES } from "../services/salarySlabs.js";
 import { sendSuccess, sendError } from "../utils/response.js";
 
 const commissionService = new CommissionService();
+const salaryService = new SalaryService();
 
 // ─── Validation Schemas ───────────────────────────────────────────────────────
 
@@ -33,6 +36,18 @@ const previewSchema = z.object({
   team: objectId.optional(),
   closer: objectId.optional(),
 });
+
+/** One level of a salary slab: AED target and salary, percent of commission. */
+const slabRowSchema = z.object({
+  name: z.string().trim().min(1, "Name the level").max(20),
+  target: z.number().min(0, "Cannot be negative").max(100_000_000),
+  salary: money,
+  percent: z.number().min(0, "0 to 100").max(100, "0 to 100"),
+});
+const slabSchema = z.object({ rows: z.array(slabRowSchema).min(1, "A slab needs its base row").max(12) });
+
+const monthName = (m: string) =>
+  new Date(`${m}-01T00:00:00Z`).toLocaleString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
@@ -103,6 +118,56 @@ export const getEarnings = async (req: AuthenticatedRequest, res: Response, next
     }
     const earnings = await commissionService.getEarnings(viewerOf(req), month.data);
     sendSuccess(res, "Commission fetched", earnings);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** A month's salary and commission on the slabs: the viewer's own, and everyone's for a Super Admin. */
+export const getPay = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const now = uaeMonthOf(new Date());
+    const raw = typeof req.query.month === "string" && req.query.month ? req.query.month : now;
+    const month = monthSchema.safeParse(raw);
+    if (!month.success) {
+      sendError(res, "Month must be YYYY-MM", 400);
+      return;
+    }
+    if (month.data < PAY_FROM_MONTH) {
+      sendError(res, `Salary slabs start from ${monthName(PAY_FROM_MONTH)}`, 400);
+      return;
+    }
+    if (month.data > now) {
+      sendError(res, `${monthName(month.data)} hasn't started yet`, 400);
+      return;
+    }
+    const pay = await salaryService.getPay(viewerOf(req), month.data);
+    sendSuccess(res, "Pay fetched", pay);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** One role's salary slab, in force from this month (UAE) on — earlier months keep theirs. */
+export const updateSlab = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const role = SLAB_ROLES.find((r) => r === req.params.role);
+    if (!role) {
+      sendError(res, "Role must be sales, tl or sm", 400);
+      return;
+    }
+    const parsed = slabSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendError(res, "Validation failed", 400, parsed.error.flatten());
+      return;
+    }
+    const problem = slabProblem(parsed.data.rows);
+    if (problem) {
+      sendError(res, problem, 400);
+      return;
+    }
+    const slabs = await saveSlab(role, parsed.data.rows, req.user!.userId, uaeMonthOf(new Date()));
+    sendSuccess(res, "Salary slab saved", slabs);
   } catch (err) {
     next(err);
   }

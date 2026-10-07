@@ -8,6 +8,7 @@ import { Team } from "../models/Team.js";
 import { User } from "../models/User.js";
 import { fetchEnrolmentStatuses } from "./financeClient.js";
 import { stepsOf, allDone, waitingOn } from "./enrolmentSteps.js";
+import { slabsFor } from "./salarySlabs.js";
 import { env } from "../config/env.js";
 import type {
   CommissionRole,
@@ -72,12 +73,23 @@ export function planOf(course?: { commission?: Partial<Plan> | null } | null): P
   return { sales: amount(c?.sales), tl: amount(c?.tl), sm: amount(c?.sm), creditUsd: amount(c?.creditUsd) };
 }
 
-const idOf = (v: unknown): string => {
+export const idOf = (v: unknown): string => {
   if (!v) return "";
   if (v instanceof Types.ObjectId) return v.toHexString();
   if (typeof v === "object" && "_id" in (v as object)) return String((v as { _id: unknown })._id);
   return String(v);
 };
+
+/**
+ * A sale's course fee in AED: finance's invoice total — the fee as approved,
+ * its tax inside — or, while finance has no total in AED for it, the
+ * student's own fee. What a sale adds to a salary-slab target.
+ */
+export function feeOf(st: { totalMinor?: number; currency?: string } | null | undefined, studentFee?: number): number {
+  const inAed = (st?.currency || "AED").toUpperCase() === "AED";
+  if (st && inAed && typeof st.totalMinor === "number" && st.totalMinor > 0) return st.totalMinor / 100;
+  return typeof studentFee === "number" && Number.isFinite(studentFee) && studentFee > 0 ? studentFee : 0;
+}
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
@@ -245,6 +257,7 @@ type StudentLite = {
   enrollmentDate?: Date;
   createdAt?: Date;
   financeInvoiceNumber?: string | null;
+  totalFee?: number;
 };
 
 /**
@@ -261,7 +274,7 @@ export async function trackSales(config: CommissionConfig, names: Names): Promis
   if (!handed.length) return 0;
   const handoverOf = new Map(handed.map((h) => [String(h.studentId), h]));
   const students = (await Student.find({ _id: { $in: handed.map((h) => h.studentId) }, enrollmentDate: { $gte: COUNT_FROM } })
-    .select("name enrollmentNumber course team assignedTo enrollmentDate createdAt financeInvoiceNumber")
+    .select("name enrollmentNumber course team assignedTo enrollmentDate createdAt financeInvoiceNumber totalFee")
     .lean()) as StudentLite[];
   const sales = await CommissionSale.find({ student: { $in: students.map((s) => s._id) } }).lean();
   const saleOf = new Map(sales.map((x) => [String(x.student), x]));
@@ -297,6 +310,7 @@ export async function trackSales(config: CommissionConfig, names: Names): Promis
         closerName: closer ? await names.of(closer) : "",
         saleDate,
         month: uaeMonthOf(saleDate),
+        fee: feeOf(st, student.totalFee),
         ...(h?.approvedAt ? { approvedAt: h.approvedAt } : {}),
       };
 
@@ -325,7 +339,7 @@ export async function trackSales(config: CommissionConfig, names: Names): Promis
       const steps = stepsOf(st, h ? { status: "sent", approvedAt: h.approvedAt as Date | undefined } : null);
       if (!allDone(steps)) {
         const reason = waitingOn(steps);
-        if (sale?.state === "progress" && sale.reason === reason) continue;
+        if (sale?.state === "progress" && sale.reason === reason && sale.fee === base.fee) continue;
         await CommissionSale.updateOne(
           { student: student._id },
           { $set: { ...base, state: "progress", reason, lines: [], plan: planOf(course) }, $unset: { countedAt: "", team: "", teamName: "" } },
@@ -408,21 +422,35 @@ export async function settlePendingSales(config: CommissionConfig, names: Names)
  * Asked of finance for the last few months' sales only — a void long after is
  * somebody's correction to make by hand, not a reason to ask about every sale
  * forever. (Sales still in progress are watched for this by trackSales.)
+ *
+ * The same answer keeps each sale's fee as finance has it — the invoice total a
+ * salary-slab target counts — for sales trackSales no longer follows.
  */
 export async function reverseVoidedSales(): Promise<number> {
   const live = await CommissionSale.find({
     state: { $in: ["counted", "waiting", "excluded"] },
     saleDate: { $gte: new Date(Date.now() - VOID_WINDOW_MS) },
   })
-    .select("student")
+    .select("student fee")
     .lean();
+  const feeNow = new Map(live.map((s) => [String(s.student), s.fee]));
   let reversed = 0;
 
   for (let i = 0; i < live.length; i += 200) {
     const ids = live.slice(i, i + 200).map((s) => String(s.student));
     const statuses = await fetchEnrolmentStatuses(ids);
     for (const st of statuses) {
-      if (st.status !== "void" || !Types.ObjectId.isValid(st.externalId)) continue;
+      if (!Types.ObjectId.isValid(st.externalId)) continue;
+      if (st.status !== "void") {
+        const fee = feeOf(st);
+        if (fee > 0 && fee !== feeNow.get(st.externalId)) {
+          await CommissionSale.updateOne(
+            { student: new Types.ObjectId(st.externalId), state: { $ne: "reversed" } },
+            { $set: { fee } },
+          );
+        }
+        continue;
+      }
       const r = await CommissionSale.updateOne(
         { student: new Types.ObjectId(st.externalId), state: { $ne: "reversed" } },
         {
@@ -484,16 +512,21 @@ export function followNow(): void {
 type Viewer = { userId: string; role?: IRole };
 
 export class CommissionService {
-  /** The plan: every course's row, the Sales Manager, the excluded logins, and what needs fixing. */
+  /**
+   * The plan: every course's row, the Sales Manager, the excluded logins, the
+   * salary slabs in force this month, and what needs fixing.
+   */
   async getPlan(viewer: Viewer) {
     const canEdit = isSuperAdmin(viewer.role);
-    const [courses, settings, teams] = await Promise.all([
+    const month = uaeMonthOf(new Date());
+    const [courses, settings, teams, slabs] = await Promise.all([
       Course.find({}).select("name amount status commission").sort({ status: 1, name: 1 }).lean(),
       CommissionSettings.findOne({ key: "default" })
         .populate("salesManager", "name email")
         .populate("excludedUsers", "name email")
         .lean(),
       Team.find({ status: "active" }).select("name leaders").populate("leaders", "name").sort({ name: 1 }).lean(),
+      slabsFor(month),
     ]);
 
     const person = (u: unknown) =>
@@ -535,6 +568,10 @@ export class CommissionService {
       }),
       waiting,
       users: users.map((u) => ({ _id: String(u._id), name: u.name, email: u.email, status: u.status })),
+      // The salary slabs in force this month, and the month they were set in (null: the sheet's).
+      slabs: slabs.slabs,
+      slabsFrom: slabs.from,
+      slabsMonth: month,
     };
   }
 

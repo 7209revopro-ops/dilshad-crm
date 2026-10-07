@@ -53,6 +53,62 @@ export interface CommissionPlanView {
   }[];
   /** Everyone, for the pickers — Super Admins only. */
   users: (CommissionPerson & { status: "active" | "inactive" })[];
+  /** The salary slabs in force this month; absent from a server before them. */
+  slabs?: Slabs;
+  /** The month they were set in — null while they're the owner's sheet. */
+  slabsFrom?: string | null;
+  /** This month (UAE): a change saved now is in force from it. */
+  slabsMonth?: string;
+}
+
+// ─── Salary slabs ─────────────────────────────────────────────────────────────
+
+/**
+ * One level of a salary slab: reach `target` AED of approved sales in a month
+ * and it pays `salary`, plus `percent` of the commission earned. The first
+ * row is the base, at target 0.
+ */
+export interface SlabRow {
+  name: string;
+  target: number;
+  salary: number;
+  percent: number;
+}
+
+/** This CRM sends no "tl" slab: team leaders are on the Sales Staff one. */
+export type Slabs = Record<CommissionRole, SlabRow[]>;
+
+export type SlabLevel = SlabRow & { index: number };
+
+/** A person's month on their slab. */
+export interface PayRow {
+  user: string;
+  name: string;
+  role: CommissionRole;
+  /** The teams a team leader's target counts. */
+  teams: string[];
+  /** Finance-approved sales the target counts, and their fees. */
+  sales: { count: number; value: number };
+  /** Closed this month, not approved by finance yet. */
+  awaitingFinance: { count: number; value: number };
+  level: SlabLevel;
+  /** The next level that pays differently, and how much more it takes; null at the top. */
+  next: (SlabLevel & { more: number }) | null;
+  salary: number;
+  percent: number;
+  commission: { earned: number; payable: number; notCountedYet: number };
+  total: number;
+}
+
+export interface PayView {
+  month: string;
+  slabs: Slabs;
+  slabsFrom: string | null;
+  /** The viewer's own month; null when they aren't on a slab. */
+  me: PayRow | null;
+  /** Everyone — Super Admins only. */
+  people: PayRow[] | null;
+  totals: { people: number; salary: number; payable: number; total: number } | null;
 }
 
 export interface CommissionLine {
