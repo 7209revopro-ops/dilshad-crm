@@ -1,3 +1,4 @@
+import { dubaiDayRange } from "../utils/dubaiDay.js";
 import { Lead } from "../models/Lead.js";
 import { User } from "../models/User.js";
 import { Team } from "../models/Team.js";
@@ -537,55 +538,21 @@ export class LeadService {
 
     // Follow-up window, on the same day-boundary rule as the createdAt range.
     if (filters.followupFrom || filters.followupTo) {
-      const followupRange: Record<string, Date> = {};
-      if (filters.followupFrom) {
-        const from = new Date(filters.followupFrom);
-        from.setUTCHours(0, 0, 0, 0);
-        if (!isNaN(from.getTime())) followupRange.$gte = from;
-      }
-      if (filters.followupTo) {
-        const to = new Date(filters.followupTo);
-        to.setUTCHours(23, 59, 59, 999);
-        if (!isNaN(to.getTime())) followupRange.$lte = to;
-      }
-      if (Object.keys(followupRange).length > 0) query.lastFollowupDate = followupRange;
+      const followupRange = dubaiDayRange(filters.followupFrom, filters.followupTo);
+      if (followupRange) query.lastFollowupDate = followupRange;
     }
 
     // ── Split-date window on assignedAt — shows leads SPLIT in the range even
     //    if they were created earlier (e.g. created yesterday, split today).
     if (filters.splitFrom || filters.splitTo) {
-      const splitRange: Record<string, Date> = {};
-      if (filters.splitFrom) {
-        const from = new Date(filters.splitFrom);
-        from.setUTCHours(0, 0, 0, 0);
-        if (!isNaN(from.getTime())) splitRange.$gte = from;
-      }
-      if (filters.splitTo) {
-        const to = new Date(filters.splitTo);
-        to.setUTCHours(23, 59, 59, 999);
-        if (!isNaN(to.getTime())) splitRange.$lte = to;
-      }
-      if (Object.keys(splitRange).length > 0) query.assignedAt = splitRange;
+      const splitRange = dubaiDayRange(filters.splitFrom, filters.splitTo);
+      if (splitRange) query.assignedAt = splitRange;
     }
 
     // ── Date range filter on createdAt ──────────────────────────────────────────
     if (filters.dateFrom || filters.dateTo) {
-      const dateRange: Record<string, Date> = {};
-      if (filters.dateFrom) {
-        const from = new Date(filters.dateFrom);
-        // Start of the given day (00:00:00 UTC)
-        from.setUTCHours(0, 0, 0, 0);
-        if (!isNaN(from.getTime())) dateRange.$gte = from;
-      }
-      if (filters.dateTo) {
-        const to = new Date(filters.dateTo);
-        // End of the given day (23:59:59.999 UTC)
-        to.setUTCHours(23, 59, 59, 999);
-        if (!isNaN(to.getTime())) dateRange.$lte = to;
-      }
-      if (Object.keys(dateRange).length > 0) {
-        query.createdAt = dateRange;
-      }
+      const dateRange = dubaiDayRange(filters.dateFrom, filters.dateTo);
+      if (dateRange) query.createdAt = dateRange;
     }
 
     if (filters.search) {
@@ -1027,35 +994,15 @@ export class LeadService {
 
     // Created-date window (was declared on LeadFilters but never applied here)
     if (filters.dateFrom || filters.dateTo) {
-      const dateRange: Record<string, Date> = {};
-      if (filters.dateFrom) {
-        const from = new Date(filters.dateFrom);
-        from.setUTCHours(0, 0, 0, 0);
-        if (!isNaN(from.getTime())) dateRange.$gte = from;
-      }
-      if (filters.dateTo) {
-        const to = new Date(filters.dateTo);
-        to.setUTCHours(23, 59, 59, 999);
-        if (!isNaN(to.getTime())) dateRange.$lte = to;
-      }
-      if (Object.keys(dateRange).length > 0) query.createdAt = dateRange;
+      const dateRange = dubaiDayRange(filters.dateFrom, filters.dateTo);
+      if (dateRange) query.createdAt = dateRange;
     }
 
     // Split-date window on assignedAt — leads SPLIT in the range even if
     // created earlier (created yesterday, split today).
     if (filters.splitFrom || filters.splitTo) {
-      const splitRange: Record<string, Date> = {};
-      if (filters.splitFrom) {
-        const from = new Date(filters.splitFrom);
-        from.setUTCHours(0, 0, 0, 0);
-        if (!isNaN(from.getTime())) splitRange.$gte = from;
-      }
-      if (filters.splitTo) {
-        const to = new Date(filters.splitTo);
-        to.setUTCHours(23, 59, 59, 999);
-        if (!isNaN(to.getTime())) splitRange.$lte = to;
-      }
-      if (Object.keys(splitRange).length > 0) query.assignedAt = splitRange;
+      const splitRange = dubaiDayRange(filters.splitFrom, filters.splitTo);
+      if (splitRange) query.assignedAt = splitRange;
     }
 
     const sortField = filters.sortBy ?? "createdAt";
