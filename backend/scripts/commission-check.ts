@@ -409,31 +409,22 @@ let r = await call("GET", "/commission/plan");
 check("no token: 401", r.status === 401, `${r.status}`);
 r = await call("GET", "/commission/plan", "Theertha");
 check("a BDE reads the plan, without the edit lists", r.status === 200 && r.body.data?.canEdit === false && (r.body.data?.users as unknown[]).length === 0 && (r.body.data?.courses as unknown[]).length === 3);
-r = await call("PUT", `/commission/plan/${c1._id}`, "Theertha", { sales: 1, tl: 1, sm: 1, creditUsd: 0 });
-check("a BDE may not change the plan: 403", r.status === 403, `${r.status}`);
-r = await call("PUT", "/commission/settings", "Theertha", { salesManager: String(people.Theertha) });
-check("a BDE may not make herself Sales Manager: 403", r.status === 403);
-r = await call("PUT", `/commission/plan/${c1._id}`, "Abrar", { sales: -5, tl: 1, sm: 1, creditUsd: 0 });
-check("a negative amount: 400", r.status === 400, `${r.status}`);
-r = await call("PUT", `/commission/plan/${c1._id}`, "Abrar", { sales: "230" });
-check("missing and mistyped fields: 400", r.status === 400);
-r = await call("PUT", "/commission/plan/not-an-id", "Abrar", { sales: 1, tl: 1, sm: 1, creditUsd: 0 });
-check("a bad course id: 400", r.status === 400);
-r = await call("PUT", `/commission/plan/${new Types.ObjectId()}`, "Abrar", { sales: 1, tl: 1, sm: 1, creditUsd: 0 });
-check("a course that does not exist: 404", r.status === 404, `${r.status}`);
-r = await call("PUT", `/commission/plan/${old._id}`, "Abrar", { sales: 120, tl: 60, sm: 20, creditUsd: 0 });
-const oldNow = await Course.findById(old._id).lean();
-check("a Super Admin sets a course's row", r.status === 200 && oldNow?.commission?.sales === 120 && Boolean(oldNow?.commission?.updatedBy));
+// Read only (the user, 2026-10-09): no route edits the plan, its settings or the slabs — not even for a Super Admin.
+r = await call("GET", "/commission/plan", "Abrar");
+check("a Super Admin reads it read only too, with the sales on hold", r.status === 200 && r.body.data?.canEdit === false && r.body.data?.seesHeld === true);
+for (const [path, body] of [
+  [`/commission/plan/${c1._id}`, { sales: 1, tl: 1, sm: 1, creditUsd: 0 }],
+  ["/commission/settings", { salesManager: String(people.Abrar) }],
+  ["/commission/slabs/sales", { rows: [] }],
+] as const) {
+  r = await call("PUT", path, "Abrar", body);
+  check(`no editing, even for a Super Admin: PUT ${path.replace(/[0-9a-f]{24}/, ":course")} is gone`, r.status === 404, `${r.status}`);
+}
+// What follows needs a course's row and the settings, set in the database as the plan now only can be.
+await Course.updateOne({ _id: old._id }, { $set: { commission: { sales: 120, tl: 60, sm: 20, creditUsd: 0, updatedBy: people.Abrar, updatedAt: new Date() } } });
 r = await call("PUT", `/courses/${old._id}`, "Abrar", { name: "Market Breakout Theory", commission: { sales: 5 } });
 check("the course form cannot change commission", (await Course.findById(old._id).lean())?.commission?.sales === 120);
-r = await call("PUT", "/commission/settings", "Abrar", { excludedUsers: ["nope"] });
-check("a bad user id in settings: 400", r.status === 400);
-r = await call("PUT", "/commission/settings", "Abrar", { excludedUsers: [String(new Types.ObjectId())] });
-check("an unknown user in settings: 400", r.status === 400, `${r.status}`);
-r = await call("PUT", "/commission/settings", "Abrar", {});
-check("an empty settings change: 400", r.status === 400);
-r = await call("PUT", "/commission/settings", "Abrar", { salesManager: String(people.Abrar), excludedUsers: [String(people["Root user"])] });
-check("a Super Admin sets the Sales Manager and excluded logins", r.status === 200 && (r.body.data?.salesManager as { name?: string })?.name === "Abrar");
+await CommissionSettings.updateOne({ key: "default" }, { $set: { salesManager: people.Abrar, excludedUsers: [people["Root user"]] } }, { upsert: true });
 r = await call("GET", "/commission/earnings?month=2026-13", "Theertha");
 check("a bad month: 400", r.status === 400);
 r = await call("GET", "/commission/earnings?month=2026-10", "Theertha");

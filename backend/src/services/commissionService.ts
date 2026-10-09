@@ -517,7 +517,9 @@ export class CommissionService {
    * salary slabs in force this month, and what needs fixing.
    */
   async getPlan(viewer: Viewer) {
-    const canEdit = isSuperAdmin(viewer.role);
+    // Read only for everyone (the user, 2026-10-09); a Super Admin still sees the sales on hold.
+    const canEdit = false;
+    const seesHeld = isSuperAdmin(viewer.role);
     const month = uaeMonthOf(new Date());
     const [courses, settings, teams, slabs] = await Promise.all([
       Course.find({}).select("name amount status commission").sort({ status: 1, name: 1 }).lean(),
@@ -534,7 +536,7 @@ export class CommissionService {
         ? { _id: idOf(u), name: (u as { name?: string }).name ?? "", email: (u as { email?: string }).email ?? "" }
         : null;
 
-    const [waiting, users] = canEdit
+    const [waiting, users] = seesHeld
       ? await Promise.all([
           CommissionSale.find({ state: "waiting" })
             .select("studentName enrollmentNumber courseName closerName teamName saleDate approvedAt reason")
@@ -547,6 +549,7 @@ export class CommissionService {
 
     return {
       canEdit,
+      seesHeld,
       tlRule: TL_RULE,
       courses: courses.map((c) => ({
         _id: String(c._id),

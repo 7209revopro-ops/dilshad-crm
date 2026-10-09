@@ -21,6 +21,8 @@ export interface CommissionPerson {
 export interface CommissionPlanView {
   /** A Super Admin: may change amounts, the Sales Manager and excluded logins. */
   canEdit: boolean;
+  /** A Super Admin sees the sales on hold; nobody edits the plan (2026-10-09). */
+  seesHeld?: boolean;
   /** How this CRM pays a team's leader (see lib/commission TL_RULE). */
   tlRule?: "zero_if_sm" | "always" | "never";
   courses: {

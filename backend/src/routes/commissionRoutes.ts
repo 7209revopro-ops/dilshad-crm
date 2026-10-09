@@ -3,13 +3,9 @@ import { authenticate } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
 import {
   getPlan,
-  updateCoursePlan,
-  updateSettings,
   getEarnings,
   getPreview,
   getPay,
-  updateSlab,
-  requireSuperAdmin,
 } from "../controllers/commissionController.js";
 
 /*
@@ -23,12 +19,11 @@ const router = Router();
 router.use(authenticate);
 
 router.get("/plan", checkPermission("commission", "view"), getPlan);
-router.put("/plan/:courseId", requireSuperAdmin, updateCoursePlan);
-router.put("/settings", requireSuperAdmin, updateSettings);
+// The plan, its settings and the salary slabs are read only — no one edits them, a
+// Super Admin included (the user, 2026-10-09); Root shows them read only too.
 router.get("/earnings", checkPermission("commission", "view"), getEarnings);
 // Salary slabs: a month's salary and commission (own; everyone's for a Super Admin or the Sales Manager).
 router.get("/pay", checkPermission("pay", "view"), getPay);
-router.put("/slabs/:role", requireSuperAdmin, updateSlab);
 // What a sale would earn, for the closing dialog — nothing is saved. Not behind
 // the Commission box: whoever closes a sale sees this in the close dialog.
 router.get("/preview", getPreview);

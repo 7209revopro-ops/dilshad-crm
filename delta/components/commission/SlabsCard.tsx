@@ -43,7 +43,7 @@ export function SlabsCard({ plan }: { plan: CommissionPlanView }) {
         <p className="text-[11px] text-muted-foreground">
           {plan.canEdit && plan.slabsMonth
             ? `A change holds from ${monthLabel(plan.slabsMonth)} on — earlier months keep theirs`
-            : "Set by a Super Admin"}
+            : "Read only — the slabs are not edited here"}
           {plan.slabsFrom ? ` · last changed for ${monthLabel(plan.slabsFrom)}` : ""}
         </p>
       </div>

@@ -50,7 +50,7 @@ export function PlanTab() {
         <ExcludedCard plan={data} />
       </div>
       {TL_PAID && <TeamsCard plan={data} />}
-      {data.canEdit && <OnHoldCard plan={data} />}
+      {data.seesHeld && <OnHoldCard plan={data} />}
     </div>
   );
 }
@@ -108,7 +108,7 @@ function PlanTable({ plan }: { plan: CommissionPlanView }) {
       <div className="flex items-center justify-between gap-2 px-4 py-2.5">
         <p className="text-sm font-semibold text-foreground">Plan per course</p>
         <p className="text-[11px] text-muted-foreground">
-          {plan.canEdit ? "Edit a course's amounts, then save it" : "Set by a Super Admin"}
+          {plan.canEdit ? "Edit a course's amounts, then save it" : "Read only — the plan is not edited here"}
         </p>
       </div>
       {plan.courses.map((c, i) => (

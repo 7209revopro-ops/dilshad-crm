@@ -316,28 +316,10 @@ const good = [
   { name: "D", target: 15_000, salary: 2_500, percent: 60 },
   { name: "A", target: 32_000, salary: 4_000, percent: 100 },
 ];
-h = await call("PUT", "/commission/slabs/sales", "Theertha", { rows: good });
-check("Sales Staff may not change a slab: 403", h.status === 403, `${h.status}`);
-h = await call("PUT", "/commission/slabs/sales", "Dilshad", { rows: good });
-check("…nor the Sales Manager: 403", h.status === 403, `${h.status}`);
-h = await call("PUT", "/commission/slabs/boss", "Owner", { rows: good });
-check("a role that isn't one: 400", h.status === 400);
-h = await call("PUT", "/commission/slabs/tl", "Owner", { rows: good });
-check("no TL slab in the Remote CRM: 400", h.status === 400);
-h = await call("PUT", "/commission/slabs/sales", "Owner", { rows: [] });
-check("no rows: 400", h.status === 400);
-h = await call("PUT", "/commission/slabs/sales", "Owner", { rows: [{ name: "Base", target: 5, salary: 1, percent: 0 }] });
-check("a first row that isn't at 0: 400", h.status === 400 && /base/i.test(h.body.message ?? ""), h.body.message);
-h = await call("PUT", "/commission/slabs/sales", "Owner", { rows: [good[0], good[2], good[1]] });
-check("targets out of order: 400", h.status === 400 && /higher/.test(h.body.message ?? ""), h.body.message);
-h = await call("PUT", "/commission/slabs/sales", "Owner", { rows: [good[0], { ...good[1], percent: 150 }] });
-check("a percent over 100: 400", h.status === 400);
-h = await call("PUT", "/commission/slabs/sales", "Owner", { rows: [{ name: "Base", target: 0, salary: -1, percent: 0 }] });
-check("a negative salary: 400", h.status === 400);
-h = await call("PUT", "/commission/slabs/sales", "Owner", { rows: [{ name: "", target: 0, salary: "2000", percent: 0 }] });
-check("an empty name and a salary as text: 400", h.status === 400);
 h = await call("PUT", "/commission/slabs/sales", "Owner", { rows: good });
-check("a Super Admin saves the Sales Staff slab, in force from this month", h.status === 200 && (h.body.data as { from?: string })?.from === MONTH);
+check("no editing a slab, even for a Super Admin: the route is gone", h.status === 404, `${h.status}`);
+// Set in the database, as the slabs now only can be.
+await saveSlab("sales", good, String(people.Owner), MONTH);
 h = await call("GET", "/commission/pay", "Theertha");
 body = h.body.data as unknown as PayBody;
 check("Theertha's month follows it: D now pays 60% — 21,000 → 2,500 + 138", body.me?.percent === 60 && body.me.commission.payable === 138 && body.me.total === 2_638, JSON.stringify(body.me));
