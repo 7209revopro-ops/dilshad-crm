@@ -252,7 +252,7 @@ export function EditStudentModal({ open, student, onClose }: Props) {
             </div>
             {form.watch("bonus") === "yes" && (
               <div className="space-y-1.5">
-                <Label htmlFor="bonusAmount">Bonus amount</Label>
+                <Label htmlFor="bonusAmount">Bonus amount (USD $)</Label>
                 <Input id="bonusAmount" type="number" min={0} step="0.01" {...form.register("bonusAmount")} />
                 {form.formState.errors.bonusAmount && (
                   <p className="text-xs text-destructive">{form.formState.errors.bonusAmount.message}</p>

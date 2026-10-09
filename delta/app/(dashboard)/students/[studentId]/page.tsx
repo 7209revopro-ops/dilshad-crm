@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { fmtFull } from "@/lib/currency";
+import { fmtFull, fmtUSD } from "@/lib/currency";
 import { useStudent, useUpdateStudent } from "@/hooks/useStudents";
 import { useEnrolmentCorrection, uaeTime } from "@/hooks/useEnrolments";
 import { useAuthStore } from "@/lib/store/authStore";
@@ -215,7 +215,7 @@ export default function StudentDetailPage() {
                   <div className="flex items-center justify-between rounded-lg border border-border/30 bg-muted/20 px-2.5 py-1.5 text-[11px]">
                     <span className="flex items-center gap-1 text-muted-foreground"><Gift className="h-3 w-3" /> Bonus</span>
                     <span className={cn("font-semibold tabular-nums", student.hasBonus ? "text-violet-400" : "text-muted-foreground")}>
-                      {student.hasBonus ? fmtFull(student.bonusAmount ?? 0) : "None"}
+                      {student.hasBonus ? fmtUSD(student.bonusAmount ?? 0) : "None"}
                     </span>
                   </div>
                 )}

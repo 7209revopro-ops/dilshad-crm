@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { fmtFull } from "@/lib/currency";
+import { fmtFull, fmtUSD } from "@/lib/currency";
 import { useCreateStudent, useUpdateStudent } from "@/hooks/useStudents";
 import { useAllCourses } from "@/hooks/useCourses";
 import { useAddPayment } from "@/hooks/usePayments";
@@ -484,7 +484,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                             <Input
                               type="number" min="0" step="0.01" value={bonusInput}
                               onChange={(e) => { setBonusInput(e.target.value); setBonusTouched(true); }}
-                              placeholder="Bonus amount" className="h-8 text-xs"
+                              placeholder="Bonus amount (USD $)" className="h-8 text-xs"
                               aria-label="Bonus amount"
                             />
                           </motion.div>
@@ -502,7 +502,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                         {editing
                           ? "Saved here. Finance sees a change only if it sends this enrolment back for correction."
                           : bonusChoice === "yes"
-                            ? `${bonusAmount > 0 ? fmtFull(bonusAmount) : "The"} bonus goes to finance with the enrolment, and on to the LMS and Tetra Commission — outside the fee and balance.`
+                            ? `${bonusAmount > 0 ? fmtUSD(bonusAmount) : "The"} bonus goes to finance with the enrolment, and on to the LMS and Tetra Commission — outside the fee and balance.`
                             : "No bonus — recorded as such with the enrolment."}
                       </p>
                     )}
