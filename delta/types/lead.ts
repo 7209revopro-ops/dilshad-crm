@@ -113,6 +113,8 @@ export interface Lead {
   followupStrategyType?: FollowupStrategyType | null;
   sellingAmount?: number | null;
   createdAt: string;
+  /** The first created date, when the lead has since been handed to someone (createdAt is then the hand-over). */
+  originalCreatedAt?: string | null;
   updatedAt: string;
 }
 

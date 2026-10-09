@@ -809,6 +809,10 @@ export default function LeadDetailPage() {
                 )}
 
                 <InfoRow icon={Calendar} label="Created" value={formatDate(lead.createdAt)} />
+                {/* Handed over since — createdAt is the hand-over; this is when it first came in. */}
+                {lead.originalCreatedAt && (
+                  <InfoRow icon={Calendar} label="First created" value={formatDate(lead.originalCreatedAt)} />
+                )}
                 <InfoRow icon={Clock} label="Last Updated" value={formatDate(lead.updatedAt)} />
 
                 {/* Call Not Connected Counter */}

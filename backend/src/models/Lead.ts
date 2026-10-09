@@ -1,4 +1,5 @@
 import mongoose, { Schema } from "mongoose";
+import { handOverOnAssign } from "./leadHandOver.js";
 import type { ILead, ILeadNote, IActivityLog, IReminder, IPayment, IFollowUp } from "../types/index.js";
 
 // ─── Note Sub-Schema ──────────────────────────────────────────────────────────
@@ -215,6 +216,11 @@ const leadSchema = new Schema<ILead>(
       type: Date,
       default: null,
     },
+    // Declared so it can change: a lead handed to someone takes the hand-over
+    // time as its created date (see leadHandOver.ts). Still set on create by timestamps.
+    createdAt: { type: Date },
+    // The first created date, kept once when the lead is first handed over.
+    originalCreatedAt: { type: Date, default: undefined },
     team: {
       type: Schema.Types.ObjectId,
       ref: "Team",
@@ -391,5 +397,7 @@ leadSchema.index({ createdAt: -1 });
 leadSchema.index({ nextFollowUpAt: 1 });
 // Inactive leads: untouched statuses, oldest assignment first
 leadSchema.index({ status: 1, assignedAt: 1 });
+
+handOverOnAssign(leadSchema);
 
 export const Lead = mongoose.model<ILead>("Lead", leadSchema);

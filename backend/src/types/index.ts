@@ -405,6 +405,8 @@ export interface ILead extends Document {
   course?: Types.ObjectId | ICourse;
   assignedTo?: Types.ObjectId | IUser;
   assignedAt?: Date | null;
+  /** The first created date, kept when the lead is first handed over (createdAt then moves to the hand-over). */
+  originalCreatedAt?: Date | null;
   team?: Types.ObjectId | ITeam;
   reporter: Types.ObjectId | IUser;
   notes: Types.DocumentArray<ILeadNote & Document>;
