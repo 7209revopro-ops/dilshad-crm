@@ -16,6 +16,7 @@ import { toast } from "@/lib/toast";
 import api from "@/lib/axios";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/authStore";
+import { ClassInfo } from "@/components/mentors/ClassInfo";
 
 /** Ported alongside this page rather than shared: the rest of this codebase
     keeps this same small helper private to whichever file needs it (see
@@ -1153,6 +1154,8 @@ export default function MentorsPage() {
                     </div>
                   ) : null}
                 </div>
+                {/* Info: who booked, joined, cancelled and reviewed, and when it started and ended. */}
+                <ClassInfo c={c as Record<string, unknown>} tz={tz} />
               </>
             );
           })()}
