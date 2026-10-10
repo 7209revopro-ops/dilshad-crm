@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useAddEnrolmentEmail } from "@/hooks/useEnrolments";
+import { useEmailCheck } from "@/hooks/useStudents";
 import { isFinanceEmail } from "@/types/student";
 
 /**
@@ -20,6 +21,10 @@ import { isFinanceEmail } from "@/types/student";
  * server says the email is what held it up (`needsClientEmail`), on My
  * Enrolments, the enrolment's page and the student's page.
  *
+ * One email, one client (2026-10-10): an email another client here already
+ * holds is refused — finance would file this enrolment under them — and said
+ * under the field, in the server's words, before the button is pressed.
+ *
  * Whoever may not act on enrolments is told who can, rather than given a
  * field the server would refuse.
  */
@@ -28,7 +33,8 @@ export function AddClientEmail({ studentId, initial, mayAct = true, className }:
   /**
    * What the field starts from — the server's `suggestedEmail`: the
    * enrolment's email if finance would take it, else the lead's (people add it
-   * to the lead by hand). Only filled in: nothing goes until the button is pressed.
+   * to the lead by hand), never one another client holds. Only filled in:
+   * nothing goes until the button is pressed.
    */
   initial?: string | null;
   mayAct?: boolean;
@@ -40,6 +46,10 @@ export function AddClientEmail({ studentId, initial, mayAct = true, className }:
   const value = email.trim();
   const valid = isFinanceEmail(value);
   const prefilled = Boolean(value) && value === start;
+  const check = useEmailCheck(valid ? value : "", { studentId }, mayAct);
+  /** Refused by the server as another client's email — said under the field while it is the one typed. */
+  const [refused, setRefused] = useState<{ email: string; message: string } | null>(null);
+  const taken = valid ? check.taken ?? (refused?.email === value.toLowerCase() ? refused : null) : null;
 
   return (
     <div className={cn("rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5", className)}>
@@ -55,7 +65,16 @@ export function AddClientEmail({ studentId, initial, mayAct = true, className }:
           className="mt-2 flex flex-wrap items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (valid && !add.isPending) add.mutate({ id: studentId, email: value });
+            if (!valid || taken || check.checking || add.isPending) return;
+            add.mutate(
+              { id: studentId, email: value },
+              {
+                onError: (err: unknown) => {
+                  const res = (err as { response?: { status?: number; data?: { message?: string } } })?.response;
+                  if (res?.status === 409 && /already used by/i.test(res.data?.message ?? "")) setRefused({ email: value.toLowerCase(), message: res.data!.message! });
+                },
+              },
+            );
           }}
         >
           <Input
@@ -65,19 +84,28 @@ export function AddClientEmail({ studentId, initial, mayAct = true, className }:
             placeholder="client@example.com"
             className="h-8 min-w-[12rem] flex-1 text-xs"
             aria-label="Client email"
+            aria-invalid={Boolean(taken) || (Boolean(value) && !valid)}
             autoComplete="off"
             disabled={add.isPending}
           />
-          <Button type="submit" size="sm" className="h-8 gap-1.5 text-xs" disabled={!valid || add.isPending}>
+          <Button type="submit" size="sm" className="h-8 gap-1.5 text-xs" disabled={!valid || Boolean(taken) || check.checking || add.isPending}>
             {add.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
             {add.isPending ? "Sending…" : "Add email & send again"}
           </Button>
-          <p className={cn("w-full text-[10px]", value && !valid ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
+          <p className={cn(
+            "w-full text-[10px]",
+            taken ? "text-red-600 dark:text-red-400" : value && !valid ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
+          )}>
             {value && !valid
               ? "That isn't an email address finance will take."
-              : prefilled
-                ? "Filled in from the client's details here — check it, then send. It goes to finance at once as the same enrolment."
-                : "It goes to finance at once as the same enrolment, and the email is kept on the lead too."}
+              : taken
+                // The server's words: whose it is (never their phone), and that this client's own is needed.
+                ? taken.message
+                : check.checking
+                  ? "Checking that no other client here has this email…"
+                  : prefilled
+                    ? "Filled in from the client's details here — check it, then send. It goes to finance at once as the same enrolment."
+                    : "It goes to finance at once as the same enrolment, and the email is kept on the lead too."}
           </p>
         </form>
       )}

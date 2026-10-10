@@ -1223,3 +1223,14 @@ A new close starts "Bonus given?" at yes with the course's bonus, marked "From t
 - `types/student.isFinanceEmail` — finance's own check (zod 3 `z.string().email()`, as the server's); used by the close
   dialog, `AddClientEmail` and `CorrectEnrolmentDialog` (in place of its own looser `EMAIL_RE`), so `a@b.c` is asked for
   again before the server refuses it, and nothing the server takes is blocked.
+
+### Change log — 2026-10-10 (one email, one client)
+- `CreateStudentModal` — the lead's email is checked when the dialog opens (`useEmailCheck`, by lead); one another client
+  holds is treated as missing: the Email field shows, starting from it, with the server's words in red ("This email is
+  already used by … (STU-…), a different client — enter …'s own email."); "the client's own email" joins "Still needed"; Create
+  waits while an email is checked ("Checking the client's email…"). The lead keeps its email. A 409 from the server is shown
+  on the field too.
+- `CorrectEnrolmentDialog` — the email checked as typed (by enrolment); taken → the message under the field and "the
+  client's own email" in Still needed; a 409 shows there too.
+- `AddClientEmail` — the same check and message; the button waits for it.
+- `hooks/useStudents.useEmailCheck` (new).

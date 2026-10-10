@@ -838,3 +838,18 @@ on the lead is marked done. `getUserLeadStats` also returns `meeting_done`.
   populates `leadId.email`, the page asks `suggestedEmailFor`); the finance step's error reads "the client's email is
   missing; add it and send again". `getCorrection` — `deliveryStatus`, `needsClientEmail`, `suggestedEmail`.
 - `requestInvoice` — 409 (`queued: false`) for a row `refusedForEmail`: "… add the client's email first …".
+
+## One email, one client (changed 2026-10-10)
+
+- `services/emailHolder.ts` (new) — `findEmailHolder(email, { name, phone, leadId?, studentId? })`: students (not
+  `studentId`, not of `leadId`), then leads (not `leadId`), holding the email trimmed and case-insensitively (`emailMatch`),
+  earliest first; the first that `differentPeople` says is another person, as `{ kind, id, name, code? }`, or null.
+- `utils/clientEmail.ts` (new) — `isFinanceEmail` / `FINANCE_EMAIL_RE` (moved from studentService), `emailKey`, `phoneKey`
+  (last 9 digits; "" under 7 digits), `nameKey`, `differentPeople`, `emailMatch`, `maskEmail`, `takenMessage`.
+- `createStudent` — 409 `takenMessage` after the missing check (the client: the close's name/phone, else the lead's).
+- `correctEnrolment` — 409 after the missing check (the client as corrected). `requestInvoice` — the sent-back branch answers
+  `queued: false` (409): the message + "Correct the enrolment to change it, and it goes again." `addEnrolmentEmail` — 409
+  after the row checks.
+- `suggestedEmailOf(student, leadEmail)` — async now; skips a taken email. `suggestedEmailFor(h, student)`; `listEnrolments`
+  works the suggestions out for the rows that need one.
+- `checkClientEmail(email, { leadId | studentId })` (new) — behind `GET /students/email-check`.

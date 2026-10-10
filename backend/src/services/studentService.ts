@@ -1,5 +1,4 @@
 import { Types } from "mongoose";
-import { z } from "zod";
 import {
   ACADEMY_CURRENCY,
   ACADEMY_LABELS,
@@ -18,6 +17,8 @@ import {
 import { Student } from "../models/Student.js";
 import { Lead } from "../models/Lead.js";
 import type { IRole, IStudent, IStudentPayment } from "../types/index.js";
+import { FINANCE_EMAIL_RE, emailKey, isFinanceEmail, takenMessage, type EmailHolder } from "../utils/clientEmail.js";
+import { findEmailHolder } from "./emailHolder.js";
 
 function createError(msg: string, status: number) {
   return Object.assign(new Error(msg), { statusCode: status });
@@ -146,19 +147,11 @@ function isBonusAmount(v: unknown): boolean {
 }
 
 /*
- * The client's email, checked as finance checks it (2026-10-10).
- *
- * Finance's intake refuses an enrolment whose `customer.email` fails its
- * `z.string().email()` (zod 3 there). Zod 4's `z.email()` here is the same
- * pattern (`z.regexes.email`) — so an address that only looks like one, such
- * as `a@b.c`, is refused at the close and at a correction rather than saved
- * here and then refused by finance, out of sight. Checked as given: finance
- * trims nothing.
+ * The client's email is checked as finance checks it (2026-10-10) —
+ * isFinanceEmail, zod's email pattern, in utils/clientEmail.ts — and, since
+ * finance files a close under whoever its email already belongs to, it must
+ * not be another client's here (findEmailHolder; one email, one client).
  */
-const financeEmail = z.email();
-const isFinanceEmail = (v: unknown): boolean => typeof v === "string" && financeEmail.safeParse(v).success;
-/** The same pattern, for a database filter. */
-const FINANCE_EMAIL_RE = z.regexes.email;
 
 /** What finance answers when its intake refuses the enrolment's shape — an empty client email, say. */
 const FINANCE_REFUSED_RE = /request validation failed/i;
@@ -196,15 +189,26 @@ function emailCanBeAdded(h: HandoverForEmail): boolean {
 /**
  * What the "add the client's email" field starts from (2026-10-10): the
  * enrolment's email if finance would take it, else the lead's — people add it
- * to the lead by hand — else nothing. Only ever a suggestion: nothing is sent
- * until somebody presses the button.
+ * to the lead by hand — else nothing. Never one another client here already
+ * holds (one email, one client): suggested, it would only be refused. Only
+ * ever a suggestion: nothing is sent until somebody presses the button.
  */
-function suggestedEmailOf(studentEmail: unknown, leadEmail: unknown): string {
-  for (const v of [studentEmail, leadEmail]) {
-    const e = typeof v === "string" ? v.trim().toLowerCase() : "";
-    if (isFinanceEmail(e)) return e;
+async function suggestedEmailOf(
+  student: { _id: unknown; name?: unknown; phone?: unknown; email?: unknown; leadId?: unknown },
+  leadEmail: unknown,
+): Promise<string> {
+  for (const v of [student.email, leadEmail]) {
+    const e = emailKey(v);
+    if (!isFinanceEmail(e)) continue;
+    if (await findEmailHolder(e, { name: student.name, phone: student.phone, studentId: student._id, leadId: student.leadId })) continue;
+    return e;
   }
   return "";
+}
+
+/** A refusal for an email another client here holds: 409, naming them (takenMessage). */
+function emailTaken(holder: EmailHolder, clientName: unknown) {
+  return createError(takenMessage(holder, clientName), 409);
 }
 
 /** Why the finance step failed, as the steps say it: in words for a missing email, finance's own otherwise. */
@@ -365,6 +369,22 @@ export class StudentService {
         422,
       );
     }
+
+    /*
+     * The client's own email (one email, one client — the user, 2026-10-10).
+     * Finance files a close under the customer its email already belongs to,
+     * so an email another client here holds — a student, or a lead that is a
+     * different person — is refused, naming them. The lead's own email counts
+     * too: a lead sharing it with other people is closed with the client's own,
+     * and keeps its email (keepEmailOnLead only fills one in where there is none).
+     * Who the client is: as the close says, else as the lead does.
+     */
+    const closedLead = Types.ObjectId.isValid(String(data.leadId))
+      ? await Lead.findById(data.leadId).select("name phone").lean()
+      : null;
+    const client = { name: data.name || closedLead?.name, phone: data.phone || closedLead?.phone };
+    const holder = await findEmailHolder(email, { ...client, leadId: data.leadId });
+    if (holder) throw emailTaken(holder, client.name);
 
     const enrollmentNumber = await nextEnrollmentNumber();
 
@@ -1061,6 +1081,16 @@ export class StudentService {
     );
     const byExternal = new Map(statuses.map((s) => [s.externalId, s]));
 
+    // For each close refused for want of the client's email, the email its field
+    // starts from — one finance would take that no other client here holds.
+    const suggested = new Map(
+      await Promise.all(
+        students
+          .filter((s) => refusedForEmail(byStudent.get(String(s._id))))
+          .map(async (s) => [String(s._id), await suggestedEmailOf(s, (s.leadId as unknown as { email?: unknown } | null)?.email)] as const),
+      ),
+    );
+
     const rows = students.map((s) => {
       const h = byStudent.get(String(s._id));
       const f = byExternal.get(String(s._id));
@@ -1084,11 +1114,10 @@ export class StudentService {
               resentAt: h.resentAt ?? null,
               resends: h.resends ?? 0,
               // Refused by finance for want of the client's email: the card asks for it,
-              // its field filled in with an email finance would take, where one is known.
+              // its field filled in with an email finance would take, where one is known
+              // that no other client here holds.
               needsClientEmail: refusedForEmail(h),
-              suggestedEmail: refusedForEmail(h)
-                ? suggestedEmailOf(s.email, (s.leadId as unknown as { email?: unknown } | null)?.email)
-                : "",
+              suggestedEmail: suggested.get(String(s._id)) ?? "",
             }
           : null,
         // Absent rather than guessed when finance could not be reached.
@@ -1157,7 +1186,7 @@ export class StudentService {
     const sale = await CommissionSale.findOne({ student: student._id }).lean();
     const config = sale ? await loadConfig() : null;
     const everything = isSuperAdmin(viewer.role as never) || (config?.salesManager ? String(config.salesManager) === viewer.userId : false);
-    const suggestedEmail = await this.suggestedEmailFor(h, student.email, student.leadId);
+    const suggestedEmail = await this.suggestedEmailFor(h, student);
 
     return {
       ...student,
@@ -1225,6 +1254,18 @@ export class StudentService {
     if (existing?.status === "sent") {
       if (!(await this.sendBackOf(studentId, existing)).sentBack) {
         return { queued: false, message: `Already invoiced as ${existing.invoiceNumber ?? "an invoice"}` };
+      }
+      /*
+       * It goes as a correction, with the client's email as the enrolment has
+       * it now. One another client here holds (one email, one client —
+       * 2026-10-10) is refused, as the correction refuses it: finance would
+       * take it as that client's. The correction is where it is changed.
+       */
+      const holder = isFinanceEmail(emailKey(student.email))
+        ? await findEmailHolder(student.email, { name: student.name, phone: student.phone, studentId: student._id, leadId: student.leadId })
+        : null;
+      if (holder) {
+        return { queued: false, message: `${takenMessage(holder, student.name)} Correct the enrolment to change it, and it goes again.` };
       }
       if (!(await this.resendCorrected(studentId))) return { queued: false, message: "Enrolment not found" };
       return { queued: true, message: "Correction sent to finance" };
@@ -1376,7 +1417,7 @@ export class StudentService {
       // student page asks for it (addEnrolmentEmail) rather than a correction.
       deliveryStatus: h?.status ?? null,
       needsClientEmail: refusedForEmail(h),
-      suggestedEmail: await this.suggestedEmailFor(h, student.email, student.leadId),
+      suggestedEmail: await this.suggestedEmailFor(h, student),
       mayMove,
       // Fixed at the close, shown read only: the form's money is in its currency.
       academy: academyOf(student),
@@ -1441,6 +1482,16 @@ export class StudentService {
     if (typeof data.hasBonus !== "boolean") missing.push("whether a bonus was given");
     else if (data.hasBonus && !isBonusAmount(data.bonusAmount)) missing.push("the bonus amount");
     if (missing.length) throw createError(`A correction needs ${missing.join(", ")}.`, 422);
+
+    /*
+     * The client's own email (one email, one client — 2026-10-10). Finance
+     * keeps the customer by email: corrected with an address another client
+     * here holds, this enrolment would be filed under them — or, kept with one
+     * it shared, rename them. Refused, naming them; the client as corrected
+     * is who is compared.
+     */
+    const holder = await findEmailHolder(email, { name, phone, studentId: student._id, leadId: student.leadId });
+    if (holder) throw emailTaken(holder, name);
 
     // The academy is the close's, and stays (the user, 2026-10-10): the money
     // below is in its currency, and finance is asked in its organization.
@@ -1557,12 +1608,16 @@ export class StudentService {
   /**
    * The email to start the "add the client's email" field from, for a close
    * finance refused for want of one (suggestedEmailOf): the enrolment's, else
-   * the lead's. "" for any other.
+   * the lead's — never one another client here holds. "" for any other.
    */
-  private async suggestedEmailFor(h: HandoverForEmail, studentEmail: unknown, leadId: unknown): Promise<string> {
+  private async suggestedEmailFor(
+    h: HandoverForEmail,
+    student: { _id: unknown; name?: unknown; phone?: unknown; email?: unknown; leadId?: unknown },
+  ): Promise<string> {
     if (!refusedForEmail(h)) return "";
+    const leadId = student.leadId;
     const lead = leadId && Types.ObjectId.isValid(String(leadId)) ? await Lead.findById(leadId).select("email").lean() : null;
-    return suggestedEmailOf(studentEmail, lead?.email);
+    return suggestedEmailOf(student, lead?.email);
   }
 
   /**
@@ -1618,6 +1673,9 @@ export class StudentService {
         409,
       );
     }
+    // The client's own (one email, one client — 2026-10-10): not one another client here holds.
+    const holder = await findEmailHolder(email, { name: student.name, phone: student.phone, studentId: student._id, leadId: student.leadId });
+    if (holder) throw emailTaken(holder, student.name);
 
     // Conditional, so a row that reached finance a moment ago is left as it is.
     const reset = await FinanceHandover.updateOne(
@@ -1642,6 +1700,50 @@ export class StudentService {
     kickFinanceHandover();
 
     return { email, message: "Email added — sending it to finance again." };
+  }
+
+  // ── One email, one client ────────────────────────────────────────────────────
+
+  /**
+   * Whether an email is already another client's here (2026-10-10), for the
+   * close dialog, the correction and the add-email box to say so before
+   * anything is saved: `{ ok: true }`, or `{ ok: false, takenBy, message }` —
+   * the refusal the server would give, naming the holder (never their phone).
+   *
+   * Asked for a client: the lead being closed (`leadId`) or the enrolment
+   * (`studentId`) — who is compared, and whose own records don't count. Only a
+   * help: the close, the correction and the add-email refuse a taken email
+   * whatever this said.
+   */
+  async checkClientEmail(
+    rawEmail: unknown,
+    who: { leadId?: unknown; studentId?: unknown },
+  ): Promise<{ ok: boolean; takenBy?: { name: string; code?: string; kind: EmailHolder["kind"] }; message?: string }> {
+    const email = emailKey(rawEmail);
+    if (!isFinanceEmail(email)) throw createError("That isn't an email finance will take.", 422);
+    const given = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : "");
+    const studentId = given(who.studentId);
+    const leadId = given(who.leadId);
+    if (!studentId && !leadId) throw createError("Say whose email it is: the lead being closed (leadId) or the enrolment (studentId).", 422);
+
+    let client: { name?: unknown; phone?: unknown; studentId?: unknown; leadId?: unknown };
+    if (studentId) {
+      const s = Types.ObjectId.isValid(studentId) ? await Student.findById(studentId).select("name phone leadId").lean() : null;
+      if (!s) throw createError("Enrolment not found", 404);
+      client = { name: s.name, phone: s.phone, studentId: s._id, leadId: s.leadId };
+    } else {
+      const l = Types.ObjectId.isValid(leadId) ? await Lead.findById(leadId).select("name phone").lean() : null;
+      if (!l) throw createError("Lead not found", 404);
+      client = { name: l.name, phone: l.phone, leadId: l._id };
+    }
+
+    const holder = await findEmailHolder(email, client);
+    if (!holder) return { ok: true };
+    return {
+      ok: false,
+      takenBy: { name: holder.name, ...(holder.code ? { code: holder.code } : {}), kind: holder.kind },
+      message: takenMessage(holder, client.name),
+    };
   }
 
 }

@@ -15,12 +15,14 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/enrolment-correction-check.XXXXXX")"
 
 cleanup() {
   local code=$?
-  # Some mongod builds have no --shutdown; stop it by its port instead.
-  local pid
-  pid="$(lsof -ti:"$PORT" -sTCP:LISTEN 2>/dev/null || true)"
-  if [ -n "$pid" ]; then
-    kill $pid 2>/dev/null || true
-    for _ in $(seq 1 50); do kill -0 $pid 2>/dev/null || break; sleep 0.2; done
+  # Only the mongod this started, by the pid it wrote — never whatever else
+  # holds the port (another check's, say, when this one found it taken).
+  # mongod --shutdown is Linux only.
+  if [ -f "$WORK/mongod.pid" ]; then
+    local pid
+    pid="$(cat "$WORK/mongod.pid")"
+    kill "$pid" 2>/dev/null || true
+    for _ in $(seq 1 50); do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
   fi
   rm -rf "$WORK"
   exit $code
@@ -33,7 +35,7 @@ if lsof -ti:"$PORT" >/dev/null 2>&1; then
 fi
 
 mkdir -p "$WORK/db" "$WORK/log"
-mongod --dbpath "$WORK/db" --port "$PORT" --bind_ip 127.0.0.1 --fork --logpath "$WORK/log/mongod.log" >/dev/null
+mongod --dbpath "$WORK/db" --port "$PORT" --bind_ip 127.0.0.1 --fork --logpath "$WORK/log/mongod.log" --pidfilepath "$WORK/mongod.pid" >/dev/null
 
 cd "$REPO"
 MONGODB_URI="mongodb://127.0.0.1:$PORT/crm-scratch" DOTENV_CONFIG_PATH=/nonexistent \

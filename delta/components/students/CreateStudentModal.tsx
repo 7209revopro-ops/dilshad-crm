@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { fmtAcademy, fmtUSD } from "@/lib/currency";
-import { useCloseOptions, useCreateStudent, useUpdateStudent } from "@/hooks/useStudents";
+import { useCloseOptions, useCreateStudent, useEmailCheck, useUpdateStudent } from "@/hooks/useStudents";
 import { useAllCourses } from "@/hooks/useCourses";
 import { useAddPayment } from "@/hooks/usePayments";
 import { CommissionPreview } from "@/components/commission/CommissionPreview";
@@ -192,10 +192,27 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
   const leadEmail = (lead.email ?? "").trim();
   // Finance's own check: a lead email that only looks like one (a@b.c) is asked for again.
   const leadEmailOk = isFinanceEmail(leadEmail);
-  const askEmail = !editing && !leadEmailOk;
-  const [emailInput, setEmailInput] = useState(leadEmailOk ? "" : leadEmail);
-  const email = (leadEmailOk ? leadEmail : emailInput.trim()).toLowerCase();
+  /*
+   * One email, one client (2026-10-10): finance files a close under whoever its
+   * email already belongs to, so a lead email another client here holds — a
+   * student, or a lead that is a different person — is treated as missing: the
+   * field shows, saying whose it is, and Create waits for this client's own.
+   * The lead keeps its email; the one given goes on the enrolment.
+   */
+  const leadCheck = useEmailCheck(leadEmailOk ? leadEmail : "", { leadId: lead._id }, open && !editing);
+  /** A close the server refused for an email another client holds — said on the field while it is the one typed. */
+  const [refusedTaken, setRefusedTaken] = useState<{ email: string; message: string } | null>(null);
+  const leadEmailTaken = Boolean(leadCheck.taken) || (refusedTaken !== null && refusedTaken.email === leadEmail.toLowerCase());
+  const askEmail = !editing && (!leadEmailOk || leadEmailTaken);
+  const [emailInput, setEmailInput] = useState(leadEmail);
+  const email = (askEmail ? emailInput.trim() : leadEmail).toLowerCase();
   const emailMissing = askEmail && !isFinanceEmail(email);
+  const typedCheck = useEmailCheck(askEmail && !emailMissing ? email : "", { leadId: lead._id }, open && !editing);
+  const takenBy = askEmail && !emailMissing
+    ? typedCheck.taken ?? (refusedTaken?.email === email ? refusedTaken : null)
+    : null;
+  /** Finding out whether the email is another client's — a moment; Create waits for it. */
+  const emailChecking = !editing && (askEmail ? !emailMissing && typedCheck.checking : leadEmailOk && leadCheck.checking);
 
   /*
    * Whether a bonus was given, and how much.
@@ -235,6 +252,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
     : [
         noBangalorePrice && "a Bangalore price for this course",
         emailMissing && "the client's email",
+        takenBy && "the client's own email",
         !language && "language",
         ...missingInRows(paymentRows, base),
         !bonusChoice && "whether a bonus was given",
@@ -310,6 +328,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
       return;
     }
 
+    const sent = email;
     await createMut.mutateAsync({
       leadId: lead._id,
       name:   lead.name,
@@ -349,8 +368,15 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
         ...rowForeignFields(r, base),
       })),
       ...bonusFields,
-    });
-    onCreated();
+    }).then(
+      () => onCreated(),
+      (err: unknown) => {
+        // Already said in a toast. One refused as another client's email is said on the field too,
+        // which opens for this client's own when it was the lead's.
+        const res = (err as { response?: { status?: number; data?: { message?: string } } })?.response;
+        if (res?.status === 409 && /already used by/i.test(res.data?.message ?? "")) setRefusedTaken({ email: sent, message: res.data!.message! });
+      },
+    );
   }
 
   const assignedName = lead.assignedTo
@@ -426,13 +452,24 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                           onChange={(e) => setEmailInput(e.target.value)}
                           placeholder="client@example.com" className="h-8 text-xs"
                           aria-label="Client email" autoComplete="off"
+                          aria-invalid={Boolean(takenBy) || (emailMissing && Boolean(emailInput.trim()))}
                         />
-                        <p className={cn("text-[10px]", emailMissing && emailInput.trim() ? "text-amber-400" : "text-muted-foreground")}>
+                        <p className={cn(
+                          "text-[10px]",
+                          takenBy ? "text-red-600 dark:text-red-400" : emailMissing && emailInput.trim() ? "text-amber-400" : "text-muted-foreground",
+                        )}>
                           {emailMissing && emailInput.trim()
                             ? "That isn't an email address finance will take."
-                            : leadEmail
-                              ? "This lead's email isn't one finance can use. Finance needs one for the invoice; it is saved on the lead too."
-                              : "This lead has no email. Finance needs one for the invoice; it is saved on the lead too."}
+                            : takenBy
+                              // The server's words: whose it is (never their phone), and that this client's own is needed.
+                              ? takenBy.message
+                              : emailChecking
+                                ? "Checking that no other client here has this email…"
+                                : leadEmailTaken
+                                  ? "This lead's email belongs to another client here — finance needs this client's own. It goes on the enrolment; the lead keeps its email."
+                                  : leadEmail
+                                    ? "This lead's email isn't one finance can use. Finance needs one for the invoice; it is saved on the lead too."
+                                    : "This lead has no email. Finance needs one for the invoice; it is saved on the lead too."}
                         </p>
                       </div>
                     </div>
@@ -784,17 +821,19 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
               <span className={cn("text-[11px]", !missing.length && overFee ? "text-amber-400" : "text-muted-foreground")}>
                 {missing.length
                   ? `Still needed: ${missing.join(", ")}.`
-                  : overFee
-                    ? `Collected is ${fmt(overBy)} more than the fee — it goes to finance as collected.`
-                    : editing
-                      ? "Changes apply to this enrolment."
-                      : "The lead is closed either way."}
+                  : emailChecking
+                    ? "Checking the client's email…"
+                    : overFee
+                      ? `Collected is ${fmt(overBy)} more than the fee — it goes to finance as collected.`
+                      : editing
+                        ? "Changes apply to this enrolment."
+                        : "The lead is closed either way."}
               </span>
               <Button
                 size="sm"
                 className="gap-2"
                 onClick={handleCreate}
-                disabled={saving || courseMissing || missing.length > 0 || uploading}
+                disabled={saving || courseMissing || missing.length > 0 || uploading || emailChecking}
               >
                 {saving ? (
                   <span className="flex items-center gap-1.5"><span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" /> {editing ? "Saving…" : "Creating…"}</span>

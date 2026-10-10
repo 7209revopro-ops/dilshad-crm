@@ -224,3 +224,20 @@ export const addEnrolmentEmail = async (req: AuthenticatedRequest, res: Response
     sendSuccess(res, result.message, { queued: true, email: result.email });
   } catch (err) { next(err); }
 };
+
+/**
+ * Whether an email is already another client's here — one email, one client
+ * (2026-10-10) — for the close dialog, the correction and the add-email box
+ * to say so before saving: `{ ok }`, or `{ ok: false, takenBy: { name, code?,
+ * kind }, message }`. The server refuses a taken email at each of those
+ * whatever this said.
+ *
+ * GET /api/v1/students/email-check?email=&leadId=&studentId=
+ */
+export const checkClientEmail = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const q = req.query as Record<string, unknown>;
+    const result = await svc.checkClientEmail(q.email, { leadId: q.leadId, studentId: q.studentId });
+    sendSuccess(res, result.ok ? "Email is free" : "Email is another client's", result);
+  } catch (err) { next(err); }
+};

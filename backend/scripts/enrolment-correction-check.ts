@@ -30,7 +30,14 @@
  *     an invalid email (finance's own check: `a@b.c` too), one failed for
  *     another reason, and by who may not; "Send again" refused for it until the
  *     email is added; the field filled in with an email finance would take
- *     that the CRM has (the enrolment's, else the lead's) — never sent by itself.
+ *     that the CRM has (the enrolment's, else the lead's) — never sent by itself;
+ *   - Case 11: one email, one client (2026-10-10), Halif's case — a client
+ *     closed before the rule with another client's address, sent back: the
+ *     correction keeping it, "Send again" as it stands, and one with an address
+ *     another lead holds are refused (409, naming the holder), nothing changed
+ *     or sent; corrected with his own address it goes again as the same
+ *     enrolment; another enrolment of the same client's is no other client;
+ *     the add-email refuses a taken address, and its field never starts from one.
  *
  * The Remote CRM's copy of the Sales CRM's check.
  *
@@ -806,6 +813,165 @@ section("Case 10 — a close that went without the client's email: add it, and i
     `${r.status} ${r.body.message} ${JSON.stringify(sendsFor(stuckB.id).map((p) => p._org))}`);
   check("…the lead's activity says who", String((await Lead.findById(stuckB.leadId).lean())?.activityLogs?.at(-1)?.performedBy) === String(people.Maya!.id));
   env.FINANCE_ORG_ID_BANGALORE = BLR_ORG;
+}
+
+section("Case 11 — one email, one client (2026-10-10): Halif's case — the correction, \"Send again\" and the added email refuse another client's email");
+{
+  const { StudentService } = await import("../src/services/studentService.js");
+  const svc = new StudentService();
+  const SHARED = "najad.shared@example.com";
+  /** A lead with this name, phone and email, as the CRM holds one. */
+  const leadOf = async (name: string, phone: string, email: string | null) => {
+    const _id = new Types.ObjectId();
+    await db.collection("leads").insertOne({
+      _id, name, phone, ...(email === null ? {} : { email }), status: "closed", assignedTo: people.Theertha!.id, payments: [], activityLogs: [],
+    });
+    return String(_id);
+  };
+  const ask = (q: Record<string, string>) => call("GET", `/students/email-check?${new URLSearchParams(q)}`, "Theertha");
+  const settledAs = (id: string, status: string) => waitFor(async () => (await FinanceHandover.findOne({ studentId: id }).lean())?.status === status);
+
+  // najad ahmed closed first with the address — through the API, delivered.
+  const najadLead = await leadOf("najad ahmed", "+971509200001", SHARED);
+  r = await call("POST", "/students", "Theertha", {
+    leadId: najadLead, name: "najad ahmed", phone: "+971509200001", email: SHARED, course: String(course500._id), team: String(teamA),
+    assignedTo: String(people.Theertha!.id), enrollmentDate: "2026-10-05T00:00:00.000Z", totalFee: 500, paidAmount: 500, language: "English",
+    hasBonus: false, payments: [pay("cash", 500, "najad-cash")],
+  });
+  const najadId = String(r.body.data?._id ?? "");
+  const najadDelivered = await settledAs(najadId, "sent");
+  const najadBefore = await snapshot(najadId);
+  const najadCode = (await Student.findById(najadId).lean())?.enrollmentNumber;
+  check("najad ahmed closes with the address first: 201, delivered", r.status === 201 && najadDelivered && Boolean(najadCode), `${r.status} ${r.body.message}`);
+
+  // Halif — another client, another phone — closed with the same address before this rule, as in
+  // this CRM: written straight in, and delivered (finance filed it under najad ahmed).
+  const halifLead = await leadOf("Halif", "+971509200002", SHARED);
+  const halif = await Student.create({
+    enrollmentNumber: "STU-6001", name: "Halif", phone: "+971509200002", email: SHARED, leadId: halifLead, course: course500._id, team: teamA,
+    assignedTo: people.Theertha!.id, totalFee: 500, paidAmount: 500, pendingAmount: 0, feeStatus: "paid", enrollmentDate: new Date("2026-10-06"),
+    language: "English", paymentMethod: "cash", paymentReceipt: receipt("halif-cash"), payments: [{ ...pay("cash", 500, "halif-cash"), paidAt: new Date("2026-10-06") }],
+    hasBonus: false, bonusAmount: 0, academy: "dubai", status: "active",
+  });
+  const halifId = String(halif._id);
+  await svc.queueFinanceHandover(halifId, halifLead);
+  const halifDelivered = await settledAs(halifId, "sent");
+  approvalOf.set(halifId, "pending");
+  await sendBack(halifId);
+  check("Halif's close went to finance with najad's address — and finance sends it back",
+    halifDelivered && sendsFor(halifId).length === 1 && sendsFor(halifId)[0]?.customer?.email === SHARED, `${halifDelivered} ${sendsFor(halifId).length}`);
+  form = await call("GET", `/students/${halifId}/correction`, "Theertha");
+  check("…the correction opens for it", form.status === 200 && form.body.data?.sentBack === true, `${form.status} ${JSON.stringify(form.body.data?.sentBack)}`);
+
+  const halifFix = (over: Record<string, unknown> = {}) => correction({
+    name: "Halif", phone: "+971509200002", email: SHARED, course: String(course500._id), totalFee: 500, paidAmount: 500,
+    payments: [pay("cash", 500, "halif-fixed")], hasBonus: false, bonusAmount: 0, notes: "Halif's own email", ...over,
+  });
+  const takenByNajad = `This email is already used by najad ahmed (${najadCode}), a different client — enter Halif's own email.`;
+  /** Refused, with nothing changed on Halif, nothing sent, and still sent back. */
+  const refusedH = async (label: string, send: () => Promise<Answer>, status: number, pattern: RegExp | string) => {
+    const before = await snapshot(halifId);
+    const sends = sendsFor(halifId).length;
+    const x = await send();
+    await sleep(100);
+    const same = (await snapshot(halifId)) === before && sendsFor(halifId).length === sends
+      && (await FinanceHandover.findOne({ studentId: halifId }).lean())?.approvalState === "returned";
+    const said = typeof pattern === "string" ? x.body.message === pattern : pattern.test(x.body.message ?? "");
+    check(label, x.status === status && said && same, `${x.status} ${x.body.message}${same ? "" : " — something changed"}`);
+  };
+
+  let c = await ask({ email: SHARED, studentId: halifId });
+  check("the correction dialog's check on the email it opens with: taken — najad ahmed, a student, by code — in the refusal's words",
+    c.status === 200 && c.body.data?.ok === false && (c.body.data?.takenBy as any)?.name === "najad ahmed" && (c.body.data?.takenBy as any)?.code === najadCode
+      && c.body.data?.message === takenByNajad, JSON.stringify(c.body));
+  await refusedH("corrected keeping najad's address: 409, naming him — so finance never renames najad ahmed to Halif", () => call("PUT", `/students/${halifId}/correction`, "Theertha", halifFix()), 409, takenByNajad);
+  await refusedH("…in any case, with spaces round it: 409", () => call("PUT", `/students/${halifId}/correction`, "Theertha", halifFix({ email: "  NAJAD.Shared@Example.com " })), 409, takenByNajad);
+  await refusedH("\"Send again\" as it stands, with that address: 409, the same words and where to change it",
+    () => call("POST", `/students/${halifId}/invoice`, "Theertha"), 409, `${takenByNajad} Correct the enrolment to change it, and it goes again.`);
+  await leadOf("Rahul K", "+971509200003", "rahul.k@example.com");
+  await refusedH("corrected with an address another lead holds (another person): 409, naming the lead as one",
+    () => call("PUT", `/students/${halifId}/correction`, "Theertha", halifFix({ email: "rahul.k@example.com" })), 409,
+    "This email is already used by Rahul K (a lead), a different client — enter Halif's own email.");
+
+  c = await ask({ email: "halif.own@example.com", studentId: halifId });
+  check("the check on Halif's own address: free", c.body.data?.ok === true, JSON.stringify(c.body.data));
+  const k = sendsFor(halifId).length;
+  r = await call("PUT", `/students/${halifId}/correction`, "Theertha", halifFix({ email: "Halif.Own@Example.com" }));
+  await waitFor(() => sendsFor(halifId).length === k + 1);
+  const resent = sendsFor(halifId).at(-1);
+  check("Halif corrected with his own, untaken address: 200, sent again at once as the same enrolment, with it",
+    r.status === 200 && resent?.externalId === halifId && resent?.customer?.email === "halif.own@example.com" && resent?.customer?.name === "Halif",
+    `${r.status} ${r.body.message} ${JSON.stringify(resent?.customer)}`);
+  check("…the enrolment has it; his lead keeps the address it carried (nothing cleaned); najad ahmed untouched",
+    (await Student.findById(halifId).lean())?.email === "halif.own@example.com" && (await Lead.findById(halifLead).lean())?.email === SHARED
+      && (await snapshot(najadId)) === najadBefore);
+
+  // The same client's other enrolment's address: the same person (the same phone, written another way).
+  const second = await leadOf("Halif", "0509200002", null);
+  r = await call("POST", "/students", "Theertha", {
+    leadId: second, name: "Halif", phone: "0509200002", email: "halif.second@example.com", course: String(course500._id),
+    enrollmentDate: "2026-10-07T00:00:00.000Z", totalFee: 500, paidAmount: 500, language: "English", hasBonus: false, payments: [pay("cash", 500, "halif-2")],
+  });
+  check("Halif closes a second course with another address of his: 201", r.status === 201, `${r.status} ${r.body.message}`);
+  await settledAs(halifId, "sent");
+  await sendBack(halifId);
+  r = await call("PUT", `/students/${halifId}/correction`, "Theertha", halifFix({ email: "halif.second@example.com" }));
+  check("…and his first, sent back again, corrected with that one — his own other enrolment's: 200", r.status === 200, `${r.status} ${r.body.message}`);
+
+  // The added email, for a close finance refused for want of one.
+  const stuckOf = async (name: string, phone: string) => {
+    n++;
+    const leadId = await leadOf(name, phone, null);
+    const st = await Student.create({
+      enrollmentNumber: `STU-${6100 + n}`, name, phone, leadId, course: course500._id, team: teamA, assignedTo: people.Theertha!.id,
+      totalFee: 500, paidAmount: 500, pendingAmount: 0, feeStatus: "paid", enrollmentDate: new Date("2026-10-10"), language: "English",
+      paymentMethod: "cash", paymentReceipt: receipt(`stuck-${n}`), payments: [{ ...pay("cash", 500, `stuck-${n}`), paidAt: new Date("2026-10-10") }],
+      hasBonus: false, bonusAmount: 0, academy: "dubai", status: "active",
+    });
+    const id = String(st._id);
+    await svc.queueFinanceHandover(id, leadId);
+    if (!(await settledAs(id, "failed"))) throw new Error("could not set up a refused close");
+    return { id, leadId };
+  };
+  const stuck = await stuckOf("Stuck Person", "+971509200009");
+  const addEmail = (email: string) => call("POST", `/students/${stuck.id}/enrolment/email`, "Theertha", { email });
+  /** Refused, with nothing changed and nothing sent. */
+  const refusedAdd = async (label: string, email: string, message: string) => {
+    const x = await addEmail(email);
+    await sleep(150);
+    const row = await FinanceHandover.findOne({ studentId: stuck.id }).lean();
+    const same = row?.status === "failed" && !(row?.payload as any)?.customer?.email && sendsFor(stuck.id).length === 0
+      && !(await Student.findById(stuck.id).lean())?.email && !(await Lead.findById(stuck.leadId).lean())?.email;
+    check(label, x.status === 409 && x.body.message === message && same, `${x.status} ${x.body.message}${same ? "" : " — something changed"}`);
+  };
+  await refusedAdd("adding najad's address to another client's refused close: 409, naming him, nothing changed or sent", SHARED,
+    `This email is already used by najad ahmed (${najadCode}), a different client — enter Stuck Person's own email.`);
+  await refusedAdd("…or one another lead holds: 409, naming the lead", "rahul.k@example.com",
+    "This email is already used by Rahul K (a lead), a different client — enter Stuck Person's own email.");
+  c = await ask({ email: SHARED, studentId: stuck.id });
+  check("…the add-email box's check says so first", c.body.data?.ok === false && (c.body.data?.takenBy as any)?.code === najadCode, JSON.stringify(c.body.data));
+
+  // What its field starts from: never an address another client holds.
+  const views = async () => {
+    const mine = await call("GET", "/students/enrolments/mine?limit=100", "Theertha");
+    const page = await call("GET", `/students/enrolments/${stuck.id}`, "Theertha");
+    const start = await call("GET", `/students/${stuck.id}/correction`, "Theertha");
+    return [((mine.body as any).data as any[])?.find((x) => String(x._id) === stuck.id)?.handover, (page.body.data as any)?.handover, start.body.data] as any[];
+  };
+  await db.collection("leads").updateOne({ _id: new Types.ObjectId(stuck.leadId) }, { $set: { email: SHARED } });
+  let v = await views();
+  check("the lead given najad's address by hand: not suggested — on My Enrolments, the enrolment page or the student page",
+    v.every((x) => x?.needsClientEmail === true && x?.suggestedEmail === ""), JSON.stringify(v.map((x) => [x?.needsClientEmail, x?.suggestedEmail])));
+  await db.collection("leads").updateOne({ _id: new Types.ObjectId(stuck.leadId) }, { $set: { email: "stuck.lead@example.com" } });
+  await Student.updateOne({ _id: stuck.id }, { $set: { email: SHARED } });
+  v = await views();
+  check("…the enrolment holding najad's and the lead its own: the lead's is suggested", v.every((x) => x?.suggestedEmail === "stuck.lead@example.com"), JSON.stringify(v.map((x) => x?.suggestedEmail)));
+  await sleep(150);
+  check("…only suggested: nothing sent", sendsFor(stuck.id).length === 0);
+  r = await addEmail("stuck.lead@example.com");
+  await waitFor(() => sendsFor(stuck.id).length === 1);
+  check("the client's own address added: 200, delivered with it as the same enrolment",
+    r.status === 200 && sendsFor(stuck.id)[0]?.customer?.email === "stuck.lead@example.com" && sendsFor(stuck.id)[0]?.externalId === stuck.id, `${r.status} ${r.body.message}`);
 }
 
 // Collecting more than the fee is taken now (the owner, 2026-10-06) — last, so nothing above depends on it.

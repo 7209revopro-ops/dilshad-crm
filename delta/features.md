@@ -861,3 +861,18 @@ added. Not shown for one held up by anything else. The email is checked as finan
 
 **Change Log**:
 - 1.0.0 — Initial build
+
+## One email, one client (2026-10-10)
+
+**What it does**: Finance files a close under whoever its email already belongs to, so the CRM refuses an email another
+client here already holds — a student, or a lead that is a different person (another phone; with no phone, another name).
+The close dialog checks the lead's email as it opens: one that is another client's is asked for again — "This email is
+already used by … (STU-…), a different client — enter …'s own email." — and Create waits for the client's own; the lead keeps
+its email. The correction dialog and "Add the client's email" say the same before saving, and "Send again" on a sent-back
+close with such an email is refused (correct it instead). The same client closing a second course is not affected.
+
+**API**: `GET /students/email-check?email=&leadId=` / `&studentId=`; 409 on the close, the correction, "Send again" (sent
+back) and the added email.
+
+**Change Log**:
+- 1.0.0 — Initial build

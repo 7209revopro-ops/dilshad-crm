@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/axios";
 import { toast } from "@/lib/toast";
 import type { ApiResponse } from "@/types";
 import type { Academy, Student, StudentFilters, CreateStudentInput, StoredReceipt } from "@/types/student";
+import { isFinanceEmail } from "@/types/student";
 
 const KEY = ["students"] as const;
 
@@ -63,6 +65,56 @@ export const useCloseOptions = () =>
     },
     staleTime: 5 * 60_000,
   });
+
+/**
+ * What the server says of an email (one email, one client — 2026-10-10):
+ * free, or already another client's here — a student or a lead that is a
+ * different person — with who, and the words it refuses it in.
+ */
+export interface EmailCheck {
+  ok: boolean;
+  takenBy?: { name: string; code?: string; kind: "student" | "lead" };
+  /** "This email is already used by … (STU-…), a different client — enter …'s own email." */
+  message?: string;
+}
+
+/**
+ * Whether an email is already another client's here, asked a moment after the
+ * typing stops, for the client of this lead (the close) or of this enrolment
+ * (a correction, an added email). Finance files a close under whoever its
+ * email already belongs to, so the screens say so before anything is saved.
+ *
+ * Only a help: the server refuses a taken email whatever this says, and a
+ * check that fails (the network, an older server) holds nothing up.
+ */
+export function useEmailCheck(email: string, who: { leadId?: string | null; studentId?: string | null }, enabled = true) {
+  const key = email.trim().toLowerCase();
+  const [settled, setSettled] = useState(key);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(key), 400);
+    return () => clearTimeout(t);
+  }, [key]);
+  const askable = (v: string) => enabled && isFinanceEmail(v) && Boolean(who.leadId || who.studentId);
+  const q = useQuery({
+    queryKey: [...KEY, "email-check", settled, who.leadId ?? "", who.studentId ?? ""],
+    queryFn: async (): Promise<EmailCheck> => {
+      const res = await api.get<ApiResponse<EmailCheck>>("/students/email-check", {
+        params: { email: settled, ...(who.studentId ? { studentId: who.studentId } : { leadId: who.leadId }) },
+      });
+      return res.data.data ?? { ok: true };
+    },
+    enabled: askable(settled),
+    retry: false,
+    staleTime: 15_000,
+  });
+  const current = settled === key;
+  return {
+    /** Another client's, as typed now: who, and the server's words. */
+    taken: askable(key) && current && q.data && !q.data.ok ? q.data : null,
+    /** Still finding out for the email as typed now — a moment. */
+    checking: askable(key) && (!current || q.isFetching),
+  };
+}
 
 export const useCreateStudent = () => {
   const qc = useQueryClient();

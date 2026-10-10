@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { fmtAcademy } from "@/lib/currency";
 import { useAllCourses } from "@/hooks/useCourses";
 import { useCorrectEnrolment, useEnrolmentCorrection, type EnrolmentCorrectionStart } from "@/hooks/useEnrolments";
+import { useEmailCheck } from "@/hooks/useStudents";
 import {
   PaymentRowsEditor, missingInRows, newPaymentRow, rowAmount, rowForeignFields, type PaymentBase, type PaymentRow,
 } from "@/components/students/PaymentRowsEditor";
@@ -136,6 +137,17 @@ function CorrectionForm({ studentId, start, onClose }: { studentId: string; star
   const [name, setName] = useState(s.name ?? "");
   const [phone, setPhone] = useState(s.phone ?? "");
   const [email, setEmail] = useState(s.email ?? "");
+  /*
+   * One email, one client (2026-10-10): finance keeps a customer by email, so an
+   * email another client here holds — a student, or a lead that is a different
+   * person — is refused; kept, a shared one would rename the client finance
+   * filed it under. Said under the field, from when the form opens.
+   */
+  const emailNow = email.trim().toLowerCase();
+  const emailCheck = useEmailCheck(isFinanceEmail(email) ? emailNow : "", { studentId });
+  /** A correction the server refused as another client's email — said on the field while it is the one typed. */
+  const [refusedTaken, setRefusedTaken] = useState<{ email: string; message: string } | null>(null);
+  const takenBy = isFinanceEmail(email) ? emailCheck.taken ?? (refusedTaken?.email === emailNow ? refusedTaken : null) : null;
 
   // The course, and the fee that follows it — and can be argued with.
   const studentCourse = s.course && typeof s.course === "object" ? (s.course as Course) : null;
@@ -187,6 +199,7 @@ function CorrectionForm({ studentId, start, onClose }: { studentId: string; star
     !name.trim() && "the client's name",
     !phone.trim() && "the client's phone",
     !isFinanceEmail(email) && "the client's email",
+    takenBy && "the client's own email",
     !courseId && "a course",
     noBangalorePrice && "a course with a Bangalore price",
     !feeOk && "the fee",
@@ -227,7 +240,14 @@ function CorrectionForm({ studentId, start, onClose }: { studentId: string; star
           bonusAmount: bonusChoice === "yes" ? bonusAmount : 0,
         },
       },
-      { onSuccess: onClose },
+      {
+        onSuccess: onClose,
+        onError: (err: unknown) => {
+          // Already in a toast; one refused as another client's email is said under the field too.
+          const res = (err as { response?: { status?: number; data?: { message?: string } } })?.response;
+          if (res?.status === 409 && /already used by/i.test(res.data?.message ?? "")) setRefusedTaken({ email: emailNow, message: res.data!.message! });
+        },
+      },
     );
   }
 
@@ -281,12 +301,17 @@ function CorrectionForm({ studentId, start, onClose }: { studentId: string; star
             </div>
             <div className="space-y-1">
               <p className={label}><Mail className="h-3 w-3" /> Email *</p>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-8 text-xs" aria-label="Client email" />
+              <Input
+                type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-8 text-xs" aria-label="Client email"
+                aria-invalid={Boolean(takenBy) || (email.trim() !== "" && !isFinanceEmail(email))}
+              />
             </div>
           </div>
           {email.trim() !== "" && !isFinanceEmail(email) && (
             <p className="text-[10px] text-amber-400">Finance needs a working email to invoice the client.</p>
           )}
+          {/* The server's words: whose it is (never their phone), and that this client's own is needed. */}
+          {takenBy && <p className="text-[10px] text-red-600 dark:text-red-400">{takenBy.message}</p>}
         </section>
 
         {/* The academy: shown, not changed — a correction keeps the close's. */}
@@ -496,15 +521,17 @@ function CorrectionForm({ studentId, start, onClose }: { studentId: string; star
         <span className={cn("text-[11px]", !missing.length && overFee ? "text-amber-400" : "text-muted-foreground")}>
           {missing.length
             ? `Still needed: ${missing.join(", ")}.`
-            : overFee
-              ? `Collected is ${fmt(overBy)} more than the fee — it goes to finance as collected.`
-              : "Saved, and sent to finance again in the same step."}
+            : emailCheck.checking
+              ? "Checking the client's email…"
+              : overFee
+                ? `Collected is ${fmt(overBy)} more than the fee — it goes to finance as collected.`
+                : "Saved, and sent to finance again in the same step."}
         </span>
         <Button
           size="sm"
           className="gap-2 shrink-0"
           onClick={save}
-          disabled={correct.isPending || missing.length > 0 || uploading}
+          disabled={correct.isPending || missing.length > 0 || uploading || emailCheck.checking}
         >
           {correct.isPending
             ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending…</>

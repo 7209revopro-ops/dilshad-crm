@@ -799,3 +799,53 @@ correction with `a@b.c` refused — 134 checks; `scripts/closing-fields-check.sh
 
 **Change Log**:
 - 1.0.0 — Initial build. The stuck close(s) are fixed from the screens once this is deployed.
+
+## One email, one client — an email another client holds is refused (2026-10-10)
+
+**Description**: Finance knows a customer by the email alone (`findOrCreateCustomer`, per organization), so every close is
+filed under the customer its email already belongs to. Here 4 different students were closed with one address (23 leads
+carry it) and finance filed all four invoices under the first; a correction keeping it would have renamed that customer.
+An email (trimmed, lower-cased, exact) is now **taken** for a client when another record here holds it and is a different
+person — another student (not this one, nor a student of this same lead) or another lead (not this one). Different person:
+both phones known (7+ digits) and their last 9 digits differ; with a phone missing, the names differ (case and spaces
+aside); with neither to go on, not known to differ. The same phone is the same person — a second course is ordinary.
+Refused with 409, naming the holder and never a phone: "This email is already used by mohammed lebbie (STU-0021), a
+different client — enter Halif's own email." (a lead: "Rahul K (a lead)"; one with no name: "another lead"). At:
+
+- **The close** (`POST /students`) — after the missing-fields check, before anything is saved; the client is the close's
+  name/phone, else the lead's. A lead whose own email is taken is closed with the client's own; the lead keeps its email
+  (nothing is cleaned: `keepEmailOnLead` only fills one in where there is none).
+- **The correction** (`PUT /students/:id/correction`) — the client as corrected — and **"Send again"** on a sent-back close
+  (`POST /students/:id/invoice`, which resends it as it stands): the same words + "Correct the enrolment to change it, and
+  it goes again."
+- **The added email** (`POST /students/:id/enrolment/email`) — after the row checks. `suggestedEmail` never suggests a
+  taken email.
+- **`GET /students/email-check?email=&leadId=` or `&studentId=`** (new; `authenticate`, `students:create` or
+  `enrolments:edit`) — for the client of that lead (the close) or enrolment (correction, add-email): `{ ok: true }` or
+  `{ ok: false, takenBy: { name, code?, kind: "student" | "lead" }, message }`; 422 for an email finance won't take or no
+  id, 404 for an unknown one. Only a help: the server refuses regardless.
+
+Not covered: "Generate invoice" for an enrolment never queued, retries of a queued row's snapshot, and the student edit
+(`PUT /students/:id`).
+
+**Report** (read only): `scripts/shared-emails-report.ts` — every email finance would take that 2+ different people hold
+across leads and students: masked (`na***@gmail.com`), records (students, leads), people, and each record (kind, name, code
+or lead id, status) — never a phone. Loads no models (no index built), `autoIndex`/`autoCreate` off, reads only; takes
+`--json` and nothing else. From `backend/`:
+`MONGODB_URI='mongodb+srv://USER:PASS@HOST/DB' bun --no-env-file run scripts/shared-emails-report.ts [--json]`.
+
+**Service Methods**: `findEmailHolder` (`services/emailHolder.ts`), `StudentService.checkClientEmail`; `utils/clientEmail.ts`
+— `isFinanceEmail` (moved there), `emailKey`, `phoneKey`, `nameKey`, `differentPeople`, `emailMatch`, `maskEmail`,
+`takenMessage`.
+
+**Tests**: `scripts/closing-fields-check.sh` — 81 checks (was 44): 23 leads + 4 students on one email, another lead, the same
+client's second course, no phone → names, a junk phone, another case/spaces in storage, the dialog's check, and the report
+(groups, masking, no phones, refuses `--write` / no `MONGODB_URI`, database unchanged). `scripts/split-payments-check.sh` —
+86 (was 65): Case 7, the close and `GET /students/email-check` through the API (401/403/422/404).
+`scripts/enrolment-correction-check.sh` — 154 (was 134): Case 11, Halif's case — the correction keeping the shared email,
+one a lead holds, "Send again": refused, nothing changed or sent; corrected with his own → delivered as the same enrolment;
+the same client's other email allowed; the added email refused for a taken one; `suggestedEmail` never a taken one. The
+three runners stop only the mongod they started (its pid file) — `mongod --shutdown` is Linux only.
+
+**Change Log**:
+- 1.0.0 — Initial build. Existing leads' emails are left as they are.

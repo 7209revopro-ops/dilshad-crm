@@ -19,7 +19,13 @@
  *   - Case 6: the client's email at the close (2026-10-10) — refused without
  *     one finance can take (its own check: a@b.c too), nothing saved; kept on
  *     the enrolment and on a lead that had none, with an activity entry; a
- *     lead's own email never replaced.
+ *     lead's own email never replaced;
+ *   - Case 7: one email, one client (2026-10-10) — a close with an email
+ *     another client here holds (a student, or a lead, of another phone — or,
+ *     with no phone to compare, another name) refused with 409 naming them,
+ *     nothing saved; the same client's second course taken; and the check the
+ *     close dialog asks first (GET /students/email-check): taken / free, who
+ *     may ask, what it refuses.
  *
  * Run by split-payments-check.sh. Scratch database only.
  */
@@ -347,6 +353,100 @@ section("Case 6 — the client's email at the close (2026-10-10): finance refuse
   r = await closeLead("own@lead.example", { email: "other@client.example" });
   check("…one the dialog sent differently is the enrolment's; the lead's own is never replaced from the close",
     r.status === 201 && (await studentOf(r))?.email === "other@client.example" && (await Lead.findById(r.leadId).lean())?.email === "own@lead.example", `${r.status}`);
+}
+
+section("Case 7 — one email, one client (2026-10-10): the close refuses another client's email, and the dialog can ask first");
+{
+  const { Lead } = await import("../src/models/Lead.js");
+  /** A lead with this name, phone and email — as the CRM holds one. */
+  const leadOf = async (name: string, phone: string, email: string | null) => {
+    const _id = new Types.ObjectId();
+    await db.collection("leads").insertOne({
+      _id, name, phone, ...(email === null ? {} : { email }), status: "closed", assignedTo: people.Theertha!.id, payments: [], activityLogs: [],
+    });
+    return String(_id);
+  };
+  /** That lead closed through the API, as the dialog closes it — its name and phone — with this email. */
+  const closeAs = (leadId: string, name: string, phone: string, email: string, who = "Theertha") =>
+    call("POST", "/students", who, {
+      leadId, name, phone, email, course: String(course500._id), enrollmentDate: "2026-10-05T00:00:00.000Z",
+      totalFee: 500, paidAmount: 500, language: "English", hasBonus: false, payments: [pay("cash", 500, `own-email-${leadId}`)],
+    });
+  /** The check the dialog asks — as Theertha unless said; null for nobody signed in. */
+  const ask = (q: Record<string, string>, who: string | null = "Theertha") => call("GET", `/students/email-check?${new URLSearchParams(q)}`, who ?? undefined);
+
+  const najadLead = await leadOf("najad ahmed", "+971509100001", "najad@example.com");
+  r = await closeAs(najadLead, "najad ahmed", "+971509100001", "najad@example.com");
+  const najad = await studentOf(r);
+  check("the first client closes with their email: 201", r.status === 201 && najad?.email === "najad@example.com", `${r.status} ${r.body.message}`);
+
+  // The same client again: a second course.
+  const again = await leadOf("Najad A.", "0509100001", "najad@example.com");
+  let x = await closeAs(again, "Najad A.", "0509100001", "najad@example.com");
+  check("the same client (the same phone, written another way) closing a second course with his email: 201", x.status === 201, `${x.status} ${x.body.message}`);
+  let c = await ask({ email: "najad@example.com", leadId: again });
+  check("…the check agrees: free for him", c.status === 200 && c.body.data?.ok === true, JSON.stringify(c.body));
+
+  // Another person's lead carrying the same email — as 23 did in this CRM.
+  const halifLead = await leadOf("Halif", "+971509100002", "najad@example.com");
+  let count = await Student.countDocuments();
+  x = await closeAs(halifLead, "Halif", "+971509100002", "najad@example.com");
+  check("another client (another phone) closing with it: 409, naming who has it, by code, and asking for this client's own",
+    x.status === 409 && x.body.message === `This email is already used by najad ahmed (${najad?.enrollmentNumber}), a different client — enter Halif's own email.`, `${x.status} ${x.body.message}`);
+  check("…nothing saved, the lead's email left as it was", (await Student.countDocuments()) === count && (await Lead.findById(halifLead).lean())?.email === "najad@example.com");
+  check("…and no phone number in what it says", !/509100001|509100002/.test(x.body.message ?? ""));
+
+  // What the close dialog asks before saving.
+  c = await ask({ email: "najad@example.com", leadId: halifLead });
+  check("the dialog's check for Halif's lead: 200, not free — taken by najad ahmed, a student, with code — in the refusal's words",
+    c.status === 200 && c.body.data?.ok === false && (c.body.data?.takenBy as any)?.name === "najad ahmed" && (c.body.data?.takenBy as any)?.code === najad?.enrollmentNumber
+      && (c.body.data?.takenBy as any)?.kind === "student" && c.body.data?.message === x.body.message, JSON.stringify(c.body));
+  c = await ask({ email: " Najad@Example.COM ", leadId: halifLead });
+  check("…whatever the case and spaces it is typed with", c.body.data?.ok === false, JSON.stringify(c.body.data));
+  c = await ask({ email: "halif@example.com", leadId: halifLead });
+  check("…an email nobody here holds: free", c.status === 200 && c.body.data?.ok === true && c.body.data?.takenBy === undefined, JSON.stringify(c.body));
+  c = await ask({ email: "najad@example.com", leadId: halifLead }, null);
+  check("…not signed in: 401", c.status === 401, `${c.status}`);
+  c = await ask({ email: "najad@example.com", leadId: halifLead }, "Vera");
+  check("…a role that neither closes nor corrects: 403", c.status === 403, `${c.status} ${c.body.message}`);
+  c = await ask({ email: "a@b.c", leadId: halifLead });
+  check("…an email finance won't take: 422", c.status === 422, `${c.status} ${c.body.message}`);
+  c = await ask({ email: "najad@example.com" });
+  check("…without the lead or the enrolment it is for: 422", c.status === 422, `${c.status} ${c.body.message}`);
+  c = await ask({ email: "najad@example.com", leadId: String(new Types.ObjectId()) });
+  check("…a lead that doesn't exist: 404", c.status === 404, `${c.status} ${c.body.message}`);
+
+  x = await closeAs(halifLead, "Halif", "+971509100002", "Halif.Own@Example.com");
+  check("Halif closed with his own email: 201 — the lead keeps the email it carried (nothing cleaned)",
+    x.status === 201 && (await studentOf(x))?.email === "halif.own@example.com" && (await Lead.findById(halifLead).lean())?.email === "najad@example.com", `${x.status} ${x.body.message}`);
+  c = await ask({ email: "halif.own@example.com", studentId: String(x.body.data?._id) });
+  check("…the check for his own email, on his own enrolment: free", c.status === 200 && c.body.data?.ok === true, JSON.stringify(c.body));
+  // The rule can't tell who an email first belonged to: while Halif's lead still carries najad's
+  // address, najad's own next close with it is refused too — until that lead's email is put right by hand.
+  x = await closeAs(await leadOf("najad ahmed", "+971 50 910 0001", "najad@example.com"), "najad ahmed", "+971 50 910 0001", "najad@example.com");
+  check("…and while it does, even najad's own next close with that email is refused: 409, naming Halif's lead",
+    x.status === 409 && x.body.message === "This email is already used by Halif (a lead), a different client — enter najad ahmed's own email.", `${x.status} ${x.body.message}`);
+
+  // A lead holding it, nobody closed with it.
+  await leadOf("Rahul K", "+971509100003", "rahul@example.com");
+  const sameer = await leadOf("Sameer", "+971509100004", "rahul@example.com");
+  count = await Student.countDocuments();
+  x = await closeAs(sameer, "Sameer", "+971509100004", "rahul@example.com");
+  check("an email another lead holds (another person): 409, naming the lead as one, nothing saved",
+    x.status === 409 && x.body.message === "This email is already used by Rahul K (a lead), a different client — enter Sameer's own email." && (await Student.countDocuments()) === count, `${x.status} ${x.body.message}`);
+  c = await ask({ email: "rahul@example.com", leadId: sameer });
+  check("…and the dialog's check: a lead, by name, no code", c.body.data?.ok === false && (c.body.data?.takenBy as any)?.kind === "lead" && (c.body.data?.takenBy as any)?.name === "Rahul K" && !("code" in ((c.body.data?.takenBy as object) ?? {})), JSON.stringify(c.body.data));
+
+  // No phone to compare: the names decide.
+  const noPhone = await leadOf("Fatima Noor", "+971509100005", null);
+  await db.collection("students").insertOne({
+    enrollmentNumber: "STU-7001", name: "Fatima Noor", email: "fatima@example.com", leadId: new Types.ObjectId(noPhone),
+    totalFee: 500, paidAmount: 500, pendingAmount: 0, feeStatus: "paid", status: "active", enrollmentDate: new Date(), createdAt: new Date(),
+  });
+  x = await closeAs(await leadOf("FATIMA  noor", "+971509100006", null), "FATIMA  noor", "+971509100006", "fatima@example.com");
+  check("a student holding it with no phone: the same name (case and spaces aside) is the same client — 201", x.status === 201, `${x.status} ${x.body.message}`);
+  x = await closeAs(await leadOf("Zainab Ali", "+971509100007", null), "Zainab Ali", "+971509100007", "fatima@example.com");
+  check("…another name is another client: 409 naming her", x.status === 409 && /^This email is already used by Fatima Noor \(STU-7001\), a different client — enter Zainab Ali's own email\.$/.test(x.body.message ?? ""), `${x.status} ${x.body.message}`);
 }
 
 server.close();

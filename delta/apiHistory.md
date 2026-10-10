@@ -1480,3 +1480,13 @@ beside `paymentMethod` / `paymentReceipt` (the first payment's). Each new paymen
 **Types:** `Handover.needsClientEmail` / `suggestedEmail`, `EnrolmentCorrectionStart.needsClientEmail` / `suggestedEmail` /
 `deliveryStatus`; `isFinanceEmail` in `types/student.ts`. `POST /students/:id/invoice` answers 409 for a close refused for want
 of the client's email (the toast says to add it first).
+
+## One email, one client (added 2026-10-10)
+
+| Hook | Query key | Endpoint | Notes |
+|------|-----------|----------|-------|
+| `useEmailCheck(email, { leadId \| studentId }, enabled)` | `["students", "email-check", email, leadId, studentId]` | `GET /api/v1/students/email-check` | asked 400 ms after typing stops; `{ taken, checking }`; a failed check holds nothing up |
+
+**Types:** `EmailCheck` (`ok`, `takenBy { name, code?, kind }`, `message`) in `hooks/useStudents.ts`. `POST /students`, `PUT
+/students/:id/correction`, `POST /students/:id/enrolment/email` and `POST /students/:id/invoice` (sent back) answer 409 "This
+email is already used by … — enter …'s own email." for an email another client holds.
