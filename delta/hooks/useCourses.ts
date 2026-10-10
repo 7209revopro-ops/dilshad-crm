@@ -114,12 +114,17 @@ export interface FinanceItem {
  *
  * Returns an empty list when the integration is switched off, so the screen can
  * say so plainly instead of showing an error.
+ *
+ * `academy` "bangalore" lists the Bangalore finance organization's catalogue —
+ * a different one from Dubai's — empty when that organization isn't set up.
  */
-export const useFinanceItems = (enabled = true) =>
+export const useFinanceItems = (enabled = true, academy: "dubai" | "bangalore" = "dubai") =>
   useQuery({
-    queryKey: ["finance-items"],
+    queryKey: ["finance-items", academy],
     queryFn: async () => {
-      const response = await api.get<ApiResponse<FinanceItem[]>>("/courses/finance-items");
+      const response = await api.get<ApiResponse<FinanceItem[]>>("/courses/finance-items", {
+        params: academy === "bangalore" ? { academy } : {},
+      });
       return response.data.data ?? [];
     },
     enabled,
@@ -138,12 +143,20 @@ export const useLmsCourses = (enabled = true) =>
     staleTime: 5 * 60_000,
   });
 
-/** Save where a course maps: its finance product ("" to unmap) and its LMS courses, in order ([] to unmap). */
+/**
+ * Save where a course maps: its finance product ("" to unmap) and its LMS
+ * courses, in order ([] to unmap) — and how it sells at the Bangalore academy:
+ * its INR price (null takes it off), Bangalore finance item and LMS courses
+ * ([] = the same as Dubai's).
+ */
 export const useMapCourse = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, financeItemId, lmsCourseSlugs }: { id: string; financeItemId: string; lmsCourseSlugs: string[] }) => {
-      const response = await api.put<ApiResponse<Course>>(`/courses/${id}`, { financeItemId, lmsCourseSlugs });
+    mutationFn: async ({ id, financeItemId, lmsCourseSlugs, bangalore }: {
+      id: string; financeItemId: string; lmsCourseSlugs: string[];
+      bangalore?: { price: number | null; financeItemId: string; lmsCourseSlugs: string[] };
+    }) => {
+      const response = await api.put<ApiResponse<Course>>(`/courses/${id}`, { financeItemId, lmsCourseSlugs, ...(bangalore ? { bangalore } : {}) });
       return response.data.data!;
     },
     onSuccess: () => {

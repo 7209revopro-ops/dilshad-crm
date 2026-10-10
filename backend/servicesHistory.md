@@ -798,3 +798,22 @@ on the lead is marked done. `getUserLeadStats` also returns `meeting_done`.
   aed, label)`: a currency of `CLOSE_CURRENCIES`, amount and rate above zero, `amount` within 0.5% of `amountInCurrency ×
   exchangeRate`, never on `collectedBefore`; stored on `Student.payments[]`.
 - `buildHandoverPayload` — a payment in another currency adds `original: { currency, amountMinor (×100), rate }`.
+
+## Academy at the close (changed 2026-10-10)
+
+- `financeClient` — `financeOrgOf(academy)`, `academiesOffered()` (Bangalore only when FINANCE_ORG_ID_BANGALORE is set; served
+  by `GET /students/close-options`); `sendEnrolment(payload, orgId)`,
+  `listFinanceItems(orgId)`, `fetchEnrolmentStatuses(ids, orgId)` take the organization (default `FINANCE_ORG_ID`); an empty
+  org is never sent (retried, not misrouted).
+- `financeOrgs` (new) — `orgOfHandover(row, studentAcademy)` (stored `financeOrgId`, else by academy, else Dubai), `orgsOf(ids)`,
+  `fetchStatusesByOrg(ids, known?)` — one status call per organization. Used by the worker's delivery and poll,
+  `listEnrolments`, `getEnrolment`, `sendBackOf`, `trackSales`, `reverseVoidedSales`.
+- `studentService.createStudent` — `academy` ("dubai" default, "bangalore"); Bangalore → `assertBangaloreClose` (Bangalore
+  price, and FINANCE_ORG_ID_BANGALORE set — even with finance off); payments checked against INR.
+- `foreignPart(raw, amount, n, base)` / `checkedPayments(…, base)` — Bangalore: INR, or AED with rate INR per AED; the lead's
+  own money must be AED with its rate.
+- `buildHandoverPayload` — `academy` always; Bangalore: `bangalore.financeItemId`, `bangalore.lmsCourseSlugs` (else Dubai's),
+  `original` for payments not in INR.
+- `queueFinanceHandover` — stores `academy` and `financeOrgId` on the row.
+- `correctEnrolment` — academy fixed (422 if another is sent), Bangalore needs a Bangalore-priced course, own money compared in
+  AED, lead sync via `leadPaymentOf` (Bangalore: only AED cash, at its AED). `getCorrection` returns `academy`.

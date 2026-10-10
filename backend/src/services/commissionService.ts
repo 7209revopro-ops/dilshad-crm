@@ -6,7 +6,7 @@ import { Student } from "../models/Student.js";
 import { Course } from "../models/Course.js";
 import { Team } from "../models/Team.js";
 import { User } from "../models/User.js";
-import { fetchEnrolmentStatuses } from "./financeClient.js";
+import { fetchStatusesByOrg, orgOfHandover } from "./financeOrgs.js";
 import { stepsOf, allDone, waitingOn } from "./enrolmentSteps.js";
 import { slabsFor } from "./salarySlabs.js";
 import { env } from "../config/env.js";
@@ -270,7 +270,7 @@ type StudentLite = {
  * again until its steps are done too.
  */
 export async function trackSales(config: CommissionConfig, names: Names): Promise<number> {
-  const handed = await FinanceHandover.find({ status: "sent" }).select("studentId invoiceNumber approvedAt").lean();
+  const handed = await FinanceHandover.find({ status: "sent" }).select("studentId invoiceNumber approvedAt academy financeOrgId").lean();
   if (!handed.length) return 0;
   const handoverOf = new Map(handed.map((h) => [String(h.studentId), h]));
   const students = (await Student.find({ _id: { $in: handed.map((h) => h.studentId) }, enrollmentDate: { $gte: COUNT_FROM } })
@@ -284,7 +284,11 @@ export async function trackSales(config: CommissionConfig, names: Names): Promis
   }).slice(0, 200);
   if (!open.length) return 0;
 
-  const statuses = await fetchEnrolmentStatuses(open.map((s) => String(s._id)));
+  // Each asked of the finance organization it was billed in — Dubai's or Bangalore's.
+  const statuses = await fetchStatusesByOrg(
+    open.map((s) => String(s._id)),
+    new Map(open.map((s) => [String(s._id), orgOfHandover(handoverOf.get(String(s._id)))])),
+  );
   if (!statuses.length) return 0;                       // finance unreachable: ask again next time
   const statusOf = new Map(statuses.map((st) => [st.externalId, st]));
   let changed = 0;
@@ -438,7 +442,7 @@ export async function reverseVoidedSales(): Promise<number> {
 
   for (let i = 0; i < live.length; i += 200) {
     const ids = live.slice(i, i + 200).map((s) => String(s.student));
-    const statuses = await fetchEnrolmentStatuses(ids);
+    const statuses = await fetchStatusesByOrg(ids);
     for (const st of statuses) {
       if (!Types.ObjectId.isValid(st.externalId)) continue;
       if (st.status !== "void") {

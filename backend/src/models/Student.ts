@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { CLOSE_CURRENCIES, ENROLMENT_LANGUAGES, ENROLMENT_PAYMENT_METHODS } from "../types/index.js";
+import { ACADEMIES, CLOSE_CURRENCIES, ENROLMENT_LANGUAGES, ENROLMENT_PAYMENT_METHODS } from "../types/index.js";
 import type { IStudent } from "../types/index.js";
 
 const studentSchema = new Schema<IStudent>(
@@ -54,6 +54,15 @@ const studentSchema = new Schema<IStudent>(
     paidAmount:   { type: Number, default: 0, min: 0 },
     pendingAmount:{ type: Number, default: 0, min: 0 },
 
+    /**
+     * Which academy it was closed for (2026-10-10): Dubai, or Bangalore —
+     * billed in Bangalore's finance organization, its fee and payments in INR.
+     * Fixed at the close: a correction cannot change it, and every call to
+     * finance about this enrolment goes to that academy's organization. Unset
+     * on enrolments from before, which are Dubai (academyOf).
+     */
+    academy: { type: String, enum: ACADEMIES },
+
     status: {
       type: String,
       enum: ["active", "inactive", "graduated", "dropped"],
@@ -101,7 +110,8 @@ const studentSchema = new Schema<IStudent>(
             paidAt: { type: Date, required: true },
             collectedBefore: { type: Boolean },
             // Paid in another currency (the owner, 2026-10-05): which, how much
-            // of it, and 1 of it = exchangeRate AED. `amount` is the AED figure.
+            // of it, and 1 of it = exchangeRate of the academy's currency (AED
+            // for Dubai, INR for Bangalore). `amount` is the figure in that.
             currency: { type: String, enum: CLOSE_CURRENCIES },
             amountInCurrency: { type: Number, min: 0.01 },
             exchangeRate: { type: Number, min: 0 },

@@ -60,6 +60,29 @@ const courseSchema = new Schema<ICourse>(
     lmsCourseSlugs: { type: [String], default: [] },
 
     /**
+     * The course at the Bangalore academy (2026-10-10), set on the Map dialog:
+     *   price          what it sells for there, in INR. Without one the course
+     *                  can't be closed for Bangalore — a close is refused
+     *                  rather than billed at a guess.
+     *   financeItemId  the item it bills against in the Bangalore finance
+     *                  organization (a different catalogue from Dubai's).
+     *                  Unmapped, the invoice line carries the name and price.
+     *   lmsCourseSlugs the LMS courses it opens there; none set means the same
+     *                  as Dubai's — the Forex courses are shared between them.
+     */
+    bangalore: {
+      type: new Schema(
+        {
+          price: { type: Number, min: [0, "Bangalore price cannot be negative"] },
+          financeItemId: { type: String, default: null },
+          lmsCourseSlugs: { type: [String], default: [] },
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
+
+    /**
      * The SAC code this course is sold under.
      *
      * Per course, because it is a property of what is being sold: two courses

@@ -718,3 +718,28 @@ payments[] (each may carry currency, amountInCurrency, exchangeRate), hasBonus, 
 **Models Used**: `FinanceHandover.resentAt` / `resends` (new), `Student`, `Lead.payments`, `Course`, `Team`, `User`.
 
 **Tests**: `scripts/enrolment-correction-check.sh` — 65 checks against a stand-in finance, a payment in INR among them.
+
+## Academy at the close — Dubai / Bangalore (2026-10-10)
+
+**Description**: A close is for the Dubai academy (as every close was) or the Bangalore one. Bangalore is billed in its own
+finance organization (`FINANCE_ORG_ID_BANGALORE`) in INR: the fee is the course's Bangalore price, the finance item its
+Bangalore item, the LMS courses its Bangalore ones (Dubai's when none set); payments are rupees, or cash in AED with its rate
+(INR per AED) sent as finance's `original`. The money already on the lead is AED, so on a Bangalore close it is that, with its
+rate. The academy and its organization are fixed at the close — on the student and on the outbox row — and every later call
+(delivery and retries, resend, correction, decision poll, My Enrolments, the enrolment page, the send-back check, commission
+lookups) goes to that organization; status calls are grouped per organization. Refused at the close: a course with no Bangalore
+price, and no Bangalore organization set (even with finance switched off). `GET /students/close-options` says `academies`
+(["dubai","bangalore"] only when FINANCE_ORG_ID_BANGALORE is set) and the dialog offers the choice only when Bangalore is
+listed — an older API lists nothing, so a newer screen never closes for Bangalore there. A correction cannot change the academy. The bonus stays USD;
+commission and salary unchanged. A Bangalore close puts only its AED cash on the lead's (AED) payment list.
+
+**Routes**: `GET /students/close-options` (new, any signed-in user) → `{ academies }`; `POST /students` takes `academy`; `PUT /courses/:id` takes `bangalore: { price, financeItemId,
+lmsCourseSlugs }`; `GET /courses/finance-items?academy=bangalore` lists the Bangalore organization's catalogue.
+
+**Service Methods**: `financeOrgs.orgOfHandover` / `orgsOf` / `fetchStatusesByOrg`, `financeClient.financeOrgOf` /
+`academiesOffered`, `studentService.assertBangaloreClose`, `foreignPart(…, base)`, `leadPaymentOf`.
+
+**Models Used**: `Student.academy`, `FinanceHandover.academy` + `financeOrgId`, `Course.bangalore`.
+
+**Change Log**:
+- 1.0.0 — Initial build. Enrolments from before have no academy and are Dubai.

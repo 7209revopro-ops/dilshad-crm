@@ -72,8 +72,15 @@ const envSchema = z.object({
   FINANCE_API_URL:            z.string().default(""),
   FINANCE_CLIENT_ID:          z.string().default(""),
   FINANCE_INTEGRATION_SECRET: z.string().default(""),
-  /** Which organization in finance these enrolments belong to. */
+  /** Which organization in finance these enrolments belong to — the Dubai academy's. */
   FINANCE_ORG_ID:             z.string().default(""),
+  /**
+   * The Bangalore academy's organization in finance (2026-10-10): a close for
+   * the Bangalore academy is billed there, in INR, and everything later about
+   * it — a resend, a correction, its status — is asked there too. Unset, a
+   * Bangalore close is refused rather than billed in the Dubai organization.
+   */
+  FINANCE_ORG_ID_BANGALORE:   z.string().default(""),
 
   /*
    * The Delta LMS, where mentors keep their availability and their classes.

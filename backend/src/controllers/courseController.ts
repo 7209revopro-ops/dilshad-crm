@@ -23,6 +23,20 @@ const financeItemIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Not a finance it
 /** The bonus a client gets with the course, in its amount's currency; 0 for none. */
 const bonusAmountSchema = z.number().min(0, "Bonus cannot be negative").optional();
 
+/**
+ * The course at the Bangalore academy: its INR price (null takes it off), the
+ * item in the Bangalore finance organization ("" unmaps it), and the LMS
+ * courses it opens there ([] means the same as Dubai's).
+ */
+const bangaloreSchema = z
+  .object({
+    price: z.number().min(0, "Bangalore price cannot be negative").nullable().optional(),
+    financeItemId: financeItemIdSchema,
+    lmsCourseSlugs: lmsCourseSlugsSchema,
+  })
+  .strict()
+  .optional();
+
 const createCourseSchema = z.object({
   name: z.string().min(1, "Course name is required").max(150),
   description: z.string().max(1000).optional(),
@@ -33,6 +47,7 @@ const createCourseSchema = z.object({
   status: z.enum(["active", "inactive"]).optional(),
   financeItemId: financeItemIdSchema,
   lmsCourseSlugs: lmsCourseSlugsSchema,
+  bangalore: bangaloreSchema,
 });
 
 const updateCourseSchema = z.object({
@@ -45,6 +60,7 @@ const updateCourseSchema = z.object({
    */
   financeItemId: financeItemIdSchema,
   lmsCourseSlugs: lmsCourseSlugsSchema,
+  bangalore: bangaloreSchema,
   name: z.string().min(1).max(150).optional(),
   description: z.string().max(1000).optional().nullable(),
   amount: z.number().min(0).optional(),
@@ -149,19 +165,28 @@ export const deleteCourse = async (
  *
  * Proxied rather than called from the browser: the signing secret belongs on
  * the server, and a key shipped to a browser is a key that has been published.
+ *
+ * `?academy=bangalore` lists the Bangalore organization's catalogue instead —
+ * where a course's Bangalore item comes from; Dubai's otherwise.
  */
 export const getFinanceItems = async (
-  _req: AuthenticatedRequest,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const { listFinanceItems, financeConfigured } = await import("../services/financeClient.js");
+    const { listFinanceItems, financeConfigured, financeOrgOf } = await import("../services/financeClient.js");
     if (!financeConfigured()) {
       sendSuccess(res, "Finance integration is not configured", []);
       return;
     }
-    sendSuccess(res, "Finance catalogue retrieved", await listFinanceItems());
+    const academy = req.query.academy === "bangalore" ? "bangalore" : "dubai";
+    const org = financeOrgOf(academy);
+    if (!org) {
+      sendSuccess(res, "The Bangalore finance organization is not configured", []);
+      return;
+    }
+    sendSuccess(res, "Finance catalogue retrieved", await listFinanceItems(org));
   } catch (err) {
     next(err);
   }

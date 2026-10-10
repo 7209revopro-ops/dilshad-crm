@@ -20,7 +20,7 @@ import { useCourses } from "@/hooks/useCourses";
 import { CourseDialog } from "@/components/courses/CourseDialog";
 import { DeleteCourseDialog } from "@/components/courses/DeleteCourseDialog";
 import type { Course } from "@/types/course";
-import { lmsCoursesOf } from "@/types/course";
+import { bangalorePriceOf, lmsCoursesOf } from "@/types/course";
 import { useCurrencyStore } from "@/lib/store/currencyStore";
 import Link from "next/link";
 import { TL_PAID, usd } from "@/lib/commission";
@@ -139,6 +139,18 @@ function CourseCard({ course, onEdit, onDelete, onMap, index }: CourseCardProps)
               }`}
             >
               {lmsCount ? `LMS: ${lmsCount} course${lmsCount === 1 ? "" : "s"}` : "LMS not mapped"}
+            </span>
+            {/* Its Bangalore price — without one it can't be closed for the Bangalore academy. */}
+            <span
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                bangalorePriceOf(course)
+                  ? "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {bangalorePriceOf(course)
+                ? `Bangalore: ₹${bangalorePriceOf(course).toLocaleString("en-IN")}`
+                : "No Bangalore price"}
             </span>
           </button>
 

@@ -22,6 +22,26 @@ export function financeConfigured(): boolean {
   );
 }
 
+/**
+ * The finance organization a close for this academy is billed in (2026-10-10):
+ * Dubai's (FINANCE_ORG_ID) — as every close was before there was a choice —
+ * or Bangalore's (FINANCE_ORG_ID_BANGALORE). "" when that one isn't set.
+ */
+export function financeOrgOf(academy?: string | null): string {
+  return academy === "bangalore" ? env.FINANCE_ORG_ID_BANGALORE : env.FINANCE_ORG_ID;
+}
+
+/**
+ * The academies a close can be made for on this server, as the close dialog is
+ * told (GET /students/close-options): Bangalore only once its finance
+ * organization is set. The dialog shows its Academy choice only when Bangalore
+ * is listed — so a new screen on a server that can't bill Bangalore (or an
+ * older API that lists nothing) never offers it, and closes as Dubai.
+ */
+export function academiesOffered(): ("dubai" | "bangalore")[] {
+  return env.FINANCE_ORG_ID_BANGALORE ? ["dubai", "bangalore"] : ["dubai"];
+}
+
 /** Trailing slashes and a trailing /api/v1 both stripped: the path carries it. */
 function baseUrl(): string {
   return env.FINANCE_API_URL.replace(/\/+$/, "").replace(/\/api\/v1$/, "");
@@ -50,9 +70,14 @@ export interface EnrolmentResult {
  * retry. A 4xx will fail the same way every time — a malformed payload does not
  * become valid by being sent again — so the worker stops retrying those.
  */
-export async function sendEnrolment(payload: unknown): Promise<EnrolmentResult> {
+export async function sendEnrolment(payload: unknown, orgId: string = env.FINANCE_ORG_ID): Promise<EnrolmentResult> {
   if (!financeConfigured()) {
     throw Object.assign(new Error("Finance integration is not configured"), { permanent: true });
+  }
+  // Never sent to some other organization instead: a Bangalore close with no
+  // Bangalore organization set waits here, saying so, until it is set.
+  if (!orgId) {
+    throw Object.assign(new Error("The finance organization for this academy is not configured"), { permanent: false });
   }
 
   const path = "/api/v1/integrations/enrolments";
@@ -79,7 +104,7 @@ export async function sendEnrolment(payload: unknown): Promise<EnrolmentResult> 
         "x-delta-timestamp": timestamp,
         "x-delta-nonce": nonce,
         "x-delta-signature": signature,
-        "x-delta-org": env.FINANCE_ORG_ID,
+        "x-delta-org": orgId,
       },
       body: raw,
       signal: controller.signal,
@@ -114,8 +139,8 @@ export async function sendEnrolment(payload: unknown): Promise<EnrolmentResult> 
  * rather than mirrored — a copy of somebody else's catalogue is a copy that
  * goes stale, which is the problem this integration exists to remove.
  */
-export async function listFinanceItems(): Promise<FinanceItem[]> {
-  if (!financeConfigured()) return [];
+export async function listFinanceItems(orgId: string = env.FINANCE_ORG_ID): Promise<FinanceItem[]> {
+  if (!financeConfigured() || !orgId) return [];
 
   const path = "/api/v1/integrations/items";
   const timestamp = String(Date.now());
@@ -131,7 +156,7 @@ export async function listFinanceItems(): Promise<FinanceItem[]> {
         "x-delta-timestamp": timestamp,
         "x-delta-nonce": nonce,
         "x-delta-signature": signature,
-        "x-delta-org": env.FINANCE_ORG_ID,
+        "x-delta-org": orgId,
       },
       signal: controller.signal,
     });
@@ -186,9 +211,13 @@ export interface EnrolmentStatus {
  * Never throws. A page of enrolments is still worth showing when finance is
  * restarting — the rows simply cannot say what happened to them yet, which is
  * the truth at that moment.
+ *
+ * One organization per call: finance answers only for its own. Enrolments of
+ * both academies are asked about through financeOrgs.fetchStatusesByOrg, which
+ * groups them by the organization each was billed in.
  */
-export async function fetchEnrolmentStatuses(studentIds: string[]): Promise<EnrolmentStatus[]> {
-  if (!financeConfigured() || studentIds.length === 0) return [];
+export async function fetchEnrolmentStatuses(studentIds: string[], orgId: string = env.FINANCE_ORG_ID): Promise<EnrolmentStatus[]> {
+  if (!financeConfigured() || studentIds.length === 0 || !orgId) return [];
 
   const path = "/api/v1/integrations/enrolments/status";
   const raw = JSON.stringify({ source: "crm", externalIds: studentIds.slice(0, 200) });
@@ -214,7 +243,7 @@ export async function fetchEnrolmentStatuses(studentIds: string[]): Promise<Enro
         "x-delta-timestamp": timestamp,
         "x-delta-nonce": nonce,
         "x-delta-signature": signature,
-        "x-delta-org": env.FINANCE_ORG_ID,
+        "x-delta-org": orgId,
       },
       body: raw,
       signal: controller.signal,

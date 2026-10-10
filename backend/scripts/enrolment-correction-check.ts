@@ -16,7 +16,13 @@
  *   - Case 7: what the form starts from, and "sent again" shown once it was
  *     (the user, 2026-10-05: "if send again show that also");
  *   - Case 8: a payment in another currency, corrected — what was handed over,
- *     its rate, and the AED it came to, as at the close.
+ *     its rate, and the AED it came to, as at the close;
+ *   - Case 9: the Bangalore academy (2026-10-10) — billed in Bangalore's
+ *     finance organization, and every later call about it (delivery, the
+ *     decision poll, My Enrolments, its page, the send-back check, "Send
+ *     again", the correction) made there too; the academy can't be corrected;
+ *     refused without the Bangalore organization; the course mapping's
+ *     Bangalore section and its catalogue.
  *
  * The Remote CRM's copy of the Sales CRM's check.
  *
@@ -49,22 +55,36 @@ async function waitFor(ok: () => Promise<boolean> | boolean, ms = 4000): Promise
 }
 
 // ── A stand-in finance: takes enrolments, and says what became of them ──────
+// Like finance, it keeps each enrolment in the organization it was sent to,
+// and answers a status call only for that organization's own (x-delta-org).
+const DUBAI_ORG = "org-correction-check", BLR_ORG = "org-bangalore-check";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const delivered: any[] = [];
 const approvalOf = new Map<string, string>();
+const orgOfId = new Map<string, string>();
+const statusCalls: { org: string; ids: string[] }[] = [];
+const itemsAsked: string[] = [];
 const finance = http.createServer((req, res) => {
   let raw = "";
   req.on("data", (c) => (raw += c));
   req.on("end", () => {
     const body = raw ? JSON.parse(raw) : {};
+    const org = String(req.headers["x-delta-org"] ?? "");
     res.setHeader("content-type", "application/json");
     if (req.url === "/api/v1/integrations/enrolments") {
-      delivered.push(body);
+      delivered.push({ ...body, _org: org });
+      orgOfId.set(String(body.externalId), org);
       res.end(JSON.stringify({ data: { invoiceId: `inv-${body.externalId}`, invoiceNumber: `INV-${String(body.externalId).slice(-4)}`, customerId: "cust", duplicate: false, flags: [] } }));
       return;
     }
+    if (req.url === "/api/v1/integrations/items") {
+      itemsAsked.push(org);
+      res.end(JSON.stringify({ data: [{ id: org === BLR_ORG ? "b".repeat(24) : "a".repeat(24), name: org === BLR_ORG ? "MBT Bangalore" : "MBT Dubai", sku: "MBT", unitPriceMinor: 100, type: "service" }] }));
+      return;
+    }
     if (req.url === "/api/v1/integrations/enrolments/status") {
-      const ids = ((body.externalIds ?? []) as string[]).filter((id) => approvalOf.has(id));
+      statusCalls.push({ org, ids: body.externalIds ?? [] });
+      const ids = ((body.externalIds ?? []) as string[]).filter((id) => approvalOf.has(id) && (orgOfId.get(id) ?? DUBAI_ORG) === org);
       res.end(JSON.stringify({
         data: ids.map((id) => ({
           externalId: id, invoiceId: `inv-${id}`, invoiceNumber: `INV-${id.slice(-4)}`, status: "sent",
@@ -94,7 +114,8 @@ Object.assign(process.env, {
   FINANCE_API_URL: `http://127.0.0.1:${financePort}`,
   FINANCE_CLIENT_ID: "crm-correction-check",
   FINANCE_INTEGRATION_SECRET: "correction-check-secret-correction-check-secret",
-  FINANCE_ORG_ID: "org-correction-check",
+  FINANCE_ORG_ID: DUBAI_ORG,
+  FINANCE_ORG_ID_BANGALORE: BLR_ORG,
 });
 
 const mongoose = (await import("mongoose")).default;
@@ -403,6 +424,179 @@ r = await call("PUT", `/students/${abroad.id}/correction`, "Theertha", correctio
   payments: [pay("cash", 200, "own-cash", { collectedBefore: true }), pay("bank_transfer", 500, "inr-transfer", { currency: "INR", amountInCurrency: 10000, exchangeRate: 0.044 })],
 }));
 check("a figure that isn't what the rate makes it is refused: 422, nothing sent", r.status === 422 && /comes to 440/.test(r.body.message ?? "") && sendsFor(abroad.id).length === k, `${r.status} ${r.body.message}`);
+
+section("Case 9 — the Bangalore academy: its own finance organization, from the close to the correction");
+const BLR_ITEM = "b".repeat(24);
+const courseBlr = await Course.create({ name: "COURSE BLR", amount: 2250, lmsCourseSlugs: ["mbt"], lmsCourseSlug: "mbt", bangalore: { price: 45000, financeItemId: BLR_ITEM } });
+const courseBlr2 = await Course.create({ name: "COURSE BLR 2", amount: 5500, bangalore: { price: 90000 } });
+/** A lead closed for Bangalore the way the dialog does it: AED 200 its own; ₹30,000 card + AED 400 cash at 22.5 at the close (only the AED goes on the lead). */
+async function bangaloreSale() {
+  n++;
+  const leadId = new Types.ObjectId();
+  await db.collection("leads").insertOne({
+    _id: leadId, name: `Client ${n}`, phone: `+91900000${String(n).padStart(4, "0")}`, email: `client${n}@test.local`, status: "closed",
+    assignedTo: people.Theertha!.id,
+    payments: [
+      { _id: new Types.ObjectId(), amount: 200, note: "Booking", paidAt: new Date("2026-10-01"), addedBy: people.Theertha!.id },
+      { _id: new Types.ObjectId(), amount: 400, note: "Collected at enrolment — COURSE BLR · Cash · Bangalore · AED 400 at 1 AED = 22.5 INR", paidAt: new Date("2026-10-05"), addedBy: people.Theertha!.id },
+    ],
+  });
+  const r = await call("POST", "/students", "Theertha", {
+    leadId: String(leadId), name: `Client ${n}`, phone: `+91900000${String(n).padStart(4, "0")}`, email: `client${n}@test.local`,
+    academy: "bangalore", course: String(courseBlr._id), team: String(teamA), assignedTo: String(people.Theertha!.id),
+    enrollmentDate: "2026-10-05T00:00:00.000Z", totalFee: 45000, paidAmount: 43500, language: "English", hasBonus: false,
+    payments: [
+      pay("cash", 4500, `own-${n}`, { collectedBefore: true, currency: "AED", amountInCurrency: 200, exchangeRate: 22.5 }),
+      pay("card", 30000, `card-${n}`),
+      pay("cash", 9000, `aed-${n}`, { currency: "AED", amountInCurrency: 400, exchangeRate: 22.5 }),
+    ],
+  });
+  const id = String(r.body.data?._id ?? "");
+  const out = await waitFor(async () => (await FinanceHandover.findOne({ studentId: id }).lean())?.status === "sent");
+  if (r.status !== 201 || !out) throw new Error(`could not set up a Bangalore sale: ${r.status} ${r.body.message}`);
+  approvalOf.set(id, "pending");
+  return { id, leadId: String(leadId) };
+}
+const blr = await bangaloreSale();
+let first = sendsFor(blr.id)[0];
+check("delivered to Bangalore's finance organization (x-delta-org), saying academy bangalore", first?._org === BLR_ORG && first?.academy === "bangalore", `${first?._org} ${first?.academy}`);
+check("…in INR: the Bangalore item, fee and payments in paise, the AED cash as original {AED, fils, INR per AED}",
+  first?.course?.itemId === BLR_ITEM && first?.course?.amountMinor === 4500000 && first?.declaredPaidMinor === 4350000
+    && first?.payments?.map((p: { amountMinor: number }) => p.amountMinor).join(",") === "450000,3000000,900000"
+    && first?.payments?.[2]?.original?.currency === "AED" && first?.payments?.[2]?.original?.amountMinor === 40000 && first?.payments?.[2]?.original?.rate === 22.5,
+  JSON.stringify({ course: first?.course, payments: first?.payments }));
+h = await FinanceHandover.findOne({ studentId: blr.id }).lean();
+check("the outbox row keeps the academy and its organization", h?.academy === "bangalore" && h?.financeOrgId === BLR_ORG, `${h?.academy} ${h?.financeOrgId}`);
+const dubaiSale = await closedSale();
+check("a Dubai close beside it still goes to Dubai's, saying academy dubai", sendsFor(dubaiSale.id)[0]?._org === DUBAI_ORG && sendsFor(dubaiSale.id)[0]?.academy === "dubai"
+  && (await FinanceHandover.findOne({ studentId: dubaiSale.id }).lean())?.financeOrgId === DUBAI_ORG);
+
+// The decision poll asks each organization about its own, in one pass.
+const { pollFinanceOutcomes } = await import("../src/services/financeHandoverWorker.js");
+approvalOf.set(blr.id, "returned");
+approvalOf.set(dubaiSale.id, "returned");
+statusCalls.length = 0;
+await pollFinanceOutcomes();
+check("the poll hears both send-backs — the Bangalore one from Bangalore's organization",
+  (await FinanceHandover.findOne({ studentId: blr.id }).lean())?.approvalState === "returned" && (await FinanceHandover.findOne({ studentId: dubaiSale.id }).lean())?.approvalState === "returned");
+check("…one status call per organization, each with only its own",
+  statusCalls.some((c) => c.org === BLR_ORG && c.ids.includes(blr.id) && !c.ids.includes(dubaiSale.id))
+    && statusCalls.some((c) => c.org === DUBAI_ORG && c.ids.includes(dubaiSale.id) && !c.ids.includes(blr.id)),
+  JSON.stringify(statusCalls));
+
+statusCalls.length = 0;
+const mineB = await call("GET", "/students/enrolments/mine?limit=100", "Theertha");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rowB = ((mineB.body as any).data as any[])?.find((x) => String(x._id) === blr.id);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rowD = ((mineB.body as any).data as any[])?.find((x) => String(x._id) === dubaiSale.id);
+check("My Enrolments: the Bangalore card says Bangalore, and finance's answer for it came from Bangalore's organization",
+  rowB?.academy === "bangalore" && rowB?.invoice?.approval === "returned" && rowD?.invoice?.approval === "returned"
+    && statusCalls.some((c) => c.org === BLR_ORG && c.ids.includes(blr.id)) && !statusCalls.some((c) => c.org === DUBAI_ORG && c.ids.includes(blr.id)),
+  JSON.stringify({ academy: rowB?.academy, invoice: rowB?.invoice?.approval, calls: statusCalls }));
+const pageB = await call("GET", `/students/enrolments/${blr.id}`, "Abrar");
+check("…its own page too", pageB.status === 200 && (pageB.body.data as any)?.academy === "bangalore" && (pageB.body.data as any)?.invoice?.approval === "returned", `${pageB.status}`);
+
+form = await call("GET", `/students/${blr.id}/correction`, "Theertha");
+check("the correction starts from: Bangalore, sent back, the lead's own AED 200",
+  form.status === 200 && form.body.data?.academy === "bangalore" && form.body.data?.sentBack === true && form.body.data?.ownOnLead === 200,
+  JSON.stringify({ ...form.body.data, student: undefined }));
+const blrCorrection = (over: Record<string, unknown> = {}) => correction({
+  course: String(courseBlr._id), totalFee: 45000, paidAmount: 45000, hasBonus: false, bonusAmount: 0,
+  payments: [
+    pay("cash", 4500, "own-blr", { collectedBefore: true, currency: "AED", amountInCurrency: 200, exchangeRate: 22.5 }),
+    pay("bank_transfer", 29250, "upi-blr"),
+    pay("cash", 11250, "aed-blr", { currency: "AED", amountInCurrency: 500, exchangeRate: 22.5 }),
+  ],
+  ...over,
+});
+const sendsB = sendsFor(blr.id).length;
+const refusedB = async (label: string, body: Record<string, unknown>, status: number, pattern: RegExp) => {
+  const before = await snapshot(blr.id);
+  const x = await call("PUT", `/students/${blr.id}/correction`, "Theertha", body);
+  await sleep(100);
+  const same = (await snapshot(blr.id)) === before && sendsFor(blr.id).length === sendsB;
+  check(label, x.status === status && pattern.test(x.body.message ?? "") && same, `${x.status} ${x.body.message}${same ? "" : " — something changed"}`);
+};
+await refusedB("moving it to Dubai in a correction: 422, the academy is fixed", blrCorrection({ academy: "dubai" }), 422, /academy is fixed at the close/);
+await refusedB("a course with no Bangalore price: 422", blrCorrection({ course: String(course500._id) }), 422, /COURSE 500 has no Bangalore price/);
+await refusedB("an AED figure the rate doesn't make: 422", blrCorrection({ paidAmount: 46000, payments: [pay("cash", 4500, "own", { collectedBefore: true, currency: "AED", amountInCurrency: 200, exchangeRate: 22.5 }), pay("cash", 41500, "aed", { currency: "AED", amountInCurrency: 500, exchangeRate: 22.5 })] }), 422, /comes to 11,250 INR/);
+await refusedB("the lead's own money at another AED figure: 409", blrCorrection({ paidAmount: 42250, payments: [pay("cash", 2250, "own", { collectedBefore: true, currency: "AED", amountInCurrency: 100, exchangeRate: 22.5 }), pay("bank_transfer", 40000, "upi")] }), 409, /come to 200 AED now, not 100 AED/);
+r = await call("PUT", `/students/${blr.id}/correction`, "Theertha", blrCorrection({ academy: "bangalore" }));
+s = await Student.findById(blr.id).lean();
+check("corrected in INR (saying its own academy is fine): 200, still Bangalore", r.status === 200 && s?.academy === "bangalore" && s?.paidAmount === 45000 && s?.payments?.[2]?.amountInCurrency === 500, `${r.status} ${r.body.message}`);
+await waitFor(() => sendsFor(blr.id).length === sendsB + 1);
+const resentB = sendsFor(blr.id).at(-1);
+check("…sent again to Bangalore's organization, in paise, the AED cash as original", resentB?._org === BLR_ORG && resentB?.academy === "bangalore" && resentB?.course?.itemId === BLR_ITEM
+  && resentB?.payments?.[2]?.amountMinor === 1125000 && resentB?.payments?.[2]?.original?.amountMinor === 50000, JSON.stringify(resentB?.payments));
+lead = await Lead.findById(blr.leadId).lean();
+check("…the lead keeps its own AED 200, and of the close only the AED cash, in AED",
+  lead?.payments?.map((p) => `${p.note}:${p.amount}`).join(" | ") === "Booking:200 | Collected at enrolment — COURSE BLR · Cash · Bangalore · AED 500 at 1 AED = 22.5 INR:500",
+  lead?.payments?.map((p) => `${p.note}:${p.amount}`).join(" | "));
+
+// Sent back again, and seen by finance before the outbox: "Send again" asks Bangalore's organization, and resends there.
+const settled = (id: string) => waitFor(async () => (await FinanceHandover.findOne({ studentId: id }).lean())?.status === "sent");
+await settled(blr.id);
+approvalOf.set(blr.id, "returned");
+statusCalls.length = 0;
+const k9 = sendsFor(blr.id).length;
+r = await call("POST", `/students/${blr.id}/invoice`, "Theertha");
+check("\"Send again\": finance asked in Bangalore's organization whether it is sent back — and it goes there again",
+  r.status === 200 && statusCalls.some((c) => c.org === BLR_ORG && c.ids.includes(blr.id)) && !statusCalls.some((c) => c.org === DUBAI_ORG),
+  `${r.status} ${r.body.message} ${JSON.stringify(statusCalls)}`);
+await waitFor(() => sendsFor(blr.id).length === k9 + 1);
+check("…delivered to Bangalore's", sendsFor(blr.id).at(-1)?._org === BLR_ORG);
+
+// The organization is the one fixed at the close: a changed setting later doesn't move it.
+const { env } = await import("../src/config/env.js");
+await settled(blr.id);
+approvalOf.set(blr.id, "returned");
+await sendBack(blr.id);
+env.FINANCE_ORG_ID_BANGALORE = "org-bangalore-renamed";
+const k10 = sendsFor(blr.id).length;
+r = await call("PUT", `/students/${blr.id}/correction`, "Theertha", blrCorrection());
+await waitFor(() => sendsFor(blr.id).length === k10 + 1);
+check("a correction after the setting changed still goes to the organization it was billed in", r.status === 200 && sendsFor(blr.id).at(-1)?._org === BLR_ORG, `${r.status} ${sendsFor(blr.id).at(-1)?._org}`);
+
+// No Bangalore organization set: a Bangalore close is refused, Dubai's still go.
+env.FINANCE_ORG_ID_BANGALORE = "";
+{
+  const leadId = new Types.ObjectId();
+  await db.collection("leads").insertOne({ _id: leadId, name: "No Org", phone: "+919000000999", status: "closed", assignedTo: people.Theertha!.id, payments: [] });
+  const count = await Student.countDocuments();
+  const x = await call("POST", "/students", "Theertha", {
+    leadId: String(leadId), name: "No Org", phone: "+919000000999", email: "no.org@test.local", academy: "bangalore", course: String(courseBlr2._id),
+    enrollmentDate: "2026-10-05T00:00:00.000Z", totalFee: 90000, paidAmount: 90000, language: "English", hasBonus: false, payments: [pay("card", 90000, "no-org")],
+  });
+  check("without FINANCE_ORG_ID_BANGALORE a Bangalore close is refused: 422, nothing saved", x.status === 422 && /Bangalore finance organization/.test(x.body.message ?? "") && (await Student.countDocuments()) === count, `${x.status} ${x.body.message}`);
+  const y = await call("GET", "/courses/finance-items?academy=bangalore", "Abrar");
+  check("…and the Bangalore catalogue is empty rather than Dubai's", y.status === 200 && Array.isArray(y.body.data) && (y.body.data as unknown[]).length === 0, JSON.stringify(y.body));
+  const o = await call("GET", "/students/close-options", "Theertha");
+  check("…and the close dialog is told Dubai only", (o.body.data?.academies as string[])?.join(",") === "dubai", JSON.stringify(o.body));
+}
+const dubaiStill = await closedSale();
+check("…while a Dubai close still goes, to Dubai's", sendsFor(dubaiStill.id)[0]?._org === DUBAI_ORG);
+env.FINANCE_ORG_ID_BANGALORE = BLR_ORG;
+
+// The course mapping's Bangalore section, and its catalogue from the Bangalore organization.
+itemsAsked.length = 0;
+let items = await call("GET", "/courses/finance-items?academy=bangalore", "Abrar");
+check("Bangalore's catalogue comes from Bangalore's organization", items.status === 200 && (items.body.data as any)?.[0]?.name === "MBT Bangalore" && itemsAsked.at(-1) === BLR_ORG, `${JSON.stringify(items.body.data)} ${itemsAsked}`);
+items = await call("GET", "/courses/finance-items", "Abrar");
+check("…Dubai's, from Dubai's", (items.body.data as any)?.[0]?.name === "MBT Dubai" && itemsAsked.at(-1) === DUBAI_ORG);
+r = await call("PUT", `/courses/${courseBlr2._id}`, "Abrar", { bangalore: { price: 95000, financeItemId: BLR_ITEM, lmsCourseSlugs: ["mbt-blr", "dwt-blr"] } });
+let cB = await Course.findById(courseBlr2._id).lean();
+check("mapping a course's Bangalore price, item and LMS courses", r.status === 200 && cB?.bangalore?.price === 95000 && cB?.bangalore?.financeItemId === BLR_ITEM && cB?.bangalore?.lmsCourseSlugs?.join(",") === "mbt-blr,dwt-blr", `${r.status} ${JSON.stringify(cB?.bangalore)}`);
+r = await call("PUT", `/courses/${courseBlr2._id}`, "Abrar", { financeItemId: "", lmsCourseSlugs: ["mbt"] });
+cB = await Course.findById(courseBlr2._id).lean();
+check("…mapping Dubai's side leaves Bangalore's as it was", r.status === 200 && cB?.bangalore?.price === 95000 && cB?.bangalore?.lmsCourseSlugs?.length === 2);
+r = await call("PUT", `/courses/${courseBlr2._id}`, "Abrar", { bangalore: { price: null, financeItemId: "", lmsCourseSlugs: [] } });
+cB = await Course.findById(courseBlr2._id).lean();
+check("…taking the price off and unmapping (no LMS courses = Dubai's)", r.status === 200 && cB?.bangalore?.price === undefined && cB?.bangalore?.financeItemId === null && cB?.bangalore?.lmsCourseSlugs?.length === 0, JSON.stringify(cB?.bangalore));
+r = await call("PUT", `/courses/${courseBlr2._id}`, "Abrar", { bangalore: { price: -5 } });
+check("…a negative price: 400", r.status === 400, `${r.status}`);
+r = await call("PUT", `/courses/${courseBlr2._id}`, "Vera", { bangalore: { price: 1 } });
+check("…a role that can't edit courses: 403", r.status === 403, `${r.status}`);
 
 // Collecting more than the fee is taken now (the owner, 2026-10-06) — last, so nothing above depends on it.
 await sendBack(sale.id);

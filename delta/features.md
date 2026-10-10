@@ -828,3 +828,20 @@ picked as the source again.
 
 **Change Log**:
 - 1.0.0 — Initial build
+
+## Academy at the close — Dubai / Bangalore (2026-10-10)
+
+**What it does**: The close dialog asks "Academy: Dubai / Bangalore" (Dubai by default) — only where the server lists
+Bangalore (`GET /students/close-options` → `academies`, set by FINANCE_ORG_ID_BANGALORE); otherwise no choice, Dubai as before. Bangalore switches the fee to the
+course's Bangalore price and every figure to ₹; payments are in ₹, or cash in AED with its rate (1 AED = x INR) — the money
+already on the lead (AED) is given its rate too. A course without a Bangalore price can't be closed for Bangalore (said in
+amber, button blocked). Only AED cash from a Bangalore close goes on the lead's payments. The academy is fixed after: the
+correction dialog shows it read-only and keeps its currency. Academy badge on My Enrolments, the enrolment page, the student
+page (and Bangalore on the students list), with Bangalore money in ₹. Courses → Map gains a Bangalore section: INR price,
+Bangalore finance product (from the Bangalore organization), LMS courses (same as Dubai by default); the course card shows
+the Bangalore price.
+
+**API**: `GET /students/close-options`, `POST /students` (`academy`), `PUT /courses/:id` (`bangalore`), `GET /courses/finance-items?academy=bangalore`.
+
+**Change Log**:
+- 1.0.0 — Initial build

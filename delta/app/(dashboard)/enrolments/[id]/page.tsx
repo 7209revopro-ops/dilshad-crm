@@ -8,7 +8,8 @@ import { AlertTriangle, ArrowLeft, Coins, GraduationCap, ListChecks, Loader2, Pe
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { fmtFull } from "@/lib/currency";
+import { fmtAcademy } from "@/lib/currency";
+import { AcademyBadge } from "@/components/students/AcademyBadge";
 import { aed, ROLE_LABEL, STATE_LABEL, monthLabel } from "@/lib/commission";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useEnrolment, useRequestInvoice, sendBackState, uaeTime, type EnrolmentDetail } from "@/hooks/useEnrolments";
@@ -79,9 +80,9 @@ function Header({ e }: { e: EnrolmentDetail }) {
           <GraduationCap className="h-5 w-5 text-primary" />
         </div>
         <div className="min-w-0">
-          <h1 className="text-lg font-bold text-foreground">{e.name}</h1>
+          <h1 className="flex flex-wrap items-center gap-2 text-lg font-bold text-foreground">{e.name} <AcademyBadge academy={e.academy} /></h1>
           <p className="text-xs text-muted-foreground">
-            {[e.enrollmentNumber, course?.name ?? "No course", fmtFull(e.totalFee), invoice ? `Invoice ${invoice}` : "", closer ? `Closed by ${closer}` : "",
+            {[e.enrollmentNumber, course?.name ?? "No course", fmtAcademy(e.totalFee, e.academy), invoice ? `Invoice ${invoice}` : "", closer ? `Closed by ${closer}` : "",
               e.enrollmentDate ? `Enrolled ${new Date(e.enrollmentDate).toLocaleDateString("en-AE", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Dubai" })}` : ""]
               .filter(Boolean).join(" · ")}
           </p>

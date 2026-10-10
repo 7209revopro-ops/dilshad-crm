@@ -206,11 +206,25 @@ export interface ICourse extends Document {
   lmsCourseSlug?: string;
   /** Every LMS course it opens, in order (a bundle opens more than one). */
   lmsCourseSlugs?: string[];
+  /** How it sells at the Bangalore academy — its INR price, finance item and LMS courses. */
+  bangalore?: ICourseBangalore | null;
   /** What selling it earns (AED per approved sale) — set on the Commission plan. */
   commission?: ICourseCommission;
   status: "active" | "inactive";
   createdAt: Date;
   updatedAt: Date;
+}
+
+/**
+ * A course at the Bangalore academy (2026-10-10): its price in INR — without
+ * one, it can't be closed for Bangalore — the item it bills against in the
+ * Bangalore finance organization, and the LMS courses it opens there (none
+ * set: the same as Dubai's — the Forex courses are shared between academies).
+ */
+export interface ICourseBangalore {
+  price?: number | null;
+  financeItemId?: string | null;
+  lmsCourseSlugs?: string[];
 }
 
 // ─── Commission ───────────────────────────────────────────────────────────────
@@ -562,6 +576,30 @@ export const BASE_CURRENCY = "AED";
 export const CLOSE_CURRENCIES = ["AED", "USD", "INR", "EUR", "GBP", "SAR", "CAD", "AUD", "SGD", "JPY", "MYR"] as const;
 export type CloseCurrency = (typeof CLOSE_CURRENCIES)[number];
 
+/**
+ * Which academy a close is for, picked in the close dialog (the user,
+ * 2026-10-10): Dubai — what every close was until then — or Bangalore. Fixed
+ * at the close: it decides the finance organization the enrolment is billed
+ * in, and every later call about it (resend, correction, status) goes to that
+ * same one. An enrolment from before has none, and is Dubai.
+ */
+export const ACADEMIES = ["dubai", "bangalore"] as const;
+export type Academy = (typeof ACADEMIES)[number];
+export const ACADEMY_LABELS: Record<Academy, string> = { dubai: "Dubai", bangalore: "Bangalore" };
+
+/**
+ * The currency each academy's fees are in. Dubai's is the CRM's own (AED);
+ * Bangalore's is INR — the course's Bangalore price, paid in rupees, or cash
+ * taken in AED with its rate to INR.
+ */
+export const ACADEMY_CURRENCY: Record<Academy, "AED" | "INR"> = { dubai: "AED", bangalore: "INR" };
+
+/** An enrolment's academy: what it says, Dubai when it says nothing (one from before). */
+export const academyOf = (v: { academy?: string | null } | null | undefined): Academy =>
+  v?.academy === "bangalore" ? "bangalore" : "dubai";
+
+export const isAcademy = (v: unknown): v is Academy => typeof v === "string" && (ACADEMIES as readonly string[]).includes(v);
+
 /** A file kept in object storage, as the enrolment records it. */
 export interface StoredFile {
   name: string;
@@ -575,13 +613,19 @@ export interface StoredFile {
 /** One payment taken at the close: how, how much, when, and its receipt. */
 export interface IStudentPayment {
   method: EnrolmentPaymentMethod;
-  /** In AED (BASE_CURRENCY) — converted, when the client paid in another currency. */
+  /**
+   * In the academy's currency (ACADEMY_CURRENCY: AED for Dubai, INR for
+   * Bangalore) — converted, when the client paid in another currency.
+   */
   amount: number;
   receipt: StoredFile;
   paidAt: Date;
   /** The money already on the lead before the close, as one payment. */
   collectedBefore?: boolean;
-  /** Paid in another currency: which, how much of it, and 1 of it = `exchangeRate` AED. Absent for AED. */
+  /**
+   * Paid in another currency than the academy's: which, how much of it, and 1
+   * of it = `exchangeRate` of the academy's currency. Absent when paid in it.
+   */
   currency?: CloseCurrency;
   amountInCurrency?: number;
   exchangeRate?: number;
@@ -606,9 +650,12 @@ export interface IStudent extends Document {
   lastFollowupDate?: Date | null;
   enrollmentDate: Date;
   feeStatus: "paid" | "partial" | "pending";
+  /** In the academy's currency — AED for Dubai, INR for Bangalore — as are paidAmount and pendingAmount. */
   totalFee: number;
   paidAmount: number;
   pendingAmount: number;
+  /** Which academy it was closed for; unset on enrolments from before, which are Dubai (academyOf). */
+  academy?: Academy;
   status: "active" | "inactive" | "graduated" | "dropped";
   /** What the course is taught in, taken at the close. */
   language?: EnrolmentLanguage;

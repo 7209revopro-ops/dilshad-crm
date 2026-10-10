@@ -10,7 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { fmtFull } from "@/lib/currency";
+import { fmtAcademy } from "@/lib/currency";
+import { AcademyBadge } from "@/components/students/AcademyBadge";
 import { useMyEnrolments, useRequestInvoice, sendBackState, uaeTime, type Enrolment } from "@/hooks/useEnrolments";
 import { EnrolmentStepsStrip } from "@/components/students/EnrolmentSteps";
 import { CorrectEnrolmentDialog } from "@/components/students/CorrectEnrolmentDialog";
@@ -227,10 +228,11 @@ function EnrolmentRow({ enrolment: e, onGenerate, onCorrect, generating }: {
             {/* Its own page: the five steps, with who did each and when */}
             <Link href={`/enrolments/${e._id}`} className="font-semibold text-sm hover:text-primary hover:underline">{e.name}</Link>
             <span className="text-[10px] text-muted-foreground">{e.enrollmentNumber}</span>
+            <AcademyBadge academy={e.academy} />
             <ApprovalBadge enrolment={e} />
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {course?.name ?? "No course"} · {fmtFull(e.totalFee)} · enrolled {String(e.enrollmentDate).slice(0, 10)}
+            {course?.name ?? "No course"} · {fmtAcademy(e.totalFee, e.academy)} · enrolled {String(e.enrollmentDate).slice(0, 10)}
           </p>
 
           {/* Sent again after a send-back: said, with when (the user, 2026-10-05). */}

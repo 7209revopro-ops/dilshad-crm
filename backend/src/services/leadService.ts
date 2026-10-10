@@ -29,8 +29,8 @@ function buildPopulatedQuery(id: string) {
         { path: "members", select: "name email designation" },
       ],
     })
-    // bonusAmount: the close starts from it (CreateStudentModal).
-    .populate("course", "name amount bonusAmount status")
+    // bonusAmount and the Bangalore price: the close starts from them (CreateStudentModal).
+    .populate("course", "name amount bonusAmount status bangalore")
     .populate("notes.author", "name email")
     .populate("activityLogs.performedBy", "name email");
 }
@@ -568,7 +568,7 @@ export class LeadService {
         .populate("reporter", "name email")
         .populate("assignedTo", "name email")
         .populate("team", "name status")
-        .populate("course", "name amount bonusAmount status")
+        .populate("course", "name amount bonusAmount status bangalore")
         .sort({ [sortField]: sortOrder })
         .skip(skip)
         .limit(limit)

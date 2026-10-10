@@ -153,6 +153,20 @@ export const uploadPaymentReceipt = async (req: AuthenticatedRequest, res: Respo
   } catch (err) { next(err); }
 };
 
+/**
+ * What the close dialog may offer on this server (2026-10-10): the academies
+ * a close can be made for — Bangalore only once its finance organization is
+ * set. The dialog shows its Academy choice only when Bangalore is listed.
+ *
+ * GET /api/v1/students/close-options
+ */
+export const getCloseOptions = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { academiesOffered } = await import("../services/financeClient.js");
+    sendSuccess(res, "Close options", { academies: academiesOffered() });
+  } catch (err) { next(err); }
+};
+
 /** Send an enrolment to finance, or send it again after a failure. */
 export const requestInvoice = async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -11,7 +11,11 @@
  *   - Case 3: payments that don't add up, without a receipt, an unknown method,
  *     nothing, too many — and anything collected above the fee — refused, on a
  *     close and on an edit, with nothing saved;
- *   - Case 4: who may close.
+ *   - Case 4: who may close;
+ *   - Case 5: the academy (2026-10-10) — a Bangalore close in INR, with the
+ *     course's Bangalore price, item and LMS courses, cash in AED carried as
+ *     finance's `original` against the INR; Dubai as it was; what a Bangalore
+ *     close is refused for.
  *
  * Run by split-payments-check.sh. Scratch database only.
  */
@@ -40,6 +44,8 @@ Object.assign(process.env, {
   JWT_REFRESH_SECRET: "split-payments-check-refresh",
   NODE_ENV: "test",
   RUN_SCHEDULERS: "false",
+  // Finance itself stays off here (nothing is sent); Bangalore needs its organization set to be offered at all.
+  FINANCE_ORG_ID_BANGALORE: "org-bangalore-split-check",
 });
 
 const mongoose = (await import("mongoose")).default;
@@ -69,6 +75,17 @@ for (const [name, role] of [["Abrar", superRole], ["Theertha", bdeRole], ["Vera"
 }
 const course500 = await Course.create({ name: "COURSE 500", amount: 500 });
 const course1000 = await Course.create({ name: "COURSE 1000", amount: 1000 });
+// Sold at both academies: Dubai's item and LMS course, and a Bangalore price and item — its LMS courses Dubai's.
+const DUBAI_ITEM = "aaaaaaaaaaaaaaaaaaaaaaaa", BLR_ITEM = "bbbbbbbbbbbbbbbbbbbbbbbb";
+const courseBoth = await Course.create({
+  name: "COURSE BOTH", amount: 2250, financeItemId: DUBAI_ITEM, lmsCourseSlugs: ["mbt"], lmsCourseSlug: "mbt",
+  bangalore: { price: 45000, financeItemId: BLR_ITEM },
+});
+// …and one with LMS courses of its own in Bangalore.
+const courseOwnLms = await Course.create({
+  name: "COURSE OWN LMS", amount: 5500, lmsCourseSlugs: ["mbt", "dwt"], lmsCourseSlug: "mbt",
+  bangalore: { price: 99000, lmsCourseSlugs: ["mbt-blr"] },
+});
 
 // ── The API ─────────────────────────────────────────────────────────────────
 const express = (await import("express")).default;
@@ -186,6 +203,82 @@ r = await close({ paidAmount: 500, payments: [pay("cash", 500)] }, "Vera");
 check("a role that can't add students: 403", r.status === 403, `${r.status}`);
 r = await close({ paidAmount: 500, payments: [pay("cash", 300), pay("card", 200)] }, "Abrar");
 check("a super admin closes too", r.status === 201, `${r.status} ${r.body.message}`);
+
+section("Case 5 — the academy: a Bangalore close in INR, Dubai as it was");
+{
+  const opts = await call("GET", "/students/close-options", "Theertha");
+  check("the close dialog is told both academies, Bangalore's organization being set", opts.status === 200 && (opts.body.data?.academies as string[])?.join(",") === "dubai,bangalore", JSON.stringify(opts.body));
+  const anon = await call("GET", "/students/close-options");
+  check("…not without signing in: 401", anon.status === 401, `${anon.status}`);
+  const { env } = await import("../src/config/env.js");
+  env.FINANCE_ORG_ID_BANGALORE = "";
+  const only = await call("GET", "/students/close-options", "Theertha");
+  check("without FINANCE_ORG_ID_BANGALORE: Dubai only — the dialog shows no choice", (only.body.data?.academies as string[])?.join(",") === "dubai", JSON.stringify(only.body));
+  const count = await Student.countDocuments();
+  const x = await close({ academy: "bangalore", course: String(courseBoth._id), totalFee: 45000, paidAmount: 45000, payments: [pay("card", 45000, "no-org")] });
+  check("…and a Bangalore close is refused even with finance switched off: 422, nothing saved",
+    x.status === 422 && /Bangalore finance organization/.test(x.body.message ?? "") && (await Student.countDocuments()) === count, `${x.status} ${x.body.message}`);
+  const d = await close({ paidAmount: 500, payments: [pay("cash", 500, "dubai-no-org")] });
+  check("…while a Dubai close goes as ever", d.status === 201, `${d.status} ${d.body.message}`);
+  env.FINANCE_ORG_ID_BANGALORE = "org-bangalore-split-check";
+}
+const blr = (over: Record<string, unknown>, before: number[] = []) =>
+  close({ academy: "bangalore", course: String(courseBoth._id), totalFee: 45000, ...over }, "Theertha", before);
+r = await blr({ paidAmount: 42500, payments: [pay("card", 20000, "inr-card"), pay("cash", 22500, "aed-cash", { currency: "AED", amountInCurrency: 1000, exchangeRate: 22.5 })] });
+s = await studentOf(r);
+check("Bangalore: ₹45,000 fee, ₹20,000 card + AED 1,000 cash at 22.5 = ₹22,500: 201, kept as Bangalore", r.status === 201 && s?.academy === "bangalore" && s?.totalFee === 45000 && s?.paidAmount === 42500 && s?.pendingAmount === 2500, `${r.status} ${r.body.message} ${s?.academy}`);
+check("…the AED cash kept with what was handed over and its rate (INR per AED)",
+  s?.payments?.[1]?.currency === "AED" && s?.payments?.[1]?.amountInCurrency === 1000 && s?.payments?.[1]?.exchangeRate === 22.5 && s?.payments?.[1]?.amount === 22500 && !s?.payments?.[0]?.currency,
+  JSON.stringify(s?.payments));
+payload = await service.buildHandoverPayload(String(s!._id)) as Record<string, any>;
+check("finance is told the academy: bangalore", payload?.academy === "bangalore", payload?.academy);
+check("…the course's Bangalore item, not Dubai's, and its fee in paise", payload?.course?.itemId === BLR_ITEM && payload?.course?.amountMinor === 4500000, JSON.stringify(payload?.course));
+check("…its LMS courses Dubai's, none being set for Bangalore", payload?.course?.lmsCourseSlugs?.join(",") === "mbt" && payload?.course?.lmsCourseSlug === "mbt");
+check("…the payments in paise; the AED cash with finance's original {AED, fils, INR per AED}",
+  payload?.payments?.map((p: any) => p.amountMinor).join(",") === "2000000,2250000" && payload?.payments?.[0]?.original === undefined
+    && payload?.payments?.[1]?.original?.currency === "AED" && payload?.payments?.[1]?.original?.amountMinor === 100000 && payload?.payments?.[1]?.original?.rate === 22.5,
+  JSON.stringify(payload?.payments));
+check("…paid and balance in paise, the bonus still in USD", payload?.declaredPaidMinor === 4250000 && payload?.balanceMinor === 250000 && payload?.bonus?.currency === "USD");
+r = await close({ academy: "bangalore", course: String(courseOwnLms._id), totalFee: 99000, paidAmount: 99000, payments: [pay("bank_transfer", 99000)] });
+s = await studentOf(r);
+payload = r.status === 201 ? await service.buildHandoverPayload(String(s!._id)) as Record<string, any> : null;
+check("a course with Bangalore LMS courses of its own opens those; unmapped in Bangalore finance, it sends no item",
+  r.status === 201 && payload?.course?.lmsCourseSlugs?.join(",") === "mbt-blr" && payload?.course?.itemId === undefined, `${r.status} ${r.body.message} ${JSON.stringify(payload?.course)}`);
+r = await blr({ paidAmount: 45000, payments: [pay("cash", 4500, "own-aed", { collectedBefore: true, currency: "AED", amountInCurrency: 200, exchangeRate: 22.5 }), pay("card", 40500)] }, [200]);
+s = await studentOf(r);
+payload = r.status === 201 ? await service.buildHandoverPayload(String(s!._id)) as Record<string, any> : null;
+check("the lead's own AED 200, taken at 22.5 as ₹4,500, + ₹40,500 card: 201",
+  r.status === 201 && s?.payments?.[0]?.collectedBefore === true && s?.payments?.[0]?.amount === 4500 && payload?.payments?.[0]?.original?.amountMinor === 20000 && payload?.payments?.[0]?.amountMinor === 450000,
+  `${r.status} ${r.body.message}`);
+
+const refusedB = async (label: string, over: Record<string, unknown>, pattern: RegExp, before: number[] = []) => {
+  const count = await Student.countDocuments();
+  const x = await blr(over, before);
+  check(label, x.status === 422 && pattern.test(x.body.message ?? "") && (await Student.countDocuments()) === count, `${x.status} ${x.body.message}`);
+};
+await refusedB("a course with no Bangalore price: 422", { course: String(course500._id), totalFee: 500, paidAmount: 500, payments: [pay("cash", 500)] }, /COURSE 500 has no Bangalore price/);
+await refusedB("no course: 422", { course: null, paidAmount: 500, payments: [pay("cash", 500)] }, /needs its course/);
+await refusedB("a payment in USD on a Bangalore close: 422", { paidAmount: 45000, payments: [pay("card", 45000, "usd", { currency: "USD", amountInCurrency: 540, exchangeRate: 83.33 })] }, /takes INR, or cash in AED/);
+await refusedB("AED that isn't what its rate makes it: 422", { paidAmount: 30000, payments: [pay("cash", 30000, "aed-off", { currency: "AED", amountInCurrency: 1000, exchangeRate: 22.5 })] }, /comes to 22,500 INR, not 30,000/);
+await refusedB("the lead's own money given as rupees, without its AED and rate: 422", { paidAmount: 45000, payments: [pay("cash", 4500, "own-inr", { collectedBefore: true }), pay("card", 40500)] }, /already on the lead in AED/, [200]);
+{
+  const count = await Student.countDocuments();
+  const x = await close({ academy: "london", paidAmount: 500, payments: [pay("cash", 500)] });
+  check("an academy that isn't one: 422", x.status === 422 && /isn't an academy/.test(x.body.message ?? "") && (await Student.countDocuments()) === count, `${x.status} ${x.body.message}`);
+}
+
+r = await close({ course: String(courseBoth._id), totalFee: 2250, paidAmount: 2250, payments: [pay("cash", 1810), pay("bank_transfer", 440, "inr", { currency: "INR", amountInCurrency: 10000, exchangeRate: 0.044 })] });
+s = await studentOf(r);
+payload = r.status === 201 ? await service.buildHandoverPayload(String(s!._id)) as Record<string, any> : null;
+check("Dubai as it was: a close that says no academy is Dubai", r.status === 201 && s?.academy === "dubai" && payload?.academy === "dubai", `${r.status} ${r.body.message} ${s?.academy}`);
+check("…billed against Dubai's item, its fee in fils, Dubai's LMS course", payload?.course?.itemId === DUBAI_ITEM && payload?.course?.amountMinor === 225000 && payload?.course?.lmsCourseSlugs?.join(",") === "mbt");
+check("…an INR payment still carried as original against AED", payload?.payments?.[1]?.amountMinor === 44000 && payload?.payments?.[1]?.original?.currency === "INR" && payload?.payments?.[1]?.original?.rate === 0.044, JSON.stringify(payload?.payments));
+r = await close({ academy: "dubai", paidAmount: 500, payments: [pay("cash", 500)] });
+s = await studentOf(r);
+check("…and saying Dubai is the same", r.status === 201 && s?.academy === "dubai");
+const before5 = await studentOf(r);
+const edit = await call("PUT", `/students/${String(before5!._id)}`, "Theertha", { academy: "bangalore", notes: "moved?" });
+check("an edit can't move an enrolment to the other academy", edit.status === 200 && (await studentOf(r))?.academy === "dubai", `${edit.status}`);
 
 server.close();
 await mongoose.disconnect();

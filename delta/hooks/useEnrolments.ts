@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/axios";
 import { toast } from "@/lib/toast";
-import type { StoredReceipt, Student } from "@/types/student";
+import type { Academy, StoredReceipt, Student } from "@/types/student";
 
 const KEY = ["enrolments"] as const;
 
@@ -184,6 +184,9 @@ export interface EnrolmentCorrectionStart {
   resentAt?: string | null;
   resends?: number;
   mayMove: boolean;
+  /** The academy it was closed for — fixed; the form's money is in its currency. */
+  academy?: Academy;
+  /** What the lead holds of its own, in AED (its currency) — on a Bangalore correction, given with its rate to INR. */
   ownOnLead: number;
   counsellors?: { _id: string; name: string }[];
   teams?: { _id: string; name: string }[];
@@ -204,7 +207,7 @@ export interface EnrolmentCorrectionInput {
   paidAmount: number;
   notes: string;
   language: string;
-  /** `amount` in AED; one paid in another currency also says which, how much of it, and its rate. */
+  /** `amount` in the academy's currency (AED, or INR for Bangalore); one paid in another also says which, how much of it, and its rate. */
   payments: {
     method: string; amount: number; receipt: StoredReceipt | null; paidAt: string; collectedBefore?: boolean;
     currency?: string; amountInCurrency?: number; exchangeRate?: number;

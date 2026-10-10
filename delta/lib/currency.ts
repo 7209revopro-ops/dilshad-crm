@@ -37,3 +37,13 @@ export function getCurrencySymbol(): string {
 export function fmtUSD(n: number): string {
   return `$${(Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
+
+/**
+ * An enrolment's money in its academy's currency (2026-10-10): a Bangalore
+ * enrolment's fee and payments are rupees — "₹1,23,500" — whatever currency
+ * the screen shows; a Dubai one reads as every figure here does (fmtFull).
+ */
+export function fmtAcademy(n: number, academy?: string | null): string {
+  if (academy !== "bangalore") return fmtFull(n);
+  return `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}

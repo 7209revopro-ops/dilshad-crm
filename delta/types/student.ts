@@ -27,9 +27,12 @@ export interface Student {
 
   enrollmentDate: string;
   feeStatus:      FeeStatus;
+  /** In the academy's currency — AED for Dubai, INR for Bangalore — as are paidAmount and pendingAmount. */
   totalFee:       number;
   paidAmount:     number;
   pendingAmount:  number;
+  /** Which academy it was closed for; absent on enrolments from before, which are Dubai (academyOf). */
+  academy?: Academy;
   status:         StudentStatus;
   notes?: string;
   /** Taken at the close, and required there. Absent on older enrolments. */
@@ -92,6 +95,8 @@ export interface CreateStudentInput {
   payments?: StudentPayment[];
   hasBonus?: boolean;
   bonusAmount?: number;
+  /** Which academy it is closed for — Dubai unless said. */
+  academy?: Academy;
 }
 
 /**
@@ -138,13 +143,13 @@ export interface StoredReceipt {
  */
 export interface StudentPayment {
   method: string;
-  /** In AED — converted, when the client paid in another currency. */
+  /** In the academy's currency (AED for Dubai, INR for Bangalore) — converted, when the client paid in another. */
   amount: number;
   receipt: StoredReceipt;
   paidAt: string;
   /** The money already on the lead before the close, as one payment. */
   collectedBefore?: boolean;
-  /** Paid in another currency: which, how much of it, and 1 of it = `exchangeRate` AED. Absent for AED. */
+  /** Paid in another currency than the academy's: which, how much of it, and 1 of it = `exchangeRate` of the academy's. */
   currency?: string;
   amountInCurrency?: number;
   exchangeRate?: number;
@@ -153,5 +158,20 @@ export interface StudentPayment {
 /**
  * The currency the fees are in — Delta HQ's, which finance bills in. A payment
  * taken in another is converted to it at the close (the owner, 2026-10-05).
+ * Also the currency of a lead's own payments, whichever academy it closes for.
  */
 export const BASE_CURRENCY = "AED";
+
+/**
+ * Which academy a close is for (the user, 2026-10-10): Dubai — what every close
+ * was until then — or Bangalore, billed in Bangalore's finance organization in
+ * INR. Picked in the close dialog and fixed from then on.
+ */
+export const ACADEMIES = ["dubai", "bangalore"] as const;
+export type Academy = (typeof ACADEMIES)[number];
+export const ACADEMY_LABELS: Record<Academy, string> = { dubai: "Dubai", bangalore: "Bangalore" };
+/** What each academy's fees are in. */
+export const ACADEMY_CURRENCY: Record<Academy, "AED" | "INR"> = { dubai: "AED", bangalore: "INR" };
+/** An enrolment's academy — Dubai when it says none (one from before there was a choice). */
+export const academyOf = (v: { academy?: string | null } | null | undefined): Academy =>
+  v?.academy === "bangalore" ? "bangalore" : "dubai";

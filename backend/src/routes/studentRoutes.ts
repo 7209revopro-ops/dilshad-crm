@@ -7,6 +7,7 @@ import {
   getStudentByLeadId, updateStudent, deleteStudent,
   getMyEnrolments,
   getEnrolment, requestInvoice, getCorrection, correctEnrolment, getDailyClosings, uploadPaymentReceipt,
+  getCloseOptions,
 } from "../controllers/studentController.js";
 
 const router = Router();
@@ -27,6 +28,8 @@ const receiptUpload = multer({
 
 // Static before parameterized
 router.get("/by-lead/:leadId", authenticate, checkPermission("students", "view"), getStudentByLeadId);
+// What the close dialog may offer here (the academies) — for whoever is signed in; it says nothing about anybody.
+router.get("/close-options", authenticate, getCloseOptions);
 
 // The enrolments screen: a counsellor's own sales, with the state of each
 // invoice beside them, so the question does not have to be taken to finance.

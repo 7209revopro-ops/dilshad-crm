@@ -23,6 +23,11 @@ import { BASE_CURRENCY, ENROLMENT_PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type S
  * 2026-10-05): then the amount is typed in that currency with the rate — 1 of
  * it = so many AED — and the AED figure is worked out, or typed and the rate
  * worked out from it. The AED figure is what the payment counts as.
+ *
+ * A close for the Bangalore academy (2026-10-10) is in INR instead (`base`):
+ * each payment in rupees, or cash taken in AED with its rate — 1 AED = so many
+ * INR. The money already on the lead is in AED, so there it is always that:
+ * its AED fixed, its rate asked, the rupees it comes to worked out.
  */
 
 export interface PaymentRow {
@@ -31,11 +36,11 @@ export interface PaymentRow {
   /** In `currency`. */
   amountInput: string;
   receipt: StoredReceipt | null;
-  /** What it was paid in — AED unless the client paid in another currency. */
+  /** What it was paid in — the academy's currency unless the client paid in another. */
   currency: string;
-  /** Another currency: 1 of it = this many AED. */
+  /** Another currency: 1 of it = this many of the academy's (AED, or INR for Bangalore). */
   rateInput: string;
-  /** Another currency: what it comes to in AED. */
+  /** Another currency: what it comes to in the academy's. */
   convertedInput: string;
   /** The money already on the lead before the close, as one payment. */
   collectedBefore?: boolean;
@@ -47,8 +52,12 @@ export interface PaymentRow {
 
 export const MAX_PAYMENTS = 10;
 
-/** AED first, then the app's other currencies. */
-const PAYMENT_CURRENCIES = [BASE_CURRENCY, ...CURRENCIES.map((c) => c.code).filter((c) => c !== BASE_CURRENCY)];
+/** What a close's money is in: AED (Dubai — the CRM's own) or INR (Bangalore). */
+export type PaymentBase = "AED" | "INR";
+
+/** AED first, then the app's other currencies; for a Bangalore close, INR — or cash in AED. */
+const paymentCurrencies = (base: PaymentBase) =>
+  base === BASE_CURRENCY ? [BASE_CURRENCY, ...CURRENCIES.map((c) => c.code).filter((c) => c !== BASE_CURRENCY)] : [base, BASE_CURRENCY];
 const currencyLabel = (code: string) => CURRENCIES.find((c) => c.code === code)?.label ?? code;
 
 let rowSeq = 0;
@@ -63,8 +72,12 @@ export const newPaymentRow = (over: Partial<PaymentRow> = {}): PaymentRow => ({
   ...over,
 });
 
-/** Paid in another currency than AED (the money already on the lead never is). */
-export const isForeign = (r: PaymentRow) => !r.collectedBefore && r.currency !== BASE_CURRENCY;
+/**
+ * Paid in another currency than the academy's. On a Dubai close the money
+ * already on the lead never is (it is AED); on a Bangalore one it always is.
+ */
+export const isForeign = (r: PaymentRow, base: PaymentBase = BASE_CURRENCY) =>
+  r.currency !== base && (!r.collectedBefore || base !== BASE_CURRENCY);
 
 const num = (s: string) => Math.max(0, Number(s) || 0);
 /** Whole fils, as a plain number string. */
@@ -72,32 +85,52 @@ const toAedInput = (n: number) => String(Math.round(n * 100) / 100);
 /** A rate worked out from two amounts, to ten significant figures. */
 const toRateInput = (n: number) => String(Number(n.toPrecision(10)));
 
-/** What the payment counts as, in AED — the converted figure when it was paid in another currency. */
-export const rowAmount = (r: PaymentRow) => (isForeign(r) ? num(r.convertedInput) : num(r.amountInput));
+/** What the payment counts as, in the academy's currency — the converted figure when it was paid in another. */
+export const rowAmount = (r: PaymentRow, base: PaymentBase = BASE_CURRENCY) => (isForeign(r, base) ? num(r.convertedInput) : num(r.amountInput));
 
-/** For the close: what was handed over in another currency, and its rate — nothing for AED. */
-export function rowForeignFields(r: PaymentRow): { currency?: string; amountInCurrency?: number; exchangeRate?: number } {
-  if (!isForeign(r)) return {};
+/** For the close: what was handed over in another currency, and its rate — nothing when paid in the academy's. */
+export function rowForeignFields(r: PaymentRow, base: PaymentBase = BASE_CURRENCY): { currency?: string; amountInCurrency?: number; exchangeRate?: number } {
+  if (!isForeign(r, base)) return {};
   return { currency: r.currency, amountInCurrency: num(r.amountInput), exchangeRate: num(r.rateInput) };
 }
 
-/** "INR 50,000 at 1 INR = 0.044 AED" — for the lead's payment note. Empty for AED. */
-export function describeForeign(r: PaymentRow): string {
-  if (!isForeign(r)) return "";
+/** "INR 50,000 at 1 INR = 0.044 AED" (or, on a Bangalore close, "AED 1,000 at 1 AED = 22.5 INR") — for the lead's payment note. */
+export function describeForeign(r: PaymentRow, base: PaymentBase = BASE_CURRENCY): string {
+  if (!isForeign(r, base)) return "";
   const paid = num(r.amountInput).toLocaleString("en-US", { maximumFractionDigits: 2 });
   const rate = Number(num(r.rateInput).toPrecision(6)).toLocaleString("en-US", { maximumFractionDigits: 10 });
-  return `${r.currency} ${paid} at 1 ${r.currency} = ${rate} ${BASE_CURRENCY}`;
+  return `${r.currency} ${paid} at 1 ${r.currency} = ${rate} ${base}`;
+}
+
+/**
+ * What of a payment goes on the lead's own payment list — which is in AED and
+ * is what the CRM's revenue figures add up. Dubai: the payment, in AED. A
+ * Bangalore close: only cash handed over in AED, at its AED; rupees stay on
+ * the enrolment. Null for nothing. The server writes the same on a correction.
+ */
+export function leadAmountOf(r: PaymentRow, base: PaymentBase = BASE_CURRENCY): number | null {
+  if (base === BASE_CURRENCY) return rowAmount(r, base);
+  return r.currency === BASE_CURRENCY && num(r.amountInput) > 0 ? num(r.amountInput) : null;
+}
+
+/** Each row as a new close starts it again once the academy changes: the method and receipt kept, the money asked afresh in its currency. */
+export function rowsForBase(rows: PaymentRow[], base: PaymentBase): PaymentRow[] {
+  return rows.map((r) =>
+    r.collectedBefore
+      ? { ...r, currency: BASE_CURRENCY, rateInput: "", convertedInput: "" }
+      : { ...r, currency: base, amountInput: "", rateInput: "", convertedInput: "" },
+  );
 }
 
 /** What each payment still needs, the way the close's "Still needed" line says it. */
-export function missingInRows(rows: PaymentRow[]): string[] {
+export function missingInRows(rows: PaymentRow[], base: PaymentBase = BASE_CURRENCY): string[] {
   const one = rows.length === 1;
   return rows.flatMap((r, i) => {
     const whose = `payment ${i + 1}'s`;
     return [
       !r.method && (one ? "payment method" : `${whose} method`),
       !r.collectedBefore && !(num(r.amountInput) > 0) && (one ? "the amount paid" : `${whose} amount`),
-      isForeign(r) && num(r.amountInput) > 0 && !(num(r.rateInput) > 0 && num(r.convertedInput) > 0) &&
+      isForeign(r, base) && num(r.amountInput) > 0 && !(num(r.rateInput) > 0 && num(r.convertedInput) > 0) &&
         (one ? `the ${r.currency} rate` : `${whose} ${r.currency} rate`),
       !r.receipt && (one ? "payment receipt" : `${whose} receipt`),
     ].filter(Boolean) as string[];
@@ -108,9 +141,11 @@ interface PaymentRowsEditorProps {
   leadId: string;
   rows: PaymentRow[];
   onChange: Dispatch<SetStateAction<PaymentRow[]>>;
+  /** The academy's currency: AED (Dubai, the default) or INR (Bangalore). */
+  base?: PaymentBase;
 }
 
-export function PaymentRowsEditor({ leadId, rows, onChange }: PaymentRowsEditorProps) {
+export function PaymentRowsEditor({ leadId, rows, onChange, base = BASE_CURRENCY }: PaymentRowsEditorProps) {
   const update = (id: string, patch: Partial<PaymentRow>) =>
     onChange((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
@@ -118,7 +153,7 @@ export function PaymentRowsEditor({ leadId, rows, onChange }: PaymentRowsEditorP
   // was typed last works out the other; a new amount keeps the rate.
   function setAmount(r: PaymentRow, amountInput: string) {
     const paid = num(amountInput);
-    if (!isForeign(r)) return update(r.id, { amountInput });
+    if (!isForeign(r, base)) return update(r.id, { amountInput });
     if (num(r.rateInput) > 0) return update(r.id, { amountInput, convertedInput: paid > 0 ? toAedInput(paid * num(r.rateInput)) : "" });
     if (num(r.convertedInput) > 0 && paid > 0) return update(r.id, { amountInput, rateInput: toRateInput(num(r.convertedInput) / paid) });
     update(r.id, { amountInput });
@@ -173,7 +208,8 @@ export function PaymentRowsEditor({ leadId, rows, onChange }: PaymentRowsEditorP
               </Select>
               {r.collectedBefore ? (
                 <div className="flex-1 text-xs">
-                  <span className="font-semibold text-foreground">{fmtFull(rowAmount(r))}</span>
+                  {/* In AED, the lead's currency; on a Bangalore close its rate to INR is asked below. */}
+                  <span className="font-semibold text-foreground">{base === BASE_CURRENCY ? fmtFull(rowAmount(r)) : `${BASE_CURRENCY} ${num(r.amountInput).toLocaleString("en-US", { maximumFractionDigits: 2 })}`}</span>
                   <span className="ml-1.5 text-[10px] text-muted-foreground">already on the lead</span>
                 </div>
               ) : (
@@ -183,7 +219,7 @@ export function PaymentRowsEditor({ leadId, rows, onChange }: PaymentRowsEditorP
                       <SelectValue>{r.currency}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {PAYMENT_CURRENCIES.map((c) => (
+                      {paymentCurrencies(base).map((c) => (
                         <SelectItem key={c} value={c} className="text-xs">{currencyLabel(c)}</SelectItem>
                       ))}
                     </SelectContent>
@@ -191,8 +227,8 @@ export function PaymentRowsEditor({ leadId, rows, onChange }: PaymentRowsEditorP
                   <Input
                     type="number" min="0" step="0.01" value={r.amountInput}
                     onChange={(e) => setAmount(r, e.target.value)}
-                    placeholder={isForeign(r) ? `Amount in ${r.currency}` : "Amount"} className="h-8 min-w-0 flex-1 text-xs"
-                    aria-label={`Payment ${i + 1} amount${isForeign(r) ? ` in ${r.currency}` : ""}`}
+                    placeholder={isForeign(r, base) ? `Amount in ${r.currency}` : base === BASE_CURRENCY ? "Amount" : `Amount in ${base}`} className="h-8 min-w-0 flex-1 text-xs"
+                    aria-label={`Payment ${i + 1} amount${isForeign(r, base) ? ` in ${r.currency}` : ""}`}
                   />
                 </>
               )}
@@ -208,9 +244,9 @@ export function PaymentRowsEditor({ leadId, rows, onChange }: PaymentRowsEditorP
                 </motion.button>
               )}
             </div>
-            {/* Paid in another currency: the rate, and what it comes to in AED — the figure that counts. */}
+            {/* Paid in another currency: the rate, and what it comes to in the academy's — the figure that counts. */}
             <AnimatePresence initial={false}>
-              {isForeign(r) && (
+              {isForeign(r, base) && (
                 <motion.div
                   variants={listItemVariants}
                   initial="hidden"
@@ -223,16 +259,16 @@ export function PaymentRowsEditor({ leadId, rows, onChange }: PaymentRowsEditorP
                     type="number" min="0" step="any" value={r.rateInput}
                     onChange={(e) => setRate(r, e.target.value)}
                     placeholder="rate" className="h-7 w-24 text-xs"
-                    aria-label={`Payment ${i + 1}: 1 ${r.currency} in ${BASE_CURRENCY}`}
+                    aria-label={`Payment ${i + 1}: 1 ${r.currency} in ${base}`}
                   />
-                  <span>{BASE_CURRENCY} →</span>
+                  <span>{base} →</span>
                   <Input
                     type="number" min="0" step="0.01" value={r.convertedInput}
                     onChange={(e) => setConverted(r, e.target.value)}
-                    placeholder={`in ${BASE_CURRENCY}`} className="h-7 w-28 text-xs"
-                    aria-label={`Payment ${i + 1} in ${BASE_CURRENCY}`}
+                    placeholder={`in ${base}`} className="h-7 w-28 text-xs"
+                    aria-label={`Payment ${i + 1} in ${base}`}
                   />
-                  <span>{BASE_CURRENCY}</span>
+                  <span>{base}</span>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -279,7 +315,7 @@ export function PaymentRowsEditor({ leadId, rows, onChange }: PaymentRowsEditorP
         <motion.button
           type="button"
           whileTap={{ scale: 0.97 }}
-          onClick={() => onChange((prev) => [...prev, newPaymentRow()])}
+          onClick={() => onChange((prev) => [...prev, newPaymentRow({ currency: base })])}
           className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
         >
           <Plus className="h-3.5 w-3.5" /> Add another payment

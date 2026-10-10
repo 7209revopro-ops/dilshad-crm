@@ -31,7 +31,7 @@ function check(label: string, ok: boolean, detail = "") {
 }
 const step = (s: string) => console.log(`\n\x1b[1m${s}\x1b[0m`);
 /** What this API answers with, as far as the checks read it. */
-interface CourseOut { _id: string; name: string; amount: number; bonusAmount?: number }
+interface CourseOut { _id: string; name: string; amount: number; bonusAmount?: number; bangalore?: { price?: number } | null }
 interface LeadOut { _id: string; course?: CourseOut | null }
 interface Envelope { success?: boolean; message?: string; data?: CourseOut & CourseOut[] & LeadOut & LeadOut[] & { accessToken?: string } }
 interface Res { status: number; body: Envelope }
@@ -84,6 +84,21 @@ r = await call("GET", `/leads/${lead._id}`, undefined, admin);
 check("a lead's course carries it — where the close starts from", r.status === 200 && r.body.data?.course?.bonusAmount === 750, show(r));
 r = await call("GET", "/leads", undefined, admin);
 check("...on the leads list too", (r.body.data as LeadOut[] | undefined)?.find((l) => l._id === String(lead._id))?.course?.bonusAmount === 750, show(r));
+
+// The Bangalore price (2026-10-10) travels the same way: a close for Bangalore starts its fee from it.
+r = await call("PUT", `/courses/${c1._id}`, { bangalore: { price: 45000 } }, admin);
+check("a course is given a Bangalore price, the bonus untouched", r.status === 200 && r.body.data?.bangalore?.price === 45000 && r.body.data?.bonusAmount === 750, show(r));
+r = await call("GET", `/leads/${lead._id}`, undefined, admin);
+check("...a lead's course carries it — where a Bangalore close starts from", r.body.data?.course?.bangalore?.price === 45000, show(r));
+r = await call("GET", "/leads", undefined, admin);
+check("...on the leads list too", (r.body.data as LeadOut[] | undefined)?.find((l) => l._id === String(lead._id))?.course?.bangalore?.price === 45000, show(r));
+r = await call("GET", "/courses/all", undefined, admin);
+check("...and on the list the close picks from", (r.body.data as CourseOut[] | undefined)?.find((c) => c._id === c1._id)?.bangalore?.price === 45000, show(r));
+r = await call("PUT", `/courses/${c1._id}`, { bangalore: { price: 45000 } }, viewer);
+check("...a viewer can't set it: 403", r.status === 403, show(r));
+// This server has no FINANCE_ORG_ID_BANGALORE: the close dialog is offered no academy choice.
+const opts = await fetch(`${API}/students/close-options`, { headers: { authorization: `Bearer ${admin}` } }).then((x) => x.json()).catch(() => ({})) as { data?: { academies?: string[] } };
+check("a server without the Bangalore organization offers Dubai only", opts.data?.academies?.join(",") === "dubai", JSON.stringify(opts));
 
 // ── Case 2 ──────────────────────────────────────────────────────────────────
 step("Case 2 — edge: none given, taken off, decimals, other edits, a course from before");

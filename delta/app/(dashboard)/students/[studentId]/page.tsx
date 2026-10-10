@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { fmtFull, fmtUSD } from "@/lib/currency";
+import { fmtAcademy, fmtUSD } from "@/lib/currency";
+import { AcademyBadge } from "@/components/students/AcademyBadge";
 import { useStudent, useUpdateStudent } from "@/hooks/useStudents";
 import { useEnrolmentCorrection, uaeTime } from "@/hooks/useEnrolments";
 import { useAuthStore } from "@/lib/store/authStore";
@@ -135,6 +136,8 @@ export default function StudentDetailPage() {
                     <p className="text-sm text-muted-foreground font-mono mt-0.5">{student.enrollmentNumber}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
+                    {/* Which academy it was closed for — its money is in that academy's currency. */}
+                    <AcademyBadge academy={student.academy} className="px-3 py-1 text-xs" />
                     <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${sCfg.color}`}>{sCfg.label}</span>
                     <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${fCfg.color}`}>{fCfg.label}</span>
                     {leadObj && (
@@ -200,9 +203,9 @@ export default function StudentDetailPage() {
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-3 gap-2 text-center">
                   {[
-                    { label: "Total",   value: fmtFull(student.totalFee),    cls: "text-foreground" },
-                    { label: "Paid",    value: fmtFull(student.paidAmount),   cls: "text-green-400" },
-                    { label: "Balance", value: fmtFull(student.pendingAmount),cls: student.pendingAmount > 0 ? "text-amber-400" : "text-muted-foreground" },
+                    { label: "Total",   value: fmtAcademy(student.totalFee, student.academy),    cls: "text-foreground" },
+                    { label: "Paid",    value: fmtAcademy(student.paidAmount, student.academy),   cls: "text-green-400" },
+                    { label: "Balance", value: fmtAcademy(student.pendingAmount, student.academy),cls: student.pendingAmount > 0 ? "text-amber-400" : "text-muted-foreground" },
                   ].map(({ label, value, cls }) => (
                     <div key={label} className="rounded-lg bg-muted/30 p-2 border border-border/30">
                       <p className={cn("text-sm font-bold tabular-nums", cls)}>{value}</p>

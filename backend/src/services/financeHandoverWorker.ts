@@ -1,6 +1,7 @@
 import { FinanceHandover } from "../models/FinanceHandover.js";
 import { Student } from "../models/Student.js";
-import { financeConfigured, sendEnrolment, fetchEnrolmentStatuses } from "./financeClient.js";
+import { financeConfigured, sendEnrolment } from "./financeClient.js";
+import { fetchStatusesByOrg, orgOfHandover } from "./financeOrgs.js";
 import { sweepCommission } from "./commissionService.js";
 import { env } from "../config/env.js";
 
@@ -42,7 +43,9 @@ export async function drainFinanceHandovers(): Promise<void> {
 
   for (const row of due) {
     try {
-      const result = await sendEnrolment(row.payload);
+      // To the organization of the academy it was closed for, as written on the
+      // row at the close — Dubai's for a row from before academies.
+      const result = await sendEnrolment(row.payload, orgOfHandover(row));
       row.set({
         status: "sent",
         invoiceId: result.invoiceId,
@@ -119,7 +122,11 @@ export async function pollFinanceOutcomes(): Promise<void> {
     .limit(OUTCOME_BATCH);
   if (rows.length === 0) return;
 
-  const statuses = await fetchEnrolmentStatuses(rows.map((r) => String(r.studentId)));
+  // Each asked of the organization it was billed in (Dubai's or Bangalore's).
+  const statuses = await fetchStatusesByOrg(
+    rows.map((r) => String(r.studentId)),
+    new Map(rows.map((r) => [String(r.studentId), orgOfHandover(r)])),
+  );
   if (statuses.length === 0) return;               // finance unreachable; ask again next time
   const byId = new Map(statuses.map((st) => [st.externalId, st]));
 

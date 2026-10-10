@@ -1,8 +1,13 @@
 import { Types } from "mongoose";
 import {
+  ACADEMY_CURRENCY,
+  ACADEMY_LABELS,
   BASE_CURRENCY,
   CLOSE_CURRENCIES,
   ENROLMENT_LANGUAGES,
+  academyOf,
+  isAcademy,
+  type Academy,
   ENROLMENT_PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
   type CloseCurrency,
@@ -33,27 +38,53 @@ type PaymentInput = {
   exchangeRate?: number | string;
 } | null;
 
+/** What an academy's fees are in: AED for Dubai — this CRM's own, BASE_CURRENCY — INR for Bangalore. */
+type AcademyCurrency = (typeof ACADEMY_CURRENCY)[Academy];
+
 /**
- * A payment taken in another currency than AED (the owner, 2026-10-05): the
- * currency, the amount in it and the rate — 1 of it = `exchangeRate` AED —
- * checked against the AED amount the close converted it to. Within half a
- * percent, for rounding; a figure typed in the wrong currency is refused rather
- * than billed. Nothing for an AED payment, nor for the money already on the
- * lead, which is in AED.
+ * A payment taken in another currency than the academy's (the owner,
+ * 2026-10-05; generalised for the Bangalore academy, 2026-10-10): the
+ * currency, the amount in it and the rate — 1 of it = `exchangeRate` of the
+ * academy's currency — checked against the amount the close converted it to.
+ * Within half a percent, for rounding; a figure typed in the wrong currency is
+ * refused rather than billed.
+ *
+ *   Dubai (AED)      any of the CRM's currencies; nothing for an AED payment,
+ *                    nor for the money already on the lead, which is in AED.
+ *   Bangalore (INR)  rupees, or cash taken in AED with its rate — finance's
+ *                    `original` {AED, amount, INR per AED}. The money already
+ *                    on the lead is in AED, so on a Bangalore close it is
+ *                    always the latter: its AED and the rate it is taken at.
  */
-function foreignPart(raw: PaymentInput, aed: number, n: string): Pick<IStudentPayment, "currency" | "amountInCurrency" | "exchangeRate"> {
+function foreignPart(
+  raw: PaymentInput,
+  amount: number,
+  n: string,
+  base: AcademyCurrency = BASE_CURRENCY,
+): Pick<IStudentPayment, "currency" | "amountInCurrency" | "exchangeRate"> {
   const currency = typeof raw?.currency === "string" ? raw.currency.trim().toUpperCase() : "";
-  if (!currency || currency === BASE_CURRENCY) return {};
-  if (!CLOSE_CURRENCIES.includes(currency as CloseCurrency)) throw createError(`${n} is in a currency this CRM does not take (${currency}).`, 422);
-  if (raw?.collectedBefore) throw createError(`${n} was already on the lead in ${BASE_CURRENCY}, so it cannot be in ${currency}.`, 422);
+  if (base === BASE_CURRENCY) {
+    if (!currency || currency === BASE_CURRENCY) return {};
+    if (!CLOSE_CURRENCIES.includes(currency as CloseCurrency)) throw createError(`${n} is in a currency this CRM does not take (${currency}).`, 422);
+    if (raw?.collectedBefore) throw createError(`${n} was already on the lead in ${BASE_CURRENCY}, so it cannot be in ${currency}.`, 422);
+  } else if (raw?.collectedBefore) {
+    if (currency !== BASE_CURRENCY) {
+      throw createError(`${n} was already on the lead in ${BASE_CURRENCY} — give it in ${BASE_CURRENCY} with its rate: 1 ${BASE_CURRENCY} = how many ${base}.`, 422);
+    }
+  } else {
+    if (!currency || currency === base) return {};
+    if (currency !== BASE_CURRENCY) {
+      throw createError(`${n} is in ${currency}: a Bangalore close takes ${base}, or cash in ${BASE_CURRENCY} with its rate to ${base}.`, 422);
+    }
+  }
   const inCurrency = Number(raw?.amountInCurrency);
   if (!Number.isFinite(inCurrency) || inCurrency <= 0) throw createError(`${n} needs the amount paid in ${currency}.`, 422);
   const rate = Number(raw?.exchangeRate);
-  if (!Number.isFinite(rate) || rate <= 0) throw createError(`${n} needs its rate: 1 ${currency} = how many ${BASE_CURRENCY}.`, 422);
+  if (!Number.isFinite(rate) || rate <= 0) throw createError(`${n} needs its rate: 1 ${currency} = how many ${base}.`, 422);
   const expected = Math.round(inCurrency * rate * 100);
-  if (Math.abs(minor(aed) - expected) > Math.max(1, Math.round(expected * 0.005))) {
+  if (Math.abs(minor(amount) - expected) > Math.max(1, Math.round(expected * 0.005))) {
     throw createError(
-      `${n}: ${money(inCurrency)} ${currency} at 1 ${currency} = ${rate} ${BASE_CURRENCY} comes to ${money(expected / 100)} ${BASE_CURRENCY}, not ${money(aed)}.`,
+      `${n}: ${money(inCurrency)} ${currency} at 1 ${currency} = ${rate} ${base} comes to ${money(expected / 100)} ${base}, not ${money(amount)}.`,
       422,
     );
   }
@@ -67,7 +98,7 @@ function foreignPart(raw: PaymentInput, aed: number, n: string): Pick<IStudentPa
  * exactly what was paid. Null when the close sent none — an older screen, with
  * one method, one receipt and the total.
  */
-function checkedPayments(list: unknown, paidAmount: number, enrolledOn: Date): IStudentPayment[] | null {
+function checkedPayments(list: unknown, paidAmount: number, enrolledOn: Date, base: AcademyCurrency = BASE_CURRENCY): IStudentPayment[] | null {
   if (list === undefined || list === null) return null;
   if (!Array.isArray(list) || list.length === 0 || list.length > 10) throw createError("A closing takes between one and ten payments.", 422);
   const payments = (list as PaymentInput[]).map((raw, i) => {
@@ -90,7 +121,7 @@ function checkedPayments(list: unknown, paidAmount: number, enrolledOn: Date): I
       },
       paidAt: Number.isNaN(paidAt.getTime()) ? enrolledOn : paidAt,
       ...(raw.collectedBefore ? { collectedBefore: true } : {}),
-      ...foreignPart(raw, amount, n),
+      ...foreignPart(raw, amount, n, base),
     };
   });
   const sum = payments.reduce((s, p) => s + minor(p.amount), 0);
@@ -123,12 +154,36 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 const fromTheClose = (note?: string | null) => /^Collected at enrolment\b/.test(note ?? "");
 
-/** " · INR 50,000 at 1 INR = 0.044 AED" for a payment in another currency, as the close writes it on the lead; "" for AED. */
-function foreignNote(p: IStudentPayment): string {
-  if (!p.currency || p.currency === BASE_CURRENCY || !p.amountInCurrency || !p.exchangeRate) return "";
+/**
+ * " · INR 50,000 at 1 INR = 0.044 AED" for a payment in another currency than
+ * the academy's (`base`), as the close writes it on the lead; "" otherwise.
+ */
+function foreignNote(p: IStudentPayment, base: AcademyCurrency = BASE_CURRENCY): string {
+  if (!p.currency || p.currency === base || !p.amountInCurrency || !p.exchangeRate) return "";
   const paid = p.amountInCurrency.toLocaleString("en-US", { maximumFractionDigits: 2 });
   const rate = Number(p.exchangeRate.toPrecision(6)).toLocaleString("en-US", { maximumFractionDigits: 10 });
-  return ` · ${p.currency} ${paid} at 1 ${p.currency} = ${rate} ${BASE_CURRENCY}`;
+  return ` · ${p.currency} ${paid} at 1 ${p.currency} = ${rate} ${base}`;
+}
+
+/**
+ * What of a close goes on the lead's own payment list, as the dialog writes
+ * it there — the list is in AED, this CRM's currency, and is what its revenue
+ * figures add up. A Dubai close: every payment taken, in AED. A Bangalore
+ * close (2026-10-10): only what was handed over in AED, at its AED amount;
+ * a payment in rupees stays on the enrolment alone, since adding INR to an
+ * AED list would count it some twenty times over.
+ */
+function leadPaymentOf(p: IStudentPayment, academy: Academy, courseName: string): { amount: number; note: string } | null {
+  const method = PAYMENT_METHOD_LABELS[p.method] ?? p.method;
+  if (academy === "dubai") {
+    // In AED; one paid in another currency says what was handed over, as the close's note does.
+    return { amount: p.amount, note: `Collected at enrolment — ${courseName} · ${method}${foreignNote(p)}` };
+  }
+  if (p.currency !== BASE_CURRENCY || !p.amountInCurrency) return null;
+  return {
+    amount: p.amountInCurrency,
+    note: `Collected at enrolment — ${courseName} · ${method} · ${ACADEMY_LABELS[academy]}${foreignNote(p, ACADEMY_CURRENCY[academy])}`,
+  };
 }
 
 /** Everything a close took, sent again as a correction once finance has sent the enrolment back. */
@@ -148,6 +203,8 @@ export interface EnrolmentCorrection {
   payments?: unknown;
   hasBonus?: boolean;
   bonusAmount?: number | string;
+  /** Fixed at the close: only accepted when it is the academy the enrolment already has. */
+  academy?: string;
 }
 
 // Auto-generate enrollment number: STU-0001, STU-0002, ...
@@ -190,15 +247,23 @@ export class StudentService {
     payments?: unknown;
     hasBonus?: boolean;
     bonusAmount?: number;
+    /** Which academy it is closed for: "dubai" (the default) or "bangalore". */
+    academy?: string | null;
   }) {
     const existing = await Student.findOne({ leadId: data.leadId });
     if (existing) throw createError("A student already exists for this lead", 409);
+
+    // Dubai unless the close says Bangalore (an older screen says nothing).
+    const academy = data.academy === undefined || data.academy === null || data.academy === "" ? "dubai" : data.academy;
+    if (!isAcademy(academy)) throw createError(`"${String(data.academy)}" isn't an academy — choose Dubai or Bangalore.`, 422);
+    if (academy === "bangalore") await this.assertBangaloreClose(data.course);
 
     const totalFee   = data.totalFee   ?? 0;
     const paidAmount = data.paidAmount ?? 0;
     const enrolledOn = data.enrollmentDate ? new Date(data.enrollmentDate) : new Date();
     // One payment or several; the first is also the one method and receipt.
-    const payments = checkedPayments(data.payments, paidAmount, enrolledOn);
+    // In the academy's currency: AED for Dubai, INR for Bangalore.
+    const payments = checkedPayments(data.payments, paidAmount, enrolledOn, ACADEMY_CURRENCY[academy]);
     const paymentMethod = payments?.[0]?.method ?? data.paymentMethod;
     const paymentReceipt = payments?.[0]?.receipt ?? data.paymentReceipt;
 
@@ -252,6 +317,7 @@ export class StudentService {
       totalFee,
       paidAmount,
       pendingAmount: Math.max(0, totalFee - paidAmount),
+      academy,
       notes: data.notes,
       language: data.language,
       paymentMethod,
@@ -269,6 +335,40 @@ export class StudentService {
     await this.queueFinanceHandover(String(student._id), data.leadId);
 
     return this.populateStudent(String(student._id));
+  }
+
+  /**
+   * What a close for the Bangalore academy needs before it can be made
+   * (2026-10-10): the course, with its Bangalore price — the fee is in INR and
+   * there is no Dubai figure to fall back on — and the Bangalore finance
+   * organization to bill it in (FINANCE_ORG_ID_BANGALORE), even while finance
+   * is switched off: this server offers Bangalore only once it is set
+   * (academiesOffered). Refused otherwise, rather than sent into Dubai's
+   * organization or billed at a guess.
+   */
+  private async assertBangaloreClose(courseId: unknown): Promise<void> {
+    const { academiesOffered } = await import("./financeClient.js");
+    if (!academiesOffered().includes("bangalore")) {
+      throw createError(
+        "Bangalore closes can't reach finance yet — the Bangalore finance organization isn't set up on this server. Close it for Dubai, or ask an admin to set FINANCE_ORG_ID_BANGALORE.",
+        422,
+      );
+    }
+    if (typeof courseId !== "string" || !Types.ObjectId.isValid(courseId)) {
+      throw createError("A Bangalore close needs its course — the fee is the course's Bangalore price.", 422);
+    }
+    const { Course } = await import("../models/Course.js");
+    const course = await Course.findById(courseId).select("name bangalore").lean();
+    if (!course) throw createError("That course no longer exists — choose another.", 422);
+    if (!this.hasBangalorePrice(course)) {
+      throw createError(`${course.name} has no Bangalore price yet — set it on Courses → Map, then close it for Bangalore.`, 422);
+    }
+  }
+
+  /** Whether a course can be closed for Bangalore: it has a price there, in INR, above zero. */
+  private hasBangalorePrice(course: { bangalore?: { price?: number | null } | null } | null): boolean {
+    const price = course?.bangalore?.price;
+    return typeof price === "number" && Number.isFinite(price) && price > 0;
   }
 
   /**
@@ -304,7 +404,21 @@ export class StudentService {
     // Every LMS course it opens — the list where it was mapped as one (two for a
     // bundle), the single slug from before otherwise.
     const listed = (course?.lmsCourseSlugs ?? []).map((s) => s.trim()).filter(Boolean);
-    const lms = listed.length ? listed : course?.lmsCourseSlug?.trim() ? [course.lmsCourseSlug.trim()] : [];
+    const dubaiLms = listed.length ? listed : course?.lmsCourseSlug?.trim() ? [course.lmsCourseSlug.trim()] : [];
+
+    /*
+     * The academy it was closed for (2026-10-10). Bangalore bills in its own
+     * finance organization, in INR: the course's Bangalore item — the Dubai
+     * one is in another catalogue — and its Bangalore LMS courses, Dubai's
+     * where none were set (the Forex courses are shared). The fee and the
+     * payments are already in INR on the student; ×100 makes them paise.
+     */
+    const academy = academyOf(student);
+    const base = ACADEMY_CURRENCY[academy];
+    const bangalore = academy === "bangalore" ? course?.bangalore ?? null : null;
+    const bangaloreLms = (bangalore?.lmsCourseSlugs ?? []).map((s) => s.trim()).filter(Boolean);
+    const lms = academy === "bangalore" && bangaloreLms.length ? bangaloreLms : dubaiLms;
+    const itemId = academy === "bangalore" ? bangalore?.financeItemId : course?.financeItemId;
 
     return {
       externalId: String(student._id),
@@ -315,6 +429,9 @@ export class StudentService {
       // so it cannot change for enrolments already sent. Keep "remote" here
       // when code is copied across from Delta's CRM.
       crm: "remote",
+      // Dubai or Bangalore — always said, so finance, the LMS and Tetra
+      // Commission never have to guess it from which organization this came in.
+      academy,
       customer: {
         name: student.name,
         email: student.email ?? "",
@@ -322,7 +439,7 @@ export class StudentService {
       },
       course: {
         name: course?.name ?? "Course",
-        ...(course?.financeItemId ? { itemId: course.financeItemId } : {}),
+        ...(itemId ? { itemId } : {}),
         // The code this course is billed under, where somebody has set one.
         ...(course?.hsnSac?.trim() ? { hsnSac: course.hsnSac.trim() } : {}),
         // Which course(s) this is in the LMS, for finance to fall back on when
@@ -394,10 +511,12 @@ export class StudentService {
                     },
                   }
                 : {}),
-              // Paid in another currency: amountMinor above is the AED it was
-              // converted to (what finance records); this is what was handed
-              // over, and the rate — finance's `original`, 1 of it = rate AED.
-              ...(p.currency && p.currency !== BASE_CURRENCY && p.amountInCurrency && p.exchangeRate
+              // Paid in another currency: amountMinor above is what it was
+              // converted to in the academy's currency (what finance records);
+              // this is what was handed over, and the rate — finance's
+              // `original`, 1 of it = rate AED (Dubai) or INR (Bangalore: cash
+              // taken in AED, rate INR per AED).
+              ...(p.currency && p.currency !== base && p.amountInCurrency && p.exchangeRate
                 ? { original: { currency: p.currency, amountMinor: Math.round(p.amountInCurrency * 100), rate: p.exchangeRate } }
                 : {}),
             })),
@@ -414,8 +533,13 @@ export class StudentService {
       const { FinanceHandover } = await import("../models/FinanceHandover.js");
       const { Student } = await import("../models/Student.js");
 
-      const student = await Student.findById(studentId).select("_id").lean();
+      const student = await Student.findById(studentId).select("_id academy").lean();
       if (!student) return;
+      // The academy, and so the finance organization, fixed with the row — every
+      // later call about this enrolment goes there (financeOrgs.orgOfHandover).
+      const { financeOrgOf } = await import("./financeClient.js");
+      const academy = academyOf(student);
+      const financeOrgId = financeOrgOf(academy);
 
       /*
        * A snapshot, not a reference.
@@ -435,6 +559,8 @@ export class StudentService {
             studentId: student._id,
             leadId,
             payload,
+            academy,
+            ...(financeOrgId ? { financeOrgId } : {}),
             status: "pending",
             nextAttemptAt: new Date(),
           },
@@ -501,7 +627,7 @@ export class StudentService {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate("course",     "name amount")
+        .populate("course",     "name amount bangalore")
         .populate("team",       "name")
         .populate("assignedTo", "name email designation")
         .populate("leadId",     "name phone status")
@@ -528,7 +654,7 @@ export class StudentService {
 
   async getStudentByLeadId(leadId: string) {
     return Student.findOne({ leadId })
-      .populate("course",     "name amount")
+      .populate("course",     "name amount bangalore")
       .populate("team",       "name")
       .populate("assignedTo", "name email designation")
       .lean();
@@ -598,7 +724,7 @@ export class StudentService {
 
   private populateStudent(id: string) {
     return Student.findById(id)
-      .populate("course",     "name amount")
+      .populate("course",     "name amount bangalore")
       .populate("team",       "name")
       .populate("assignedTo", "name email designation")
       .populate("leadId",     "name phone status")
@@ -760,7 +886,7 @@ export class StudentService {
     limit?: string;
   }) {
     const { FinanceHandover } = await import("../models/FinanceHandover.js");
-    const { fetchEnrolmentStatuses } = await import("./financeClient.js");
+    const { fetchStatusesByOrg, orgOfHandover } = await import("./financeOrgs.js");
 
     const page  = Math.max(1, parseInt(filters.page ?? "1", 10));
     const limit = Math.min(100, parseInt(filters.limit ?? "20", 10));
@@ -796,7 +922,7 @@ export class StudentService {
         .sort({ enrollmentDate: -1, createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
-        .populate("course", "name amount")
+        .populate("course", "name amount bangalore")
         .populate("assignedTo", "name email")
         .populate("leadId", "name phone status")
         .lean(),
@@ -805,12 +931,16 @@ export class StudentService {
 
     const ids = students.map((s) => String(s._id));
     const handovers = await FinanceHandover.find({ studentId: { $in: ids } })
-      .select("studentId status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt resentAt resends")
+      .select("studentId status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt resentAt resends academy financeOrgId")
       .lean();
     const byStudent = new Map(handovers.map((h) => [String(h.studentId), h]));
 
     const { stepsOf } = await import("./enrolmentSteps.js");
-    const statuses = await fetchEnrolmentStatuses(ids);
+    // Each asked of the finance organization of its academy — Dubai's or Bangalore's.
+    const statuses = await fetchStatusesByOrg(
+      ids,
+      new Map(students.map((s) => [String(s._id), orgOfHandover(byStudent.get(String(s._id)), s.academy)])),
+    );
     const byExternal = new Map(statuses.map((s) => [s.externalId, s]));
 
     const rows = students.map((s) => {
@@ -878,12 +1008,13 @@ export class StudentService {
     const { FinanceHandover } = await import("../models/FinanceHandover.js");
     const { CommissionSale } = await import("../models/CommissionSale.js");
     const { fetchEnrolmentStatuses } = await import("./financeClient.js");
+    const { orgOfHandover } = await import("./financeOrgs.js");
     const { stepsOf } = await import("./enrolmentSteps.js");
     const { isSuperAdmin, loadConfig } = await import("./commissionService.js");
 
     if (!Types.ObjectId.isValid(id)) throw createError("Enrolment not found", 404);
     const student = await Student.findById(id)
-      .populate("course", "name amount")
+      .populate("course", "name amount bangalore")
       .populate("assignedTo", "name email")
       .populate("team", "name")
       .lean();
@@ -895,9 +1026,10 @@ export class StudentService {
     if (closer !== viewer.userId && !all) throw createError("This enrolment isn't yours", 403);
 
     const h = await FinanceHandover.findOne({ studentId: student._id })
-      .select("status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt resentAt resends")
+      .select("status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt resentAt resends academy financeOrgId")
       .lean();
-    const [st] = await fetchEnrolmentStatuses([id]);
+    // Asked of the organization of the academy it was closed for.
+    const [st] = await fetchEnrolmentStatuses([id], orgOfHandover(h, student.academy));
     const sale = await CommissionSale.findOne({ student: student._id }).lean();
     const config = sale ? await loadConfig() : null;
     const everything = isSuperAdmin(viewer.role as never) || (config?.salesManager ? String(config.salesManager) === viewer.userId : false);
@@ -992,14 +1124,16 @@ export class StudentService {
    */
   private async sendBackOf(
     studentId: string,
-    h: { status?: string; approvalState?: string; returnedReason?: string } | null,
+    h: { status?: string; approvalState?: string; returnedReason?: string; academy?: string | null; financeOrgId?: string | null } | null,
   ): Promise<{ sentBack: boolean; reason: string }> {
     if (h?.status !== "sent") return { sentBack: false, reason: "" };
     if (h.approvalState === "returned") return { sentBack: true, reason: h.returnedReason ?? "" };
     // Decided already: an approved enrolment is not sent back, so finance isn't asked.
     if (h.approvalState === "approved" || h.approvalState === "not_required") return { sentBack: false, reason: "" };
     const { fetchEnrolmentStatuses } = await import("./financeClient.js");
-    const [st] = await fetchEnrolmentStatuses([studentId]);
+    const { orgOfHandover } = await import("./financeOrgs.js");
+    // Of the organization it went to — Bangalore's for a Bangalore close.
+    const [st] = await fetchEnrolmentStatuses([studentId], orgOfHandover(h));
     return st?.approval === "returned" ? { sentBack: true, reason: st.returnedReason ?? "" } : { sentBack: false, reason: "" };
   }
 
@@ -1101,6 +1235,9 @@ export class StudentService {
       resentAt: h?.resentAt ?? null,
       resends: h?.resends ?? 0,
       mayMove,
+      // Fixed at the close, shown read only: the form's money is in its currency.
+      academy: academyOf(student),
+      // In AED, the lead's own currency — on a Bangalore correction, given with its rate to INR.
       ownOnLead: (await this.ownOnLead(student.leadId)) / 100,
       ...options,
       student: await this.populateStudent(id),
@@ -1162,8 +1299,19 @@ export class StudentService {
     else if (data.hasBonus && !isBonusAmount(data.bonusAmount)) missing.push("the bonus amount");
     if (missing.length) throw createError(`A correction needs ${missing.join(", ")}.`, 422);
 
-    const course = await Course.findById(data.course).select("name").lean();
+    // The academy is the close's, and stays (the user, 2026-10-10): the money
+    // below is in its currency, and finance is asked in its organization.
+    const academy = academyOf(student);
+    const base = ACADEMY_CURRENCY[academy];
+    if (data.academy !== undefined && data.academy !== null && data.academy !== "" && data.academy !== academy) {
+      throw createError(`The academy is fixed at the close — this enrolment is for ${ACADEMY_LABELS[academy]}, and a correction can't move it.`, 422);
+    }
+
+    const course = await Course.findById(data.course).select("name bangalore").lean();
     if (!course) throw createError("That course no longer exists — choose another.", 422);
+    if (academy === "bangalore" && !this.hasBangalorePrice(course)) {
+      throw createError(`${course.name} has no Bangalore price — choose a course sold in Bangalore, or set its price on Courses → Map.`, 422);
+    }
 
     // Who closed it, and for which team: kept unless somebody who may edit
     // students moves it.
@@ -1180,7 +1328,7 @@ export class StudentService {
       }
     }
 
-    const payments = checkedPayments(data.payments, paidAmount, enrolledOn!);
+    const payments = checkedPayments(data.payments, paidAmount, enrolledOn!, base);
     if (!payments) throw createError("A correction needs its payments, each with its method, amount and receipt.", 422);
 
     /*
@@ -1192,16 +1340,20 @@ export class StudentService {
      */
     const own = await this.ownOnLead(student.leadId);
     const ownRows = payments.filter((p) => p.collectedBefore);
+    // The lead's own money is in AED; on a Bangalore correction its row is in
+    // INR, with the AED it came from beside it — that is what is compared.
+    const ownAed = (p: IStudentPayment) => (academy === "bangalore" ? p.amountInCurrency ?? 0 : p.amount);
+    const inAed = academy === "bangalore" ? ` ${BASE_CURRENCY}` : "";
     if (ownRows.length > 1) throw createError("Only one payment can be the money already on the lead.", 422);
     if (own > 0 && !ownRows.length) {
       throw createError(
-        `This lead already holds ${money(own / 100)} of its own — it stays as a payment of its own, with its method and receipt.`,
+        `This lead already holds ${money(own / 100)}${inAed} of its own — it stays as a payment of its own, with its method and receipt.`,
         422,
       );
     }
-    if (ownRows.length && minor(ownRows[0]!.amount) !== own) {
+    if (ownRows.length && minor(ownAed(ownRows[0]!)) !== own) {
       throw createError(
-        `The lead's own payments come to ${money(own / 100)} now, not ${money(ownRows[0]!.amount)} — they changed while this was open. Close the correction and open it again.`,
+        `The lead's own payments come to ${money(own / 100)}${inAed} now, not ${money(ownAed(ownRows[0]!))}${inAed} — they changed while this was open. Close the correction and open it again.`,
         409,
       );
     }
@@ -1240,13 +1392,12 @@ export class StudentService {
       const lead = await Lead.findById(student.leadId).select("payments").lean();
       if (lead) {
         const kept = (lead.payments ?? []).filter((p) => !fromTheClose(p.note));
-        const taken = payments.filter((p) => !p.collectedBefore).map((p) => ({
-          // In AED; one paid in another currency says what was handed over, as the close's note does.
-          amount: p.amount,
-          note: `Collected at enrolment — ${course.name} · ${PAYMENT_METHOD_LABELS[p.method] ?? p.method}${foreignNote(p)}`,
-          paidAt: p.paidAt,
-          addedBy: new Types.ObjectId(viewer.userId),
-        }));
+        // As the close writes them: every payment for Dubai, in AED; for
+        // Bangalore only what was handed over in AED (leadPaymentOf).
+        const taken = payments.filter((p) => !p.collectedBefore).flatMap((p) => {
+          const onLead = leadPaymentOf(p, academy, course.name);
+          return onLead ? [{ ...onLead, paidAt: p.paidAt, addedBy: new Types.ObjectId(viewer.userId) }] : [];
+        });
         await Lead.updateOne({ _id: lead._id }, { $set: { payments: [...kept, ...taken] } });
       }
     } catch (err) {

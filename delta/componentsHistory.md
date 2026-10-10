@@ -1198,3 +1198,11 @@ A new close starts "Bonus given?" at yes with the course's bonus, marked "From t
 
 ### Change log — 2026-10-06 (Mentors and Commission for every role)
 - `app/(dashboard)/layout.tsx` — `OPEN_TO_EVERYONE` (profile, calendar, Mentors, Commission): every role may open these. The guard read the address as a permission, and there is no "mentors" or "commission" one, so everyone but the Super Admin was sent away though the sidebar listed both. The server already narrows Commission to each person's own.
+
+### Change log — 2026-10-10 (academy at the close)
+- `AcademyBadge` (new) — Dubai / Bangalore pill.
+- `PaymentRowsEditor` — `base` prop ("AED" | "INR"); helpers take `base` (`isForeign`, `rowAmount`, `rowForeignFields`, `describeForeign`, `missingInRows`); new `leadAmountOf`, `rowsForBase`. On INR: currencies INR / AED, the lead's own row is AED with its rate.
+- `CreateStudentModal` — academy selector, shown only when `useCloseOptions` (GET /students/close-options) lists Bangalore; fee/labels follow it; Bangalore without a price blocked; sends `academy`.
+- `CorrectEnrolmentDialog` — academy read-only; money in its currency; course without a Bangalore price flagged.
+- `MapCourseDialog` — Bangalore section (price, Bangalore finance product, LMS courses or Dubai's).
+- `lib/currency.fmtAcademy`, `types/course.bangalorePriceOf` / `feeFor`, `types/student` `ACADEMIES` / `academyOf`.

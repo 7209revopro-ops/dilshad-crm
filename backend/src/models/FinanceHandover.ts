@@ -1,4 +1,5 @@
 import mongoose, { Schema } from "mongoose";
+import { ACADEMIES } from "../types/index.js";
 
 /**
  * An enrolment waiting to reach Delta Finance.
@@ -26,6 +27,17 @@ const financeHandoverSchema = new Schema(
 
     /** The payload as it was when the sale happened, not as the data looks now. */
     payload: { type: Schema.Types.Mixed, required: true },
+
+    /*
+     * Which academy it was closed for, and the finance organization that means
+     * (2026-10-10) — written when it is queued, and never changed after. Every
+     * later call about it (the delivery and its retries, a resend, a
+     * correction, the decision poll, its status) goes to this organization,
+     * so changing the default one later never moves an enrolment already
+     * billed. A row from before has neither, and is Dubai's (FINANCE_ORG_ID).
+     */
+    academy: { type: String, enum: ACADEMIES },
+    financeOrgId: { type: String },
 
     attempts: { type: Number, default: 0 },
     /** Not before this time. Backed off after each failure. */

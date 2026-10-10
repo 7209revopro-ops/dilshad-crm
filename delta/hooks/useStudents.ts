@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/axios";
 import { toast } from "@/lib/toast";
 import type { ApiResponse } from "@/types";
-import type { Student, StudentFilters, CreateStudentInput, StoredReceipt } from "@/types/student";
+import type { Academy, Student, StudentFilters, CreateStudentInput, StoredReceipt } from "@/types/student";
 
 const KEY = ["students"] as const;
 
@@ -41,6 +41,27 @@ export const useStudentByLeadId = (leadId: string) =>
       return res.data.data ?? null;
     },
     enabled: !!leadId,
+  });
+
+/**
+ * The academies this server can close for (2026-10-10). Bangalore is listed
+ * only once the server can bill it; an older API answers nothing useful, and
+ * that reads as Dubai only — so the close dialog never offers Bangalore where
+ * it would be closed as Dubai with rupee figures.
+ */
+export const useCloseOptions = () =>
+  useQuery({
+    queryKey: [...KEY, "close-options"],
+    queryFn: async (): Promise<{ academies: Academy[] }> => {
+      try {
+        const res = await api.get<ApiResponse<{ academies?: Academy[] }>>("/students/close-options");
+        const listed = res.data.data?.academies;
+        return { academies: Array.isArray(listed) && listed.length ? listed : ["dubai"] };
+      } catch {
+        return { academies: ["dubai"] };
+      }
+    },
+    staleTime: 5 * 60_000,
   });
 
 export const useCreateStudent = () => {

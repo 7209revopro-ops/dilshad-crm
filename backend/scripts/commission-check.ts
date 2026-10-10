@@ -14,7 +14,9 @@
  *     holds the sale until fixed; shared logins earn nothing;
  *   - a voided invoice reverses the sale; the month is the sale's, in UAE time;
  *   - who sees what, the preview the closing dialog shows, and the API's
- *     refusals.
+ *     refusals;
+ *   - a Bangalore close (2026-10-10): its status asked of Bangalore's finance
+ *     organization, never Dubai's, and counted on the same plan.
  *
  * Run by commission-check.sh. Scratch database only.
  */
@@ -37,6 +39,11 @@ const section = (s: string) => console.log(`\n${s}`);
 // ── A stand-in for finance's enrolment status call ──────────────────────────
 type Answer = { approval: string; status: string; invoiceNumber: string; lms?: unknown; commission?: unknown };
 const finance = new Map<string, Answer>();
+// Like finance, each enrolment lives in one organization, and a status call
+// (x-delta-org) is answered only for that organization's own.
+const DUBAI_ORG = "000000000000000000000001", BLR_ORG = "000000000000000000000002";
+const orgOfSale = new Map<string, string>();
+const statusCalls: { org: string; ids: string[] }[] = [];
 let financeDown = false;
 const fake = Bun.serve({
   port: 0,
@@ -45,7 +52,9 @@ const fake = Bun.serve({
     if (req.method === "POST" && url.pathname === "/api/v1/integrations/enrolments/status") {
       const body = (await req.json()) as { externalIds: string[] };
       if (financeDown) return new Response("down", { status: 503 });
-      const data = body.externalIds.filter((id) => finance.has(id)).map((id) => {
+      const org = req.headers.get("x-delta-org") ?? "";
+      statusCalls.push({ org, ids: body.externalIds });
+      const data = body.externalIds.filter((id) => finance.has(id) && (orgOfSale.get(id) ?? DUBAI_ORG) === org).map((id) => {
         const a = finance.get(id)!;
         return {
           externalId: id, invoiceId: `inv-${id}`, invoiceNumber: a.invoiceNumber, status: a.status,
@@ -72,7 +81,8 @@ Object.assign(process.env, {
   FINANCE_API_URL: `http://127.0.0.1:${fake.port}`,
   FINANCE_CLIENT_ID: "commission-check",
   FINANCE_INTEGRATION_SECRET: "commission-check-secret",
-  FINANCE_ORG_ID: "000000000000000000000001",
+  FINANCE_ORG_ID: DUBAI_ORG,
+  FINANCE_ORG_ID_BANGALORE: BLR_ORG,
 });
 
 const mongoose = (await import("mongoose")).default;
@@ -138,17 +148,19 @@ await CommissionSettings.create({ key: "default", salesManager: people.Abrar, ex
 
 // ── Sales ───────────────────────────────────────────────────────────────────
 let n = 0;
-async function sale(closer: string | null, course: Types.ObjectId | null, teamName: string | null, opts: { date?: string; approval?: string } = {}) {
+async function sale(closer: string | null, course: Types.ObjectId | null, teamName: string | null, opts: { date?: string; approval?: string; academy?: "dubai" | "bangalore" } = {}) {
   const _id = new Types.ObjectId();
   n++;
   await db.collection("students").insertOne({
     _id, name: `Student ${n}`, enrollmentNumber: `EN-${n}`, leadId: new Types.ObjectId(),
     course, team: teamName ? teams[teamName] : null, assignedTo: closer ? people[closer] : null,
     enrollmentDate: new Date(opts.date ?? "2026-10-10T08:00:00Z"), createdAt: new Date(), status: "active",
+    ...(opts.academy ? { academy: opts.academy } : {}),
   });
   await db.collection("financehandovers").insertOne({
     studentId: _id, status: "sent", payload: {}, approvalState: opts.approval ?? "pending",
     invoiceNumber: `INV-${n}`, attempts: 0, nextAttemptAt: new Date(), flags: [],
+    ...(opts.academy === "bangalore" ? { academy: "bangalore", financeOrgId: BLR_ORG } : opts.academy ? { academy: "dubai", financeOrgId: DUBAI_ORG } : {}),
   });
   return String(_id);
 }
@@ -452,6 +464,30 @@ r = await call("GET", `/students/enrolments/${journey}`);
 check("…no token: 401", r.status === 401);
 r = await call("GET", "/commission/plan", "Gone");
 check("an inactive user is refused: 403", r.status === 403, `${r.status}`);
+
+section("A Bangalore close: asked of Bangalore's finance organization, counted on the same plan");
+const blrSale = await sale("Theertha", c1._id, "TEAM TITAN", { academy: "bangalore" });
+orgOfSale.set(blrSale, BLR_ORG);
+complete(blrSale);
+statusCalls.length = 0;
+await sweep();
+s = await saleOf(blrSale);
+check("counted once its steps are done, with the plan's amounts as any other sale",
+  s?.state === "counted" && who(s, "sales") === "Theertha:230" && who(s, "sm") === "Abrar:85", `${s?.state} ${JSON.stringify(s?.lines)}`);
+check("…its status asked of Bangalore's organization, and never of Dubai's",
+  statusCalls.some((c) => c.org === BLR_ORG && c.ids.includes(blrSale)) && !statusCalls.some((c) => c.org === DUBAI_ORG && c.ids.includes(blrSale)),
+  JSON.stringify(statusCalls.map((c) => ({ org: c.org.slice(-1), n: c.ids.length, blr: c.ids.includes(blrSale) }))));
+statusCalls.length = 0;
+at(blrSale, { status: "void" });
+await reverseVoidedSales();
+s = await saleOf(blrSale);
+check("a void in Bangalore's organization reverses it — the void sweep asks there too",
+  s?.state === "reversed" && statusCalls.some((c) => c.org === BLR_ORG && c.ids.includes(blrSale)) && !statusCalls.some((c) => c.org === DUBAI_ORG && c.ids.includes(blrSale)),
+  `${s?.state} ${JSON.stringify(statusCalls.map((c) => ({ org: c.org.slice(-1), blr: c.ids.includes(blrSale) })))}`);
+const strayDubai = await sale("Theertha", c1._id, "TEAM TITAN", { academy: "bangalore" });
+complete(strayDubai);                                   // finance has it — but in Dubai's organization
+await sweep();
+check("an answer only Dubai's organization would give is never taken for a Bangalore close", (await saleOf(strayDubai))?.state !== "counted", (await saleOf(strayDubai))?.state);
 
 server.close();
 fake.stop(true);
