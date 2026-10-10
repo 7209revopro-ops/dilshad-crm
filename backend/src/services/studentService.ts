@@ -1,4 +1,5 @@
 import { Types } from "mongoose";
+import { z } from "zod";
 import {
   ACADEMY_CURRENCY,
   ACADEMY_LABELS,
@@ -144,8 +145,72 @@ function isBonusAmount(v: unknown): boolean {
   return v !== null && v !== "" && Number.isFinite(n) && n > 0;
 }
 
-/** The shape finance accepts for the client's email — it refuses an enrolment without one. */
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/*
+ * The client's email, checked as finance checks it (2026-10-10).
+ *
+ * Finance's intake refuses an enrolment whose `customer.email` fails its
+ * `z.string().email()` (zod 3 there). Zod 4's `z.email()` here is the same
+ * pattern (`z.regexes.email`) — so an address that only looks like one, such
+ * as `a@b.c`, is refused at the close and at a correction rather than saved
+ * here and then refused by finance, out of sight. Checked as given: finance
+ * trims nothing.
+ */
+const financeEmail = z.email();
+const isFinanceEmail = (v: unknown): boolean => typeof v === "string" && financeEmail.safeParse(v).success;
+/** The same pattern, for a database filter. */
+const FINANCE_EMAIL_RE = z.regexes.email;
+
+/** What finance answers when its intake refuses the enrolment's shape — an empty client email, say. */
+const FINANCE_REFUSED_RE = /request validation failed/i;
+
+type HandoverForEmail = { status?: string | null; lastError?: string | null; payload?: unknown } | null | undefined;
+
+/** The client's email as it went — or is about to go — to finance, exactly: the one in the queued payload. */
+function payloadEmail(h: HandoverForEmail): string {
+  const customer = (h?.payload as { customer?: { email?: unknown } } | null | undefined)?.customer;
+  return typeof customer?.email === "string" ? customer.email : "";
+}
+
+/**
+ * A close finance refused because the client's email was missing or not one
+ * (2026-10-10): not delivered, refused by finance's intake check, and the
+ * email it was sent no email. The screens offer "Add the client's email and
+ * send again" for exactly these — not for one held up by anything else.
+ */
+function refusedForEmail(h: HandoverForEmail): boolean {
+  if (!h || h.status === "sent") return false;
+  return FINANCE_REFUSED_RE.test(h.lastError ?? "") && !isFinanceEmail(payloadEmail(h));
+}
+
+/**
+ * Whether the client's email can be added to this queued close and sent
+ * again: one finance refused for it (above), or one still waiting to go with
+ * no email in it — finance would refuse that the moment it got there. Never
+ * one finance already has, nor one failed for some other reason.
+ */
+function emailCanBeAdded(h: HandoverForEmail): boolean {
+  if (!h || h.status === "sent" || isFinanceEmail(payloadEmail(h))) return false;
+  return h.status === "pending" || refusedForEmail(h);
+}
+
+/**
+ * What the "add the client's email" field starts from (2026-10-10): the
+ * enrolment's email if finance would take it, else the lead's — people add it
+ * to the lead by hand — else nothing. Only ever a suggestion: nothing is sent
+ * until somebody presses the button.
+ */
+function suggestedEmailOf(studentEmail: unknown, leadEmail: unknown): string {
+  for (const v of [studentEmail, leadEmail]) {
+    const e = typeof v === "string" ? v.trim().toLowerCase() : "";
+    if (isFinanceEmail(e)) return e;
+  }
+  return "";
+}
+
+/** Why the finance step failed, as the steps say it: in words for a missing email, finance's own otherwise. */
+function stepError(h: HandoverForEmail): string | null | undefined {
+  return refusedForEmail(h) ? "the client's email is missing; add it and send again" : h?.lastError;
+}
 
 /**
  * A payment on the lead that the close recorded — "Collected at enrolment —
@@ -249,7 +314,7 @@ export class StudentService {
     bonusAmount?: number;
     /** Which academy it is closed for: "dubai" (the default) or "bangalore". */
     academy?: string | null;
-  }) {
+  }, performedBy?: string) {
     const existing = await Student.findOne({ leadId: data.leadId });
     if (existing) throw createError("A student already exists for this lead", 409);
 
@@ -277,8 +342,15 @@ export class StudentService {
      * All three are asked for at once and refused as one list. Rejecting them
      * one at a time means three round trips to learn three things the form
      * could have said together.
+     *
+     * And the client's email (2026-10-10), as Draw's close already asks:
+     * finance's intake refuses an enrolment without a valid one, so a close
+     * without it was saved here and then failed there, permanently, where
+     * nobody closing the lead could see it.
      */
+    const email = String(data.email ?? "").trim().toLowerCase();
     const missing: string[] = [];
+    if (!isFinanceEmail(email)) missing.push("the client's email");
     if (!ENROLMENT_LANGUAGES.includes(data.language as EnrolmentLanguage)) missing.push("language");
     if (!ENROLMENT_PAYMENT_METHODS.includes(paymentMethod as EnrolmentPaymentMethod)) {
       missing.push("payment method");
@@ -289,7 +361,7 @@ export class StudentService {
     else if (data.hasBonus && !isBonusAmount(data.bonusAmount)) missing.push("the bonus amount");
     if (missing.length) {
       throw createError(
-        `A closing needs ${missing.join(", ")}. Upload the receipt, choose the language and payment method, and say whether a bonus was given, then close again.`,
+        `A closing needs ${missing.join(", ")}. Give the client's email, upload the receipt, choose the language and payment method, and say whether a bonus was given, then close again.`,
         422,
       );
     }
@@ -300,7 +372,7 @@ export class StudentService {
       enrollmentNumber,
       name: data.name,
       phone: data.phone,
-      email: data.email,
+      email,
       course: data.course || undefined,
       team:   data.team   || undefined,
       assignedTo: data.assignedTo || undefined,
@@ -330,11 +402,56 @@ export class StudentService {
       status: "active",
     });
 
+    // The email asked for at the close kept on the lead too, where it had none.
+    await this.keepEmailOnLead(data.leadId, email, performedBy, "at the close");
+
     // Queued, not sent. The sale is recorded the moment this returns; the
     // invoice follows when finance is reachable. See financeHandoverWorker.
     await this.queueFinanceHandover(String(student._id), data.leadId);
 
     return this.populateStudent(String(student._id));
+  }
+
+  /**
+   * The client's email, kept on the lead too — when it had none that works
+   * (2026-10-10, as Draw's close does).
+   *
+   * The lead is where this CRM keeps a client's details, so an address learnt
+   * at the close — or added afterwards for finance — belongs there rather than
+   * only on the enrolment. One the lead already holds that is an email is
+   * never replaced from here: correcting it is the lead's own edit, with its
+   * own history. Logged on the lead's activity. Never fails what called it,
+   * which is already saved.
+   *
+   * An update rather than a save, so a lead carrying some older value its
+   * schema would now refuse still gets the email instead of quietly not.
+   */
+  private async keepEmailOnLead(leadId: unknown, email: string, performedBy: string | undefined, when: string): Promise<void> {
+    try {
+      if (!leadId || !Types.ObjectId.isValid(String(leadId))) return;
+      const lead = await Lead.findById(leadId).select("email").lean();
+      if (!lead) return;
+      const had = typeof lead.email === "string" ? lead.email.trim() : "";
+      if (isFinanceEmail(had)) return;
+      await Lead.updateOne(
+        // Still without one: an email somebody saved in the meantime is theirs.
+        { _id: lead._id, email: { $not: FINANCE_EMAIL_RE } },
+        {
+          $set: { email },
+          $push: {
+            activityLogs: {
+              action: "lead_updated",
+              description: `Email added ${when}: ${email}`,
+              ...(performedBy && Types.ObjectId.isValid(performedBy) ? { performedBy: new Types.ObjectId(performedBy) } : {}),
+              changes: { email: { from: had || null, to: email } },
+              createdAt: new Date(),
+            },
+          },
+        },
+      );
+    } catch (err) {
+      console.error("[students] could not keep the email on the lead", err);
+    }
   }
 
   /**
@@ -924,14 +1041,15 @@ export class StudentService {
         .limit(limit)
         .populate("course", "name amount bangalore")
         .populate("assignedTo", "name email")
-        .populate("leadId", "name phone status")
+        // The lead's email too: where an email for a close refused without one may come from.
+        .populate("leadId", "name phone status email")
         .lean(),
       Student.countDocuments(query),
     ]);
 
     const ids = students.map((s) => String(s._id));
     const handovers = await FinanceHandover.find({ studentId: { $in: ids } })
-      .select("studentId status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt resentAt resends academy financeOrgId")
+      .select("studentId status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt resentAt resends academy financeOrgId payload.customer.email")
       .lean();
     const byStudent = new Map(handovers.map((h) => [String(h.studentId), h]));
 
@@ -965,12 +1083,18 @@ export class StudentService {
               // Sent again after a send-back: when last, and how many times.
               resentAt: h.resentAt ?? null,
               resends: h.resends ?? 0,
+              // Refused by finance for want of the client's email: the card asks for it,
+              // its field filled in with an email finance would take, where one is known.
+              needsClientEmail: refusedForEmail(h),
+              suggestedEmail: refusedForEmail(h)
+                ? suggestedEmailOf(s.email, (s.leadId as unknown as { email?: unknown } | null)?.email)
+                : "",
             }
           : null,
         // Absent rather than guessed when finance could not be reached.
         invoice: f ?? null,
         // Its five steps — finance, LMS, CS, onboarded, MT5 bonus — green / yellow / red on the card.
-        steps: stepsOf(f ?? null, h ? { status: h.status, lastError: h.lastError, approvedAt: h.approvedAt, resentAt: h.resentAt } : null),
+        steps: stepsOf(f ?? null, h ? { status: h.status, lastError: stepError(h), approvedAt: h.approvedAt, resentAt: h.resentAt } : null),
       };
     });
 
@@ -1026,13 +1150,14 @@ export class StudentService {
     if (closer !== viewer.userId && !all) throw createError("This enrolment isn't yours", 403);
 
     const h = await FinanceHandover.findOne({ studentId: student._id })
-      .select("status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt resentAt resends academy financeOrgId")
+      .select("status attempts lastError invoiceId invoiceNumber flags sentAt approvalState returnedReason returnedAt approvedAt resentAt resends academy financeOrgId payload.customer.email")
       .lean();
     // Asked of the organization of the academy it was closed for.
     const [st] = await fetchEnrolmentStatuses([id], orgOfHandover(h, student.academy));
     const sale = await CommissionSale.findOne({ student: student._id }).lean();
     const config = sale ? await loadConfig() : null;
     const everything = isSuperAdmin(viewer.role as never) || (config?.salesManager ? String(config.salesManager) === viewer.userId : false);
+    const suggestedEmail = await this.suggestedEmailFor(h, student.email, student.leadId);
 
     return {
       ...student,
@@ -1042,10 +1167,11 @@ export class StudentService {
             invoiceNumber: h.invoiceNumber ?? "", flags: h.flags ?? [], sentAt: h.sentAt ?? null,
             approvalState: h.approvalState ?? "unknown", returnedReason: h.returnedReason ?? "", returnedAt: h.returnedAt ?? null,
             approvedAt: h.approvedAt ?? null, resentAt: h.resentAt ?? null, resends: h.resends ?? 0,
+            needsClientEmail: refusedForEmail(h), suggestedEmail,
           }
         : null,
       invoice: st ?? null,
-      steps: stepsOf(st ?? null, h ? { status: h.status, lastError: h.lastError, approvedAt: h.approvedAt, resentAt: h.resentAt } : null),
+      steps: stepsOf(st ?? null, h ? { status: h.status, lastError: stepError(h), approvedAt: h.approvedAt, resentAt: h.resentAt } : null),
       commission: sale
         ? {
             state: sale.state,
@@ -1102,6 +1228,18 @@ export class StudentService {
       }
       if (!(await this.resendCorrected(studentId))) return { queued: false, message: "Enrolment not found" };
       return { queued: true, message: "Correction sent to finance" };
+    }
+
+    /*
+     * Refused by finance for want of the client's email: sent again as it is,
+     * it would be refused again the same way. The email is added first
+     * (addEnrolmentEmail), which sends it.
+     */
+    if (refusedForEmail(existing)) {
+      return {
+        queued: false,
+        message: "Finance refused this enrolment because it went without the client's email — add the client's email first, and it goes to finance again at once.",
+      };
     }
 
     if (existing) {
@@ -1234,6 +1372,11 @@ export class StudentService {
       approvalState: h?.approvalState ?? "unknown",
       resentAt: h?.resentAt ?? null,
       resends: h?.resends ?? 0,
+      // Never reached finance because it went without the client's email — the
+      // student page asks for it (addEnrolmentEmail) rather than a correction.
+      deliveryStatus: h?.status ?? null,
+      needsClientEmail: refusedForEmail(h),
+      suggestedEmail: await this.suggestedEmailFor(h, student.email, student.leadId),
       mayMove,
       // Fixed at the close, shown read only: the form's money is in its currency.
       academy: academyOf(student),
@@ -1289,7 +1432,7 @@ export class StudentService {
     const missing: string[] = [];
     if (!name) missing.push("the client's name");
     if (!phone) missing.push("the client's phone");
-    if (!EMAIL_RE.test(email)) missing.push("the client's email");
+    if (!isFinanceEmail(email)) missing.push("the client's email");
     if (typeof data.course !== "string" || !Types.ObjectId.isValid(data.course)) missing.push("a course");
     if (!enrolledOn || Number.isNaN(enrolledOn.getTime())) missing.push("the enrolment date");
     if (!Number.isFinite(totalFee) || totalFee < 0) missing.push("the fee");
@@ -1407,6 +1550,98 @@ export class StudentService {
 
     await this.resendCorrected(id);
     return { student: await this.populateStudent(id), message: `Corrected and sent to finance.${leadNote}` };
+  }
+
+  // ── A close that went without the client's email ─────────────────────────────
+
+  /**
+   * The email to start the "add the client's email" field from, for a close
+   * finance refused for want of one (suggestedEmailOf): the enrolment's, else
+   * the lead's. "" for any other.
+   */
+  private async suggestedEmailFor(h: HandoverForEmail, studentEmail: unknown, leadId: unknown): Promise<string> {
+    if (!refusedForEmail(h)) return "";
+    const lead = leadId && Types.ObjectId.isValid(String(leadId)) ? await Lead.findById(leadId).select("email").lean() : null;
+    return suggestedEmailOf(studentEmail, lead?.email);
+  }
+
+  /**
+   * Add the client's email to a close finance refused for want of it, and
+   * send it again (2026-10-10).
+   *
+   * Closes used to be taken without an email; finance's intake refuses those,
+   * permanently, and the correction can't reach them — it is for an
+   * enrolment finance has and sent back, and these it never had. So: the
+   * email is checked as the close checks it, written on the enrolment, on the
+   * lead (where it had none, with an activity entry) and into the queued
+   * payload — only the email: the rest is the snapshot of the sale as it was —
+   * and the row goes back in the queue at once, its tries reset. It is the
+   * same enrolment (the same externalId) going to the same finance
+   * organization written on its row at the close, so finance raises its
+   * invoice as if it had been right the first time.
+   *
+   * Only for a close not yet delivered whose email is missing or not one:
+   * refused by finance for it, or still waiting to go. Never one finance
+   * already has — that is changed through a correction, once finance sends it
+   * back — nor one held up by something else, which an email would not fix.
+   *
+   * Who may: as for a correction — the closer their own; anyone who may edit
+   * students, any.
+   */
+  async addEnrolmentEmail(
+    id: string,
+    rawEmail: unknown,
+    viewer: { userId: string; role?: IRole | null },
+  ): Promise<{ email: string; message: string }> {
+    const { FinanceHandover } = await import("../models/FinanceHandover.js");
+
+    const { student } = await this.correctable(id, viewer);
+
+    const email = String(rawEmail ?? "").trim().toLowerCase();
+    if (!isFinanceEmail(email)) {
+      throw createError("That isn't an email finance will take — give the client's whole address, like name@example.com.", 422);
+    }
+
+    const h = await FinanceHandover.findOne({ studentId: student._id }).lean();
+    if (!h) {
+      throw createError("This enrolment isn't waiting on finance — there is nothing to send again with an email.", 409);
+    }
+    if (h.status === "sent") {
+      throw createError(
+        `Finance already has this enrolment${h.invoiceNumber ? ` as ${h.invoiceNumber}` : ""}, so its email isn't changed from here. If finance sends it back, correct it then.`,
+        409,
+      );
+    }
+    if (!emailCanBeAdded(h)) {
+      throw createError(
+        `This enrolment wasn't held up by the client's email${h.lastError ? ` — finance said: ${h.lastError}` : ""}. An email won't fix it: send it again, or ask an admin to look.`,
+        409,
+      );
+    }
+
+    // Conditional, so a row that reached finance a moment ago is left as it is.
+    const reset = await FinanceHandover.updateOne(
+      { _id: h._id, status: { $ne: "sent" } },
+      {
+        $set: {
+          "payload.customer.email": email,
+          status: "pending",
+          attempts: 0,
+          nextAttemptAt: new Date(),
+          lastError: "",
+        },
+      },
+    );
+    if (!reset.matchedCount) throw createError("Finance took this enrolment a moment ago — refresh to see it.", 409);
+
+    await Student.updateOne({ _id: student._id }, { $set: { email } });
+    await this.keepEmailOnLead(student.leadId, email, viewer.userId, "for finance");
+
+    // Out now, in the background — to the organization written on the row at the close.
+    const { kickFinanceHandover } = await import("./financeHandoverWorker.js");
+    kickFinanceHandover();
+
+    return { email, message: "Email added — sending it to finance again." };
   }
 
 }

@@ -21,7 +21,7 @@ import {
 import { AcademyBadge } from "@/components/students/AcademyBadge";
 import { bangalorePriceOf, feeFor, type Course } from "@/types/course";
 import type { FeeStatus, Student } from "@/types/student";
-import { ACADEMY_CURRENCY, ACADEMY_LABELS, BASE_CURRENCY, ENROLMENT_LANGUAGES, academyOf } from "@/types/student";
+import { ACADEMY_CURRENCY, ACADEMY_LABELS, BASE_CURRENCY, ENROLMENT_LANGUAGES, academyOf, isFinanceEmail } from "@/types/student";
 
 /*
  * Correcting an enrolment finance sent back (the user, 2026-10-05: "if send it
@@ -35,8 +35,6 @@ import { ACADEMY_CURRENCY, ACADEMY_LABELS, BASE_CURRENCY, ENROLMENT_LANGUAGES, a
  * server.
  */
 
-/** The shape finance accepts for the client's email — it refuses an enrolment without one. */
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** A Select can't hold "" — this stands for "nobody" / "no team". */
 const NONE = "__none__";
 
@@ -188,7 +186,7 @@ function CorrectionForm({ studentId, start, onClose }: { studentId: string; star
   const missing = [
     !name.trim() && "the client's name",
     !phone.trim() && "the client's phone",
-    !EMAIL_RE.test(email.trim()) && "the client's email",
+    !isFinanceEmail(email) && "the client's email",
     !courseId && "a course",
     noBangalorePrice && "a course with a Bangalore price",
     !feeOk && "the fee",
@@ -286,7 +284,7 @@ function CorrectionForm({ studentId, start, onClose }: { studentId: string; star
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-8 text-xs" aria-label="Client email" />
             </div>
           </div>
-          {email.trim() !== "" && !EMAIL_RE.test(email.trim()) && (
+          {email.trim() !== "" && !isFinanceEmail(email) && (
             <p className="text-[10px] text-amber-400">Finance needs a working email to invoice the client.</p>
           )}
         </section>

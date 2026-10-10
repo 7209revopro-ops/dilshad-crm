@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 #
 # Stands up a throwaway mongod and checks that a close cannot be made without
-# what finance needs from it: the language, how the money was taken, and proof
-# that it was. Tears it down after.
+# what finance needs from it: the client's email, the language, how the money
+# was taken, and proof that it was. Tears it down after.
 #
-# Nothing here touches a configured database: the scratch mongod runs on its own
-# port with its own data directory under /tmp, and the driver refuses to start
-# unless MONGODB_URI names a scratch database.
+# Nothing here touches a configured database or a real finance: the scratch
+# mongod runs on its own port with its own data directory under /tmp, bun is
+# told not to read .env — which names the live database and finance, and a
+# close queues an enrolment for finance the moment it is saved — and the driver
+# refuses to start unless MONGODB_URI names a scratch database.
 #
 set -euo pipefail
 
@@ -31,4 +33,6 @@ mkdir -p "$WORK/db" "$WORK/log"
 mongod --dbpath "$WORK/db" --port "$PORT" --bind_ip 127.0.0.1 --fork --logpath "$WORK/log/mongod.log" >/dev/null
 
 cd "$REPO"
-MONGODB_URI="mongodb://127.0.0.1:$PORT/crm-scratch" bun run scripts/closing-fields-check.ts
+MONGODB_URI="mongodb://127.0.0.1:$PORT/crm-scratch" DOTENV_CONFIG_PATH=/nonexistent \
+  JWT_SECRET=closing-fields-check-jwt JWT_REFRESH_SECRET=closing-fields-check-refresh \
+  bun --no-env-file run scripts/closing-fields-check.ts

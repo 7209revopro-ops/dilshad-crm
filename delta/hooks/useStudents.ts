@@ -74,6 +74,8 @@ export const useCreateStudent = () => {
     onSuccess: () => {
       toast.success("Student profile created");
       qc.invalidateQueries({ queryKey: KEY });
+      // The email asked for at the close is kept on the lead too.
+      qc.invalidateQueries({ queryKey: ["leads"] });
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to create student";

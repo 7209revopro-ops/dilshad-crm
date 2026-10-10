@@ -817,3 +817,24 @@ on the lead is marked done. `getUserLeadStats` also returns `meeting_done`.
 - `queueFinanceHandover` — stores `academy` and `financeOrgId` on the row.
 - `correctEnrolment` — academy fixed (422 if another is sent), Bangalore needs a Bangalore-priced course, own money compared in
   AED, lead sync via `leadPaymentOf` (Bangalore: only AED cash, at its AED). `getCorrection` returns `academy`.
+
+## The client's email at the close (changed 2026-10-10)
+
+- `isFinanceEmail(v)` — zod 4 `z.email()` (finance's zod 3 `z.string().email()` pattern, `z.regexes.email`); replaces
+  `EMAIL_RE` at the close, the correction, add-email and the flag.
+- `createStudent(data, performedBy?)` — the client's email is required (`isFinanceEmail`), named in the "A closing needs …"
+  list; stored trimmed and lower case; then `keepEmailOnLead(leadId, email, performedBy, "at the close")`.
+- `keepEmailOnLead` (new, private) — sets `Lead.email` only when the lead has none finance would take (conditional update,
+  `{ email: { $not: z.regexes.email } }`), pushing a `lead_updated` activity entry with `changes.email { from, to }`; never
+  throws.
+- `addEnrolmentEmail(id, email, viewer)` (new) — `correctable` guard; 422 for an invalid email; 409 with no row, a `sent`
+  row, or one `emailCanBeAdded` refuses; conditional reset of the row (`$set payload.customer.email`, `status: "pending"`,
+  `attempts: 0`, `nextAttemptAt`, `lastError: ""`, only while not `sent`); `Student.email`; `keepEmailOnLead(…, "for
+  finance")`; `kickFinanceHandover()` — the worker sends it to `orgOfHandover(row)`.
+- Module helpers: `payloadEmail(row)`, `refusedForEmail(row)` (not sent, lastError "Request validation failed", payload email
+  invalid), `emailCanBeAdded(row)` (that, or `pending` with an invalid payload email), `stepError(row)`.
+- `listEnrolments` / `getEnrolment` — select `payload.customer.email`; `handover.needsClientEmail` + `suggestedEmail`
+  (`suggestedEmailOf(student.email, lead.email)` — the enrolment's if finance takes it, else the lead's, else ""; the list
+  populates `leadId.email`, the page asks `suggestedEmailFor`); the finance step's error reads "the client's email is
+  missing; add it and send again". `getCorrection` — `deliveryStatus`, `needsClientEmail`, `suggestedEmail`.
+- `requestInvoice` — 409 (`queued: false`) for a row `refusedForEmail`: "… add the client's email first …".

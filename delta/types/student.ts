@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { User } from "@/types";
 import type { Course } from "@/types/course";
 import type { Team } from "@/types/team";
@@ -98,6 +99,17 @@ export interface CreateStudentInput {
   /** Which academy it is closed for — Dubai unless said. */
   academy?: Academy;
 }
+
+/**
+ * Whether finance would take this as the client's email — its intake's own
+ * check (zod's `z.string().email()`), which refuses an enrolment without one,
+ * and the one the server makes at the close, at a correction and when an email
+ * is added to a close finance refused for want of one. So `a@b.c`, which only
+ * looks like an email, is asked for again here rather than refused there.
+ * Trimmed first, as what is sent is.
+ */
+const financeEmail = z.string().email();
+export const isFinanceEmail = (v: string | null | undefined): boolean => financeEmail.safeParse((v ?? "").trim()).success;
 
 /**
  * What a course is taught in, and how the money came in.

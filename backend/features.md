@@ -743,3 +743,59 @@ lmsCourseSlugs }`; `GET /courses/finance-items?academy=bangalore` lists the Bang
 
 **Change Log**:
 - 1.0.0 — Initial build. Enrolments from before have no academy and are Dubai.
+
+## The client's email at the close — and closes that went without one (2026-10-10)
+
+**Description**: Finance's intake (`inboundEnrolmentSchema`, `customer.email` a valid email) refuses an enrolment without
+the client's email — "Request validation failed", permanent, so the row sat `failed` and nobody closing the lead saw it
+(1 here on 2026-10-10; 21 in the Sales CRM, fixed the same way). As Draw's close already does:
+
+- **Checked as finance checks it**: zod's email check (`z.email()`, zod 4 — the same pattern as finance's zod 3
+  `z.string().email()`), at the close, at a correction, when an email is added, and for the flag below — so `a@b.c`, which
+  only looks like an address, is refused here rather than by finance.
+- **At the close** every close needs a valid client email. Refused with the rest of
+  what is missing — "A closing needs the client's email, … Give the client's email, upload the receipt, …" — nothing saved.
+  Kept lower case on the enrolment and on the lead when the lead had none that works (an invalid one counts as none), with
+  an activity entry ("Email added at the close: …", by who closed it); a lead's own email is never replaced from the close.
+  The dialog asks for it when the lead has none.
+- **A close already refused for it** — the correction can't reach these (finance never had them to send back): `POST
+  /students/:id/enrolment/email { email }` checks the email the same way, writes it on the enrolment, on the lead (where it
+  had none, "Email added for finance: …") and into the queued payload (`payload.customer.email` — nothing else of the
+  snapshot), resets the row (`pending`, attempts 0, `nextAttemptAt` now, `lastError` cleared) and kicks the worker: it goes
+  at once as the same enrolment (same `externalId`) to the organization stored on the row at the close. Only for a row not
+  delivered whose payload email is missing or not one — refused by finance's check, or still waiting to go; 409 for one
+  finance has (`sent`), one failed for another reason, or no row; 422 for an email that isn't one. Not counted as a resend
+  after a send-back.
+- **Shown**: `handover.needsClientEmail` on My Enrolments and the enrolment page, `needsClientEmail` + `deliveryStatus` on
+  `GET /students/:id/correction` (the student page) — true for a row not delivered, refused with "Request validation
+  failed", whose payload email is missing or one finance's check refuses. Beside it `suggestedEmail`: the enrolment's email
+  if finance would take it, else the lead's (people add it to the lead by hand), else "" — it only fills the field in;
+  nothing is sent until somebody presses the button. Its finance step reads "Couldn't be sent to finance — the client's
+  email is missing; add it and send again".
+- **"Send again" / "Generate invoice"** (`POST /students/:id/invoice`) on such a close: 409 "Finance refused this enrolment
+  because it went without the client's email — add the client's email first, and it goes to finance again at once." —
+  sent as it is, it would only be refused again. Unchanged for one held up by anything else.
+
+**Routes**: `POST /students` (`email` required) — the closer is passed for the lead's activity; `POST
+/students/:id/enrolment/email` (new; `authenticate`, `enrolments:edit`, then the closer their own / `students:edit` or
+super admin any — the correction's guard) → `{ queued, email }`.
+
+**Service Methods**: `StudentService.createStudent(data, performedBy)`, `keepEmailOnLead`, `addEnrolmentEmail`,
+`suggestedEmailFor`, `requestInvoice` (the guard); `isFinanceEmail`, `refusedForEmail`, `emailCanBeAdded`, `suggestedEmailOf`,
+`stepError`, `payloadEmail` (module helpers).
+
+**Models Used**: `Student.email`, `Lead.email` + `activityLogs`, `FinanceHandover.payload.customer.email` / `status` /
+`attempts` / `nextAttemptAt` / `lastError` / `financeOrgId`.
+
+**Tests**: `scripts/split-payments-check.sh` Case 6 (the close: refused without one — `a@b.c` too — nothing saved; kept on
+the enrolment and the lead with its activity entry; a lead's own never replaced, one that isn't an email is) — 65 checks;
+`scripts/enrolment-correction-check.sh` Case 10 (a stand-in finance that refuses an email as finance's check does; add-email
+→ delivered with it, same externalId, the rest of the payload as refused, to Dubai's / to Bangalore's stored organization
+after the setting changed; refused for a sent row, an invalid email or `a@b.c`, a row failed for another reason, no row,
+another BDE, a role without enrolments, not signed in; "Send again" refused until the email is added, still there for one
+failed otherwise; `suggestedEmail` — none, the lead's added by hand, the enrolment's first — never sent by itself) and a
+correction with `a@b.c` refused — 134 checks; `scripts/closing-fields-check.sh` — 44 checks (now runs with `bun
+--no-env-file`).
+
+**Change Log**:
+- 1.0.0 — Initial build. The stuck close(s) are fixed from the screens once this is deployed.

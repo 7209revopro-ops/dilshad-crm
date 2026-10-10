@@ -22,7 +22,15 @@
  *     decision poll, My Enrolments, its page, the send-back check, "Send
  *     again", the correction) made there too; the academy can't be corrected;
  *     refused without the Bangalore organization; the course mapping's
- *     Bangalore section and its catalogue.
+ *     Bangalore section and its catalogue;
+ *   - Case 10: a close that went without the client's email (2026-10-10) —
+ *     refused by finance's intake, it can't be corrected; adding the email
+ *     (POST /students/:id/enrolment/email) sends it again at once as the same
+ *     enrolment, to the organization on its row; refused for one finance has,
+ *     an invalid email (finance's own check: `a@b.c` too), one failed for
+ *     another reason, and by who may not; "Send again" refused for it until the
+ *     email is added; the field filled in with an email finance would take
+ *     that the CRM has (the enrolment's, else the lead's) — never sent by itself.
  *
  * The Remote CRM's copy of the Sales CRM's check.
  *
@@ -30,6 +38,7 @@
  */
 import http from "node:http";
 import { Types } from "mongoose";
+import { z } from "zod";
 
 const uri = process.env.MONGODB_URI ?? "";
 if (!/127\.0\.0\.1|localhost/.test(uri) || !/e2e|test|scratch/i.test(uri)) {
@@ -64,6 +73,8 @@ const approvalOf = new Map<string, string>();
 const orgOfId = new Map<string, string>();
 const statusCalls: { org: string; ids: string[] }[] = [];
 const itemsAsked: string[] = [];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const refusedSends: any[] = [];
 const finance = http.createServer((req, res) => {
   let raw = "";
   req.on("data", (c) => (raw += c));
@@ -72,6 +83,14 @@ const finance = http.createServer((req, res) => {
     const org = String(req.headers["x-delta-org"] ?? "");
     res.setHeader("content-type", "application/json");
     if (req.url === "/api/v1/integrations/enrolments") {
+      // As finance's intake does — its zod 3 `z.string().email()`, the same pattern as zod 4's
+      // `z.email()` here: no valid client email, no enrolment (422, "Request validation failed").
+      if (!z.email().safeParse(body?.customer?.email).success) {
+        refusedSends.push({ ...body, _org: org });
+        res.statusCode = 422;
+        res.end(JSON.stringify({ error: { code: "VALIDATION_ERROR", message: "Request validation failed", details: { customer: ["Invalid email address"] } } }));
+        return;
+      }
       delivered.push({ ...body, _org: org });
       orgOfId.set(String(body.externalId), org);
       res.end(JSON.stringify({ data: { invoiceId: `inv-${body.externalId}`, invoiceNumber: `INV-${String(body.externalId).slice(-4)}`, customerId: "cust", duplicate: false, flags: [] } }));
@@ -300,6 +319,7 @@ const refused = async (label: string, body: Record<string, unknown>, status: num
 };
 await refused("no email and no language: 422, both named", correction({ email: "", language: "" }), 422, /the client's email, language/);
 await refused("an email finance can't take: 422", correction({ email: "hakeem@example" }), 422, /the client's email/);
+await refused("…nor one that only looks like one — finance's own check refuses a@b.c: 422", correction({ email: "a@b.c" }), 422, /the client's email/);
 await refused("no name, no phone: 422", correction({ name: " ", phone: "" }), 422, /the client's name, the client's phone/);
 await refused("no course: 422", correction({ course: null }), 422, /a course/);
 await refused("a course that no longer exists: 422", correction({ course: String(new Types.ObjectId()) }), 422, /no longer exists/);
@@ -597,6 +617,196 @@ r = await call("PUT", `/courses/${courseBlr2._id}`, "Abrar", { bangalore: { pric
 check("…a negative price: 400", r.status === 400, `${r.status}`);
 r = await call("PUT", `/courses/${courseBlr2._id}`, "Vera", { bangalore: { price: 1 } });
 check("…a role that can't edit courses: 403", r.status === 403, `${r.status}`);
+
+section("Case 10 — a close that went without the client's email: add it, and it goes again as the same enrolment");
+{
+  const { StudentService } = await import("../src/services/studentService.js");
+  const svc = new StudentService();
+  /**
+   * A close from before the email was asked: no email on the lead or the
+   * enrolment, queued, and refused by finance's intake — as the stuck ones are.
+   */
+  const stuckClose = async (over: Record<string, unknown> = {}) => {
+    n++;
+    const leadId = new Types.ObjectId();
+    await db.collection("leads").insertOne({
+      _id: leadId, name: `No Email ${n}`, phone: `+97155000${String(n).padStart(4, "0")}`, status: "closed", assignedTo: people.Theertha!.id, payments: [], activityLogs: [],
+    });
+    const st = await Student.create({
+      enrollmentNumber: `STU-${8000 + n}`, name: `No Email ${n}`, phone: `+97155000${String(n).padStart(4, "0")}`, leadId, course: course500._id, team: teamA,
+      assignedTo: people.Theertha!.id, totalFee: 500, paidAmount: 500, pendingAmount: 0, feeStatus: "paid", enrollmentDate: new Date("2026-10-10"),
+      language: "English", paymentMethod: "cash", paymentReceipt: receipt(`no-email-${n}`), payments: [{ ...pay("cash", 500, `no-email-${n}`), paidAt: new Date("2026-10-10") }],
+      hasBonus: false, bonusAmount: 0, academy: "dubai", status: "active", ...over,
+    });
+    const id = String(st._id);
+    await svc.queueFinanceHandover(id, String(leadId));
+    const failed = await waitFor(async () => (await FinanceHandover.findOne({ studentId: id }).lean())?.status === "failed");
+    if (!failed) throw new Error("could not set up a refused close");
+    return { id, leadId: String(leadId) };
+  };
+  const addEmail = (id: string, who: string | undefined, email: unknown) => call("POST", `/students/${id}/enrolment/email`, who, { email });
+  const rowOf = (id: string) => FinanceHandover.findOne({ studentId: id }).lean();
+  const strip = (p: Record<string, unknown>) => JSON.stringify({ ...p, customer: { ...(p.customer as object), email: undefined }, _org: undefined });
+
+  const stuck = await stuckClose();
+  let row = await rowOf(stuck.id);
+  check("set up as in production: refused by finance's intake, permanently — failed, \"Request validation failed\", no email in what went",
+    row?.status === "failed" && row?.lastError === "Request validation failed" && (row?.payload as any)?.customer?.email === "" && sendsFor(stuck.id).length === 0,
+    `${row?.status} ${row?.lastError} ${JSON.stringify((row?.payload as any)?.customer)}`);
+  let mineE = await call("GET", "/students/enrolments/mine?limit=100", "Theertha");
+  let rowE = ((mineE.body as any).data as any[])?.find((x) => String(x._id) === stuck.id);
+  check("My Enrolments marks it as needing the client's email — nothing to suggest, the CRM has none — and its finance step says so",
+    rowE?.handover?.needsClientEmail === true && rowE?.handover?.suggestedEmail === "" && rowE?.steps?.[0]?.state === "failed" && /client's email is missing/.test(rowE?.steps?.[0]?.detail ?? ""),
+    JSON.stringify({ h: rowE?.handover, step: rowE?.steps?.[0] }));
+  const pageE = await call("GET", `/students/enrolments/${stuck.id}`, "Theertha");
+  check("…its own page too", (pageE.body.data as any)?.handover?.needsClientEmail === true && (pageE.body.data as any)?.handover?.suggestedEmail === "", JSON.stringify((pageE.body.data as any)?.handover));
+  form = await call("GET", `/students/${stuck.id}/correction`, "Theertha");
+  check("…and the student page's starting point: not delivered, needs the client's email, nothing sent back",
+    form.status === 200 && form.body.data?.needsClientEmail === true && form.body.data?.suggestedEmail === "" && form.body.data?.deliveryStatus === "failed" && form.body.data?.sentBack === false,
+    JSON.stringify({ ...form.body.data, student: undefined }));
+  r = await call("PUT", `/students/${stuck.id}/correction`, "Theertha", correction());
+  check("the correction still can't reach it — finance never had it: 409", r.status === 409, `${r.status} ${r.body.message}`);
+
+  // Refused, with nothing changed and nothing sent.
+  const untouched = async (label: string, x: Answer, status: number, pattern: RegExp, id = stuck.id, leadId = stuck.leadId) => {
+    await sleep(150);
+    const rw = await rowOf(id);
+    const st = await Student.findById(id).lean();
+    const ld = await Lead.findById(leadId).lean();
+    const same = rw?.status === "failed" && !(rw?.payload as any)?.customer?.email && !st?.email && !ld?.email && !(ld?.activityLogs ?? []).length && sendsFor(id).length === 0;
+    check(label, x.status === status && pattern.test(x.body.message ?? "") && same, `${x.status} ${x.body.message}${same ? "" : " — something changed"}`);
+  };
+  await untouched("\"Send again\" / \"Generate invoice\" on it: 409 — add the client's email first", await call("POST", `/students/${stuck.id}/invoice`, "Theertha"), 409, /add the client's email first/);
+  await untouched("an email finance can't take: 422", await addEmail(stuck.id, "Theertha", "client@example"), 422, /isn't an email finance will take/);
+  await untouched("…nor one that only looks like one — finance's own check refuses a@b.c: 422", await addEmail(stuck.id, "Theertha", "a@b.c"), 422, /isn't an email finance will take/);
+  await untouched("no email at all: 422", await addEmail(stuck.id, "Theertha", "  "), 422, /isn't an email/);
+  await untouched("another BDE, not the closer: 403", await addEmail(stuck.id, "Nikhil", "client@example.com"), 403, /isn't yours/);
+  await untouched("a role without enrolments: 403", await addEmail(stuck.id, "Vera", "client@example.com"), 403, /Access denied/);
+  await untouched("not signed in: 401", await addEmail(stuck.id, undefined, "client@example.com"), 401, /./);
+  r = await addEmail(String(new Types.ObjectId()), "Abrar", "client@example.com");
+  check("an enrolment that doesn't exist: 404", r.status === 404, `${r.status} ${r.body.message}`);
+
+  const refusedBefore = refusedSends.filter((p) => p.externalId === stuck.id).at(-1);
+  r = await addEmail(stuck.id, "Theertha", "  Stuck.Client@Example.COM ");
+  check("the closer adds it: 200, \"sending it to finance again\"", r.status === 200 && /sending it to finance again/.test(r.body.message ?? "") && r.body.data?.email === "stuck.client@example.com", `${r.status} ${r.body.message}`);
+  const went = await waitFor(() => sendsFor(stuck.id).length === 1);
+  const sentE = sendsFor(stuck.id)[0];
+  check("finance gets it at once, with the email, as the same enrolment (same externalId), to Dubai's organization",
+    went && sentE?.externalId === stuck.id && sentE?.customer?.email === "stuck.client@example.com" && sentE?._org === DUBAI_ORG,
+    `${sendsFor(stuck.id).length} sends ${JSON.stringify(sentE?.customer)} ${sentE?._org}`);
+  check("…and otherwise exactly what was refused — the sale as it was closed", Boolean(refusedBefore) && strip(sentE) === strip(refusedBefore), `${strip(sentE)}\n${strip(refusedBefore ?? {})}`);
+  await waitFor(async () => (await rowOf(stuck.id))?.status === "sent");
+  row = await rowOf(stuck.id);
+  check("the outbox: delivered, invoiced, the error gone — not counted as a resend after a send-back",
+    row?.status === "sent" && row?.invoiceNumber === `INV-${stuck.id.slice(-4)}` && !row?.lastError && (row?.payload as any)?.customer?.email === "stuck.client@example.com" && !row?.resends && !row?.resentAt,
+    `${row?.status} ${row?.invoiceNumber} ${row?.lastError} ${row?.resends}`);
+  s = await Student.findById(stuck.id).lean();
+  check("the enrolment keeps the email (lower case)", s?.email === "stuck.client@example.com", s?.email);
+  lead = await Lead.findById(stuck.leadId).lean();
+  const logE = lead?.activityLogs?.at(-1);
+  check("…and the lead, which had none, with an entry on its activity by who added it",
+    lead?.email === "stuck.client@example.com" && logE?.action === "lead_updated" && /Email added for finance: stuck\.client@example\.com/.test(logE?.description ?? "")
+      && String(logE?.performedBy) === String(people.Theertha!.id) && (logE?.changes as any)?.email?.to === "stuck.client@example.com",
+    JSON.stringify({ email: lead?.email, log: logE }));
+  mineE = await call("GET", "/students/enrolments/mine?limit=100", "Theertha");
+  rowE = ((mineE.body as any).data as any[])?.find((x) => String(x._id) === stuck.id);
+  check("My Enrolments no longer asks for it", rowE?.handover?.needsClientEmail === false && rowE?.handover?.status === "sent", JSON.stringify(rowE?.handover));
+
+  r = await addEmail(stuck.id, "Theertha", "another@example.com");
+  check("once finance has it, an email isn't changed from here: 409, nothing sent",
+    r.status === 409 && /already has this enrolment/.test(r.body.message ?? "") && sendsFor(stuck.id).length === 1 && (await Student.findById(stuck.id).lean())?.email === "stuck.client@example.com",
+    `${r.status} ${r.body.message}`);
+
+  // Failed for something else: an email wouldn't fix it.
+  const other = await closedSale();
+  await FinanceHandover.updateOne({ studentId: other.id }, { $set: { status: "failed", lastError: "Finance returned 400: course not mapped" } });
+  const otherEmail = (await Student.findById(other.id).lean())?.email;
+  r = await addEmail(other.id, "Theertha", "other@example.com");
+  check("a close failed for another reason: 409, saying what finance said, nothing changed",
+    r.status === 409 && /wasn't held up by the client's email — finance said: Finance returned 400: course not mapped/.test(r.body.message ?? "")
+      && (await rowOf(other.id))?.status === "failed" && (await Student.findById(other.id).lean())?.email === otherEmail,
+    `${r.status} ${r.body.message}`);
+  mineE = await call("GET", "/students/enrolments/mine?limit=100", "Theertha");
+  rowE = ((mineE.body as any).data as any[])?.find((x) => String(x._id) === other.id);
+  check("…and the screens don't offer it there", rowE?.handover?.needsClientEmail === false, JSON.stringify(rowE?.handover));
+  await FinanceHandover.updateOne({ studentId: other.id }, { $set: { lastError: "Request validation failed" } });
+  r = await addEmail(other.id, "Theertha", "other@example.com");
+  check("…nor one refused by finance's check whose email is fine — something else is wrong: 409", r.status === 409 && /wasn't held up/.test(r.body.message ?? ""), `${r.status} ${r.body.message}`);
+  r = await call("POST", `/students/${other.id}/invoice`, "Theertha");
+  row = await rowOf(other.id);
+  // Queued again for the worker's timer, as "Send again" on a failed close always has been.
+  check("…while \"Send again\" still works for those: 200, queued again",
+    r.status === 200 && /Sending to finance again/.test(r.body.message ?? "") && row?.status === "pending" && !row?.lastError, `${r.status} ${r.body.message} ${row?.status}`);
+
+  // What the field starts from: an email finance would take that the CRM already has — the
+  // enrolment's, else the lead's (people add it to the lead by hand). Only ever a suggestion.
+  {
+    const s2 = await stuckClose({ email: "a@b.c" });
+    const views = async () => {
+      const mine = await call("GET", "/students/enrolments/mine?limit=100", "Theertha");
+      const page = await call("GET", `/students/enrolments/${s2.id}`, "Theertha");
+      const start = await call("GET", `/students/${s2.id}/correction`, "Theertha");
+      return [((mine.body as any).data as any[])?.find((x) => String(x._id) === s2.id)?.handover, (page.body.data as any)?.handover, start.body.data] as any[];
+    };
+    let v = await views();
+    check("an email that only looks like one (a@b.c) went, finance's check refused it — flagged on My Enrolments, the enrolment page and the student page",
+      (await rowOf(s2.id))?.status === "failed" && ((await rowOf(s2.id))?.payload as any)?.customer?.email === "a@b.c" && v.every((x) => x?.needsClientEmail === true),
+      JSON.stringify(v.map((x) => x?.needsClientEmail)));
+    check("…nothing to suggest: the enrolment's isn't one finance takes, and the lead has none", v.every((x) => x?.suggestedEmail === ""), JSON.stringify(v.map((x) => x?.suggestedEmail)));
+    // Added to the lead by hand afterwards, as people have been doing — straight in, as typed.
+    await db.collection("leads").updateOne({ _id: new Types.ObjectId(s2.leadId) }, { $set: { email: "ByHand@Example.com" } });
+    v = await views();
+    check("the lead's email added by hand: suggested on all three, lower case", v.every((x) => x?.suggestedEmail === "byhand@example.com"), JSON.stringify(v.map((x) => x?.suggestedEmail)));
+    await sleep(150);
+    check("…only suggested: nothing sent, still waiting for somebody to press the button", sendsFor(s2.id).length === 0 && (await rowOf(s2.id))?.status === "failed");
+    await Student.updateOne({ _id: s2.id }, { $set: { email: "student.fixed@example.com" } });
+    v = await views();
+    check("the enrolment's own email, once it is one finance takes, comes before the lead's", v.every((x) => x?.suggestedEmail === "student.fixed@example.com"), JSON.stringify(v.map((x) => x?.suggestedEmail)));
+    r = await addEmail(s2.id, "Theertha", "byhand@example.com");
+    await waitFor(() => sendsFor(s2.id).length === 1);
+    check("sent with the one somebody chose: 200, delivered with it", r.status === 200 && sendsFor(s2.id)[0]?.customer?.email === "byhand@example.com", `${r.status} ${r.body.message}`);
+    const ld2 = await Lead.findById(s2.leadId).lean();
+    check("…the lead keeps the email it was given by hand, with no entry added", ld2?.email === "ByHand@Example.com" && !(ld2?.activityLogs ?? []).length, JSON.stringify({ email: ld2?.email, logs: ld2?.activityLogs?.length }));
+  }
+  {
+    const leadId = new Types.ObjectId();
+    await db.collection("leads").insertOne({ _id: leadId, name: "Never Queued", phone: "+971550009999", status: "closed", assignedTo: people.Theertha!.id, payments: [] });
+    const st = await Student.create({ enrollmentNumber: "STU-9500", name: "Never Queued", leadId, assignedTo: people.Theertha!.id, totalFee: 500, paidAmount: 0, pendingAmount: 500, feeStatus: "pending", enrollmentDate: new Date() });
+    r = await addEmail(String(st._id), "Theertha", "never@example.com");
+    check("an enrolment with nothing queued for finance: 409", r.status === 409 && /isn't waiting on finance/.test(r.body.message ?? ""), `${r.status} ${r.body.message}`);
+  }
+
+  // Waiting to go, never tried, with no email in it: finance would refuse it — it can take the email too.
+  {
+    const leadId = new Types.ObjectId();
+    await db.collection("leads").insertOne({ _id: leadId, name: "Waiting", phone: "+971550008888", email: "already@lead.example", status: "closed", assignedTo: people.Theertha!.id, payments: [] });
+    const st = await Student.create({ enrollmentNumber: "STU-9501", name: "Waiting", leadId, course: course500._id, assignedTo: people.Theertha!.id, totalFee: 500, paidAmount: 500, pendingAmount: 0, feeStatus: "paid", enrollmentDate: new Date(), hasBonus: false, language: "English" });
+    const payload = await svc.buildHandoverPayload(String(st._id));
+    await FinanceHandover.create({ studentId: st._id, leadId, payload, status: "pending", academy: "dubai", financeOrgId: DUBAI_ORG, nextAttemptAt: new Date(Date.now() + 3_600_000), attempts: 2, lastError: "Finance returned 503" });
+    const wid = String(st._id);
+    r = await addEmail(wid, "Theertha", "waiting@example.com");
+    await waitFor(() => sendsFor(wid).length === 1);
+    check("a close still waiting to go with no email: taken (200), and out at once with it",
+      r.status === 200 && sendsFor(wid)[0]?.customer?.email === "waiting@example.com", `${r.status} ${r.body.message} ${sendsFor(wid).length}`);
+    check("…a lead that has an email of its own keeps it", (await Lead.findById(leadId).lean())?.email === "already@lead.example");
+  }
+
+  // A Bangalore close: to the organization written on its row at the close, whatever the setting says now — added by a manager.
+  const stuckB = await stuckClose({ academy: "bangalore", course: courseBlr._id, totalFee: 45000, paidAmount: 45000, payments: [{ ...pay("card", 45000, "blr-no-email"), paidAt: new Date("2026-10-10") }] });
+  row = await rowOf(stuckB.id);
+  check("a Bangalore close refused the same way, its row written for Bangalore's organization",
+    row?.status === "failed" && row?.financeOrgId === BLR_ORG && refusedSends.some((p) => p.externalId === stuckB.id && p._org === BLR_ORG), `${row?.status} ${row?.financeOrgId}`);
+  const { env } = await import("../src/config/env.js");
+  env.FINANCE_ORG_ID_BANGALORE = "org-bangalore-renamed";
+  r = await addEmail(stuckB.id, "Maya", "blr.client@example.com");
+  await waitFor(() => sendsFor(stuckB.id).length === 1);
+  check("someone who may edit students adds it: 200 — and it goes to the organization it was closed for, as the same enrolment",
+    r.status === 200 && sendsFor(stuckB.id)[0]?._org === BLR_ORG && sendsFor(stuckB.id)[0]?.externalId === stuckB.id && sendsFor(stuckB.id)[0]?.academy === "bangalore"
+      && sendsFor(stuckB.id)[0]?.customer?.email === "blr.client@example.com",
+    `${r.status} ${r.body.message} ${JSON.stringify(sendsFor(stuckB.id).map((p) => p._org))}`);
+  check("…the lead's activity says who", String((await Lead.findById(stuckB.leadId).lean())?.activityLogs?.at(-1)?.performedBy) === String(people.Maya!.id));
+  env.FINANCE_ORG_ID_BANGALORE = BLR_ORG;
+}
 
 // Collecting more than the fee is taken now (the owner, 2026-10-06) — last, so nothing above depends on it.
 await sendBack(sale.id);

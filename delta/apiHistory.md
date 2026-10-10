@@ -1468,3 +1468,15 @@ beside `paymentMethod` / `paymentReceipt` (the first payment's). Each new paymen
 **File:** `hooks/useStudents.ts` (`useCreateStudent`) · `POST /students` — each of `payments[]` may add `currency`,
 `amountInCurrency` and `exchangeRate` (1 of it = that many AED); `amount` stays the AED figure. Built by `rowForeignFields` in
 `components/students/PaymentRowsEditor.tsx`. **Types:** `StudentPayment` gains the three; `BASE_CURRENCY` in `types/student.ts`.
+
+## The client's email (added 2026-10-10)
+
+| Hook | Query key | Endpoint | Notes |
+|------|-----------|----------|-------|
+| `useAddEnrolmentEmail()` | invalidates `["enrolments"]`, `["students"]`, `["leads"]` | `POST /api/v1/students/:id/enrolment/email` | `{ email }` → sent to finance again at once |
+| `useEnrolmentCorrection(id, enabled, { followDelivery })` (changed) | `["enrolments", "correction", id]` | `GET /api/v1/students/:id/correction` | `followDelivery`: every 3 s while `deliveryStatus` is pending |
+| `useCreateStudent()` (changed) | also invalidates `["leads"]` | `POST /students` | `email` now required by the server |
+
+**Types:** `Handover.needsClientEmail` / `suggestedEmail`, `EnrolmentCorrectionStart.needsClientEmail` / `suggestedEmail` /
+`deliveryStatus`; `isFinanceEmail` in `types/student.ts`. `POST /students/:id/invoice` answers 409 for a close refused for want
+of the client's email (the toast says to add it first).

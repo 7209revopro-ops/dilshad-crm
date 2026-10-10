@@ -21,6 +21,14 @@ export interface Handover {
   invoiceNumber: string;
   flags: string[];
   sentAt: string | null;
+  /**
+   * Refused by finance for want of the client's email — not delivered, its
+   * email missing or not one: the screens ask for it (useAddEnrolmentEmail).
+   * Absent from a server from before, which then offers nothing.
+   */
+  needsClientEmail?: boolean;
+  /** For such a close, an email finance would take that the CRM already has — the enrolment's, else the lead's; "" when none. Only a suggestion. */
+  suggestedEmail?: string;
 }
 
 /**
@@ -183,6 +191,12 @@ export interface EnrolmentCorrectionStart {
   approvalState?: Handover["approvalState"];
   resentAt?: string | null;
   resends?: number;
+  /** Whether it reached finance at all (the outbox's status); null when nothing was queued. */
+  deliveryStatus?: Handover["status"] | null;
+  /** Never reached finance for want of the client's email — the student page asks for it. */
+  needsClientEmail?: boolean;
+  /** …starting from this email, the enrolment's or else the lead's, when finance would take it; "" when none. */
+  suggestedEmail?: string;
   mayMove: boolean;
   /** The academy it was closed for — fixed; the form's money is in its currency. */
   academy?: Academy;
@@ -216,8 +230,12 @@ export interface EnrolmentCorrectionInput {
   bonusAmount: number;
 }
 
-/** The correction's starting point — only asked for while the dialog is open. */
-export const useEnrolmentCorrection = (studentId: string, enabled = true) =>
+/**
+ * The correction's starting point — only asked for while the dialog is open.
+ * `followDelivery` (the student page) asks again every few seconds while the
+ * enrolment is on its way to finance.
+ */
+export const useEnrolmentCorrection = (studentId: string, enabled = true, opts: { followDelivery?: boolean } = {}) =>
   useQuery({
     queryKey: [...KEY, "correction", studentId],
     queryFn: async () => {
@@ -228,6 +246,7 @@ export const useEnrolmentCorrection = (studentId: string, enabled = true) =>
     // A 403 (not theirs) or 404 is an answer, not something to retry.
     retry: false,
     staleTime: 0,
+    refetchInterval: (q) => (opts.followDelivery && q.state.data?.deliveryStatus === "pending" ? 3_000 : false),
   });
 
 /** Save the correction and send it to finance again, in one step. */
@@ -247,6 +266,33 @@ export const useCorrectEnrolment = () => {
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
         ?? "Could not save the correction";
+      toast.error(msg);
+    },
+  });
+};
+
+/**
+ * Add the client's email to a close finance refused for want of one, and send
+ * it again at once — the same enrolment, to the same finance organization.
+ * Only for one not yet delivered; the closer their own, whoever may edit
+ * students any (the server decides).
+ */
+export const useAddEnrolmentEmail = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, email }: { id: string; email: string }) => {
+      const res = await api.post<{ message: string; data: { queued: boolean; email: string } }>(`/students/${id}/enrolment/email`, { email });
+      return res.data;
+    },
+    onSuccess: (d) => {
+      toast.success(d.message ?? "Email added — sending it to finance again");
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ["students"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? "Could not add the email";
       toast.error(msg);
     },
   });

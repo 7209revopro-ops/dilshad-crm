@@ -54,6 +54,8 @@ async function close(over: Record<string, unknown>) {
   return svc.createStudent({
     leadId: String(new Types.ObjectId()),
     name: "Closed Client",
+    // Finance refuses an enrolment without the client's email (2026-10-10).
+    email: "closed.client@example.com",
     language: "Malayalam",
     paymentMethod: "tabby",
     paymentReceipt: receipt,
@@ -106,12 +108,32 @@ step("Refusing a close that finance could not act on");
   );
 }
 
+{
+  const m = await refused({ email: undefined });
+  check("no client email is refused, naming it", /the client's email/i.test(m ?? ""), `"${m}"`);
+}
+{
+  const m = await refused({ email: "closed.client@example" });
+  check("an email finance cannot take is refused", /the client's email/i.test(m ?? ""), `"${m}"`);
+}
+{
+  // Finance's own check (zod's email) refuses what only looks like an address.
+  const m = await refused({ email: "a@b.c" });
+  check("...nor one that only looks like one (a@b.c)", /the client's email/i.test(m ?? ""), `"${m}"`);
+}
+{
+  const before = await Student.countDocuments();
+  await refused({ email: "", language: undefined });
+  check("...and nothing is saved for a refused close", (await Student.countDocuments()) === before);
+}
+
 step("Accepting a complete one, and keeping what it said");
 {
   const s = await close({});
   check("a complete close succeeds", Boolean(s), "nothing returned");
 
   const doc = await Student.findOne({ name: "Closed Client" }).lean();
+  check("the client's email is stored", doc?.email === "closed.client@example.com", `got ${doc?.email}`);
   check("the language is stored", doc?.language === "Malayalam", `got ${doc?.language}`);
   check("the payment method is stored", doc?.paymentMethod === "tabby", `got ${doc?.paymentMethod}`);
   check("the receipt is stored", doc?.paymentReceipt?.key === receipt.key, `got ${JSON.stringify(doc?.paymentReceipt)}`);

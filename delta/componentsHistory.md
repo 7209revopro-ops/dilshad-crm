@@ -1206,3 +1206,20 @@ A new close starts "Bonus given?" at yes with the course's bonus, marked "From t
 - `CorrectEnrolmentDialog` — academy read-only; money in its currency; course without a Bangalore price flagged.
 - `MapCourseDialog` — Bangalore section (price, Bangalore finance product, LMS courses or Dubai's).
 - `lib/currency.fmtAcademy`, `types/course.bangalorePriceOf` / `feeFor`, `types/student` `ACADEMIES` / `academyOf`.
+
+### Change log — 2026-10-10 (the client's email at the close)
+- `CreateStudentModal` — a new close asks "Email *" in Personal Details when the lead has no email that works (amber when
+  what is typed isn't one); "the client's email" joins "Still needed", blocking Create; sends it (lower case).
+- `AddClientEmail` (new) — "Finance couldn't take this enrolment — it went without the client's email. Add the client's
+  email and send again:" field + "Add email & send again" button (`useAddEnrolmentEmail`), disabled until finance would
+  take it; filled in from the server's `suggestedEmail` (the enrolment's, else the lead's) with "Filled in from the client's
+  details here — check it, then send" — never sent by itself; for a role without `enrolments:edit` only the sentence.
+  Shown where the server says `needsClientEmail`.
+- My Enrolments row — `AddClientEmail` in place of the "Could not reach finance … Request validation failed" box, and no
+  "Generate invoice" (which would send it to be refused again); after saving it shows Sending.
+- Enrolment page header — `AddClientEmail`; "On its way to finance…" while pending (not a resend).
+- Student page — `AddClientEmail` from `useEnrolmentCorrection` (`needsClientEmail`), followed every 3 s while pending, with
+  "On its way to finance…".
+- `types/student.isFinanceEmail` — finance's own check (zod 3 `z.string().email()`, as the server's); used by the close
+  dialog, `AddClientEmail` and `CorrectEnrolmentDialog` (in place of its own looser `EMAIL_RE`), so `a@b.c` is asked for
+  again before the server refuses it, and nothing the server takes is blocked.

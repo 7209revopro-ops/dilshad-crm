@@ -32,6 +32,7 @@ import {
   ENROLMENT_LANGUAGES,
   PAYMENT_METHOD_LABELS,
   academyOf,
+  isFinanceEmail,
 } from "@/types/student";
 
 interface Props {
@@ -183,6 +184,20 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
   const [language, setLanguage] = useState<string>(existingStudent?.language ?? "");
 
   /*
+   * The client's email, asked for only when the lead has none that works
+   * (2026-10-10, as Draw's close asks). Finance refuses an enrolment without
+   * one, so a close without it was saved here and then failed there, out of
+   * sight. The server keeps it on the lead too.
+   */
+  const leadEmail = (lead.email ?? "").trim();
+  // Finance's own check: a lead email that only looks like one (a@b.c) is asked for again.
+  const leadEmailOk = isFinanceEmail(leadEmail);
+  const askEmail = !editing && !leadEmailOk;
+  const [emailInput, setEmailInput] = useState(leadEmailOk ? "" : leadEmail);
+  const email = (leadEmailOk ? leadEmail : emailInput.trim()).toLowerCase();
+  const emailMissing = askEmail && !isFinanceEmail(email);
+
+  /*
    * Whether a bonus was given, and how much.
    *
    * Asked at every close — yes or no, with the amount when yes — because the
@@ -219,6 +234,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
     ? [bonusAmountMissing && "the bonus amount"].filter(Boolean) as string[]
     : [
         noBangalorePrice && "a Bangalore price for this course",
+        emailMissing && "the client's email",
         !language && "language",
         ...missingInRows(paymentRows, base),
         !bonusChoice && "whether a bonus was given",
@@ -298,7 +314,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
       leadId: lead._id,
       name:   lead.name,
       phone:  lead.phone ?? undefined,
-      email:  lead.email ?? undefined,
+      email:  email || undefined,
       course: pickedCourse?._id ?? null,
       team:   lead.team
         ? typeof lead.team === "object" ? (lead.team as { _id: string })._id : lead.team
@@ -388,7 +404,7 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                   {[
                     { icon: User2, label: "Name",    value: lead.name },
                     { icon: Phone, label: "Phone",   value: lead.phone },
-                    { icon: Mail,  label: "Email",   value: lead.email },
+                    { icon: Mail,  label: "Email",   value: askEmail ? null : (leadEmail || existingStudent?.email) },
                     { icon: BookOpen, label: "Course", value: knownCourse ? `${knownCourse.name}${priceOf(knownCourse) ? ` · ${fmt(priceOf(knownCourse))}` : ""}` : null },
                     { icon: User2, label: "Counsellor", value: assignedName },
                   ].filter((r) => r.value).map(({ icon: Icon, label, value }) => (
@@ -398,6 +414,29 @@ export function CreateStudentModal({ open, lead, existingStudent, progress, onCl
                       <span className="text-xs font-medium text-foreground truncate">{value}</span>
                     </div>
                   ))}
+                  {/* Asked here, where it would have shown, when the lead has
+                      none that works — finance cannot invoice without it. */}
+                  {askEmail && (
+                    <div className="flex items-start gap-3 px-3 py-2">
+                      <Mail className="mt-2 h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="mt-1.5 text-[11px] text-muted-foreground w-20 shrink-0">Email *</span>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <Input
+                          type="email" value={emailInput}
+                          onChange={(e) => setEmailInput(e.target.value)}
+                          placeholder="client@example.com" className="h-8 text-xs"
+                          aria-label="Client email" autoComplete="off"
+                        />
+                        <p className={cn("text-[10px]", emailMissing && emailInput.trim() ? "text-amber-400" : "text-muted-foreground")}>
+                          {emailMissing && emailInput.trim()
+                            ? "That isn't an email address finance will take."
+                            : leadEmail
+                              ? "This lead's email isn't one finance can use. Finance needs one for the invoice; it is saved on the lead too."
+                              : "This lead has no email. Finance needs one for the invoice; it is saved on the lead too."}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </motion.div>
 

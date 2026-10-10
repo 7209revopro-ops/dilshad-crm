@@ -15,6 +15,7 @@ import { useAuthStore } from "@/lib/store/authStore";
 import { useEnrolment, useRequestInvoice, sendBackState, uaeTime, type EnrolmentDetail } from "@/hooks/useEnrolments";
 import { EnrolmentStepsList } from "@/components/students/EnrolmentSteps";
 import { CorrectEnrolmentDialog } from "@/components/students/CorrectEnrolmentDialog";
+import { AddClientEmail } from "@/components/students/AddClientEmail";
 import type { Course } from "@/types/course";
 
 /**
@@ -107,6 +108,13 @@ function Header({ e }: { e: EnrolmentDetail }) {
             </div>
           )}
         </div>
+      )}
+      {/* Refused by finance for want of the client's email: add it, and it goes again at once. */}
+      {h?.needsClientEmail && <AddClientEmail studentId={e._id} initial={h.suggestedEmail} mayAct={mayAct} className="mt-4" />}
+      {h?.status === "pending" && !h.resentAt && !e.invoice && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-sky-600 dark:text-sky-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> On its way to finance…
+        </p>
       )}
       {(resending || sentAgain) && h?.resentAt && (
         <p className="mt-3 flex items-center gap-1.5 text-xs text-sky-600 dark:text-sky-400">

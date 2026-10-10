@@ -5,9 +5,10 @@ import { sendSuccess, sendError } from "../utils/response.js";
 
 const svc = new StudentService();
 
-export const createStudent = async (req: Request, res: Response, next: NextFunction) => {
+export const createStudent = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const student = await svc.createStudent(req.body);
+    // Who closed it, for the lead's activity when the close adds the client's email there.
+    const student = await svc.createStudent(req.body, req.user?.userId);
     sendSuccess(res, "Student created", student, 201);
   } catch (err) { next(err); }
 };
@@ -204,5 +205,22 @@ export const correctEnrolment = async (req: AuthenticatedRequest, res: Response,
     if (!userId) return sendError(res, "Not authenticated", 401);
     const result = await svc.correctEnrolment(req.params.id, req.body ?? {}, { userId, role: req.user?.role });
     sendSuccess(res, result.message, result.student);
+  } catch (err) { next(err); }
+};
+
+/**
+ * Add the client's email to a close finance refused for want of one, and send
+ * it to finance again at once — the same enrolment, to the same organization.
+ * Only for one not yet delivered; the closer their own, anyone who may edit
+ * students any.
+ *
+ * POST /api/v1/students/:id/enrolment/email  { email }
+ */
+export const addEnrolmentEmail = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return sendError(res, "Not authenticated", 401);
+    const result = await svc.addEnrolmentEmail(req.params.id, req.body?.email, { userId, role: req.user?.role });
+    sendSuccess(res, result.message, { queued: true, email: result.email });
   } catch (err) { next(err); }
 };

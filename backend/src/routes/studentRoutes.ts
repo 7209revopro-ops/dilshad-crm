@@ -7,7 +7,7 @@ import {
   getStudentByLeadId, updateStudent, deleteStudent,
   getMyEnrolments,
   getEnrolment, requestInvoice, getCorrection, correctEnrolment, getDailyClosings, uploadPaymentReceipt,
-  getCloseOptions,
+  getCloseOptions, addEnrolmentEmail,
 } from "../controllers/studentController.js";
 
 const router = Router();
@@ -57,6 +57,8 @@ router.post("/:id/invoice", authenticate, checkPermission("enrolments", "edit"),
 // Correct an enrolment finance sent back, and send it again — from the same screen.
 router.get("/:id/correction", authenticate, checkPermission("enrolments", "edit"), getCorrection);
 router.put("/:id/correction", authenticate, checkPermission("enrolments", "edit"), correctEnrolment);
+// A close finance refused for want of the client's email: add it, and it goes again — gated as the correction is.
+router.post("/:id/enrolment/email", authenticate, checkPermission("enrolments", "edit"), addEnrolmentEmail);
 
 router.get("/",    authenticate, checkPermission("students", "view"),   getStudents);
 router.post("/",   authenticate, checkPermission("students", "create"), createStudent);

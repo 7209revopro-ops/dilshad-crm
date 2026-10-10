@@ -15,6 +15,8 @@ import { AcademyBadge } from "@/components/students/AcademyBadge";
 import { useMyEnrolments, useRequestInvoice, sendBackState, uaeTime, type Enrolment } from "@/hooks/useEnrolments";
 import { EnrolmentStepsStrip } from "@/components/students/EnrolmentSteps";
 import { CorrectEnrolmentDialog } from "@/components/students/CorrectEnrolmentDialog";
+import { AddClientEmail } from "@/components/students/AddClientEmail";
+import { useAuthStore } from "@/lib/store/authStore";
 import type { Course } from "@/types/course";
 
 /**
@@ -215,6 +217,11 @@ function EnrolmentRow({ enrolment: e, onGenerate, onCorrect, generating }: {
      its way back to finance is sent again, not sent back, whatever finance
      still says until it arrives. */
   const { sentBack, resending, sentAgain, reason } = sendBackState(e);
+  /* Refused by finance because it went without the client's email: asked for
+     here, and saving sends it again — not "Generate invoice", which would send
+     the same thing to be refused again. */
+  const needsEmail = h?.needsClientEmail === true;
+  const { hasPermission } = useAuthStore();
 
   return (
     <motion.div
@@ -270,7 +277,11 @@ function EnrolmentRow({ enrolment: e, onGenerate, onCorrect, generating }: {
             </div>
           )}
 
-          {h?.status === "failed" && (
+          {needsEmail && (
+            <AddClientEmail studentId={e._id} initial={h?.suggestedEmail} mayAct={hasPermission("enrolments", "edit")} className="mt-2" />
+          )}
+
+          {h?.status === "failed" && !needsEmail && (
             <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-2.5 py-1.5">
               <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-red-400" />
               <p className="text-[11px] text-red-300">
@@ -313,7 +324,7 @@ function EnrolmentRow({ enrolment: e, onGenerate, onCorrect, generating }: {
             </div>
           ) : h?.status === "pending" ? (
             <span className="text-[11px] text-muted-foreground">Sending…</span>
-          ) : (
+          ) : needsEmail ? null : (
             <Button size="sm" variant="outline" className="gap-2" onClick={onGenerate} disabled={generating}>
               {generating
                 ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending…</>

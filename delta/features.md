@@ -845,3 +845,19 @@ the Bangalore price.
 
 **Change Log**:
 - 1.0.0 — Initial build
+
+## The client's email at the close (2026-10-10)
+
+**What it does**: Finance refuses an enrolment without the client's email, so the close dialog now asks for it when the
+lead has none that works ("Email *" under Personal Details; Create stays blocked, "Still needed: the client's email"), as
+Draw's does. It is saved on the enrolment and on the lead. A close that already went without one — refused by finance,
+"Not delivered" — shows "Add the client's email and send again" on My Enrolments, the enrolment's page and the student's
+page, filled in with an email the CRM already has that finance would take (the enrolment's, else the lead's — people add it
+to the lead by hand); check it and press the button, and it goes to finance at once as the same enrolment (same invoice key,
+same academy's finance), shown as Sending until finance has it. "Send again" is refused for such a close until the email is
+added. Not shown for one held up by anything else. The email is checked as finance checks it, so `a@b.c` is asked for again.
+
+**API**: `POST /students` (`email` required), `POST /students/:id/enrolment/email` (`{ email }`).
+
+**Change Log**:
+- 1.0.0 — Initial build

@@ -15,7 +15,11 @@
  *   - Case 5: the academy (2026-10-10) — a Bangalore close in INR, with the
  *     course's Bangalore price, item and LMS courses, cash in AED carried as
  *     finance's `original` against the INR; Dubai as it was; what a Bangalore
- *     close is refused for.
+ *     close is refused for;
+ *   - Case 6: the client's email at the close (2026-10-10) — refused without
+ *     one finance can take (its own check: a@b.c too), nothing saved; kept on
+ *     the enrolment and on a lead that had none, with an activity entry; a
+ *     lead's own email never replaced.
  *
  * Run by split-payments-check.sh. Scratch database only.
  */
@@ -279,6 +283,71 @@ check("…and saying Dubai is the same", r.status === 201 && s?.academy === "dub
 const before5 = await studentOf(r);
 const edit = await call("PUT", `/students/${String(before5!._id)}`, "Theertha", { academy: "bangalore", notes: "moved?" });
 check("an edit can't move an enrolment to the other academy", edit.status === 200 && (await studentOf(r))?.academy === "dubai", `${edit.status}`);
+
+section("Case 6 — the client's email at the close (2026-10-10): finance refuses an enrolment without one");
+{
+  const { Lead } = await import("../src/models/Lead.js");
+  /** A lead with no email — or the one given — closed as the dialog sends it. */
+  const closeLead = async (leadEmail: string | null, sent: Record<string, unknown>, who = "Theertha") => {
+    n++;
+    const _id = new Types.ObjectId();
+    await db.collection("leads").insertOne({
+      _id, name: `Client ${n}`, phone: `+97150000${String(n).padStart(4, "0")}`, ...(leadEmail === null ? {} : { email: leadEmail }), status: "closed",
+      assignedTo: people.Theertha!.id, payments: [], activityLogs: [],
+    });
+    const x = await call("POST", "/students", who, {
+      leadId: String(_id), name: `Client ${n}`, phone: `+97150000${String(n).padStart(4, "0")}`,
+      course: String(course500._id), enrollmentDate: "2026-10-05T00:00:00.000Z", totalFee: 500, paidAmount: 500, language: "English", hasBonus: false,
+      payments: [pay("cash", 500, `email-${n}`)], ...sent,
+    });
+    return { ...x, leadId: String(_id) };
+  };
+  const refusedClose = async (label: string, leadEmail: string | null, sent: Record<string, unknown>, pattern: RegExp) => {
+    const count = await Student.countDocuments();
+    const x = await closeLead(leadEmail, sent);
+    const ld = await Lead.findById(x.leadId).lean();
+    const same = (await Student.countDocuments()) === count && (ld?.email ?? null) === leadEmail && !(ld?.activityLogs ?? []).length;
+    check(label, x.status === 422 && pattern.test(x.body.message ?? "") && same, `${x.status} ${x.body.message}${same ? "" : " — something was saved"}`);
+  };
+  await refusedClose("a lead with no email, closed without one: 422, naming the client's email, nothing saved", null, {}, /A closing needs the client's email\. Give the client's email/);
+  await refusedClose("…an empty one: 422", null, { email: "  " }, /the client's email/);
+  await refusedClose("…one finance can't take: 422", null, { email: "client@example" }, /the client's email/);
+  await refusedClose("…nor one that only looks like one — finance's own check refuses a@b.c: 422", null, { email: "a@b.c" }, /the client's email/);
+  await refusedClose("…named together with anything else missing", null, { email: "", language: "" }, /needs the client's email, language/);
+  {
+    const count = await Student.countDocuments();
+    const x = await closeLead(null, { email: "", academy: "bangalore", course: String(courseBoth._id), totalFee: 45000, paidAmount: 45000, payments: [pay("card", 45000, "blr-no-email")] });
+    check("…a Bangalore close too: 422, nothing saved", x.status === 422 && /the client's email/.test(x.body.message ?? "") && (await Student.countDocuments()) === count, `${x.status} ${x.body.message}`);
+  }
+
+  r = await closeLead(null, { email: "  New.Client@Example.COM " });
+  s = await studentOf(r);
+  let ld = await Lead.findById(r.leadId).lean();
+  const log = ld?.activityLogs?.at(-1);
+  check("closed with the email the dialog asked for: 201, kept on the enrolment in lower case", r.status === 201 && s?.email === "new.client@example.com", `${r.status} ${r.body.message} ${s?.email}`);
+  check("…and on the lead, which had none, with an entry on its activity by who closed it",
+    ld?.email === "new.client@example.com" && log?.action === "lead_updated" && log?.description === "Email added at the close: new.client@example.com"
+      && String(log?.performedBy) === String(people.Theertha!.id) && (log?.changes as { email?: { from: unknown; to: string } })?.email?.to === "new.client@example.com",
+    JSON.stringify({ email: ld?.email, log }));
+  payload = await service.buildHandoverPayload(String(s!._id)) as Record<string, any>;
+  check("…and finance is sent it", payload?.customer?.email === "new.client@example.com", JSON.stringify(payload?.customer));
+
+  r = await closeLead("not-an-email", { email: "fixed@example.com" });
+  ld = await Lead.findById(r.leadId).lean();
+  check("a lead whose email isn't one: closed with a real one (201), which replaces it on the lead",
+    r.status === 201 && ld?.email === "fixed@example.com" && (ld?.activityLogs?.at(-1)?.changes as { email?: { from: unknown } })?.email?.from === "not-an-email", `${r.status} ${ld?.email}`);
+  r = await closeLead("a@b.c", { email: "real@example.com" });
+  ld = await Lead.findById(r.leadId).lean();
+  check("…as is one that only looks like one (a@b.c) — finance wouldn't take it", r.status === 201 && ld?.email === "real@example.com", `${r.status} ${ld?.email}`);
+
+  r = await closeLead("own@lead.example", { email: "own@lead.example" });
+  ld = await Lead.findById(r.leadId).lean();
+  check("a lead with an email of its own: closed with it (201), the lead left as it was — no activity entry",
+    r.status === 201 && (await studentOf(r))?.email === "own@lead.example" && ld?.email === "own@lead.example" && !(ld?.activityLogs ?? []).length, `${r.status} ${r.body.message}`);
+  r = await closeLead("own@lead.example", { email: "other@client.example" });
+  check("…one the dialog sent differently is the enrolment's; the lead's own is never replaced from the close",
+    r.status === 201 && (await studentOf(r))?.email === "other@client.example" && (await Lead.findById(r.leadId).lean())?.email === "own@lead.example", `${r.status}`);
+}
 
 server.close();
 await mongoose.disconnect();

@@ -22,6 +22,7 @@ import { useStudent, useUpdateStudent } from "@/hooks/useStudents";
 import { useEnrolmentCorrection, uaeTime } from "@/hooks/useEnrolments";
 import { useAuthStore } from "@/lib/store/authStore";
 import { CorrectEnrolmentDialog } from "@/components/students/CorrectEnrolmentDialog";
+import { AddClientEmail } from "@/components/students/AddClientEmail";
 import { INITIAL_RESPONSE_CONFIG, PRIMARY_CONCERN_CONFIG, FOLLOWUP_STRATEGY_CONFIG } from "@/lib/leadConfig";
 import type { Course } from "@/types/course";
 import type { User } from "@/types";
@@ -82,7 +83,8 @@ export default function StudentDetailPage() {
    * whole enrolment can be corrected and sent again from here.
    */
   const { hasPermission } = useAuthStore();
-  const { data: correction } = useEnrolmentCorrection(studentId, hasPermission("enrolments", "edit"));
+  // Followed while it is on its way to finance, so an email added below turns into "delivered" without a reload.
+  const { data: correction } = useEnrolmentCorrection(studentId, hasPermission("enrolments", "edit"), { followDelivery: true });
   const [correctOpen, setCorrectOpen] = useState(false);
 
   if (isLoading) return (
@@ -179,6 +181,13 @@ export default function StudentDetailPage() {
             <Edit2 className="h-3.5 w-3.5" /> Correct &amp; send again
           </Button>
         </motion.div>
+      )}
+      {/* Never reached finance — it went without the client's email: add it, and it goes again at once. */}
+      {correction?.needsClientEmail && <AddClientEmail studentId={student._id} initial={correction.suggestedEmail} />}
+      {correction && !correction.sentBack && !correction.resentAt && correction.deliveryStatus === "pending" && (
+        <p className="flex items-center gap-1.5 text-xs text-sky-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> On its way to finance…
+        </p>
       )}
       {correction && !correction.sentBack && correction.resentAt && (
         <p className="flex items-center gap-1.5 text-xs text-sky-400">
